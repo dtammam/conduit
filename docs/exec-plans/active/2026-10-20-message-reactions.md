@@ -114,6 +114,17 @@ No server-side reactions, no emoji picker, no reactions on user messages, no rea
 2. Receipt glyph: a thumbs up emoji as asked, or a plain checkmark in the theme colour (quieter, more upstream-friendly)? Default in this plan: thumbs up in Dean's build, both selectable later if upstream prefers.
 3. Toolchain route: Homebrew (`brew install --cask flutter`, `brew install cocoapods`) or a manual Flutter zip plus `gem install --user-install cocoapods`? Homebrew is recommended; it needs Dean at the keyboard once for its installer.
 
-## 10. Progress log
+## 10. Revision, 2026-10-20 evening (supersedes 4.1 and 4.2 where they differ)
+
+Dean clarified after the first build: it must feel like an iMessage Tapback, and the first gate found the plan's long-press placement unreachable (Conduit shows the model header only on the first reply from a model in a conversation). Built behaviour:
+
+- Long-press (400 ms, wins before `SelectionArea`'s 500 ms) anywhere on a finished assistant reply opens a floating pill with 👍 👎 ✅ ❌, built with `RawGestureDetector` plus `showGeneralDialog`, no `CupertinoContextMenu`. Picking one sends the mapped text through the follow-up send path. Known cost: long-press word selection on assistant replies is off while the setting is on (double-tap selection still works, measured in widget tests only).
+- The reaction is a 22 px badge on the reply's top-trailing corner, derived from the next user message's text matching one of the four mapped texts exactly; that user turn renders as `SizedBox.shrink` while the setting is on. Not stored anywhere.
+- Delivery receipts are the same badge style on Dean's bubble's top-leading corner: 👍 muted once the reply has content, a status or finished; ❌ on an error reply or an undispatched send. Only the latest visible user message carries one; the failed id clears on regenerate and on conversation switch.
+- Settings: Settings, Chats (native page on iOS), last two rows of the chat behaviour group: "Delivery receipts", "Quick-reply reactions". Keys `delivery_receipts_enabled`, `quick_reply_reactions_enabled`, default on.
+- Phone build: `XCODE_XCCONFIG_FILE="$PWD/ios/Flutter/Dean.xcconfig" flutter build ios --release`, then `xcrun devicectl device install app --device 00008130-001A1C6420A1401C build/ios/iphoneos/Runner.app`. Signing (team, `am.tamm.conduit` ids, app group, entitlements, display name) lives only in the `dean:` commits.
+
+## 11. Progress log
 
 - 2026-10-20: upstream researched, fork created, clone and build submodules in place, this plan written. No code yet.
+- 2026-10-20 15:40 to 16:30: Flutter 3.47.7 and CocoaPods 1.17.0 installed by Dean through Homebrew. Baseline on untouched upstream: analyzer 68 warnings and infos, 0 errors; shards 5,002 passed, 2 failed (`direct_send_history_links_test`, `sidebar_workspace_tabs_test`, both pre-existing). Opus built both features; gate one rejected the header-only long-press; rebuilt as Tapback (section 10). Final: analyzer clean, shards 5,023 passed, the same 2 baseline failures. Commits `64aa83c6` (receipts) and `e2735dfe` (quick replies). Release build signed with Dean's team in 60 s incremental, installed on YOUNGKEY at 16:30. Gate two running. Not yet verified on the phone by Dean.
