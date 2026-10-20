@@ -1,0 +1,9 @@
+// Dean's phone build. Pass with XCODE_XCCONFIG_FILE="$PWD/ios/Flutter/Dean.xcconfig".
+// Never upstream: the team, bundle ids and app group live in the pbxproj on the
+// `dean` branch, and the two restricted entitlements (Private Cloud Compute,
+// CarPlay voice) are removed from Runner.entitlements there.
+#include "ArmOnly.xcconfig"
+
+// No PCC entitlement on this team: keep the Apple PCC model unsupported so the
+// app never traps on a request (see PccSdk.xcconfig).
+CONDUIT_PCC_ENTITLEMENT_FLAG =
