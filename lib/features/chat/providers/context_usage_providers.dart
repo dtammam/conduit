@@ -184,9 +184,13 @@ class ContextWindowOverridesController extends Notifier<Map<String, int>> {
   @override
   Map<String, int> build() {
     ref.watch(settledActiveAccountIdProvider);
-    final raw = PreferencesStore.getString(
-      scopedPreferenceReadKey(PreferenceKeys.contextWindowOverrides),
-    );
+    // Windows set before they were stored per account sit under the
+    // device-wide key; an account with none of its own still reads them.
+    final raw =
+        PreferencesStore.getString(
+          scopedPreferenceReadKey(PreferenceKeys.contextWindowOverrides),
+        ) ??
+        PreferencesStore.getString(PreferenceKeys.contextWindowOverrides);
     if (raw == null || raw.isEmpty) return const <String, int>{};
     try {
       final decoded = jsonDecode(raw);

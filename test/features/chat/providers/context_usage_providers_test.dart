@@ -440,6 +440,30 @@ void main() {
           .deepEquals({_sampleModel.id: _sampleWindow});
     });
 
+    test('an account with no windows of its own reads the device-wide ones '
+        'set before they were stored per account', () async {
+      await PreferencesStore.put(
+        PreferenceKeys.contextWindowOverrides,
+        jsonEncode({_sampleModel.id: _sampleWindow}),
+      );
+      await PreferencesStore.put(
+        PreferenceKeys.accountScopedSettingsMigrated,
+        true,
+      );
+      await PreferencesStore.put(PreferenceKeys.activeServerId, 'account-a');
+      final container = containerFor(
+        model: _sampleModel,
+        messages: [_user('a' * 400)],
+      ).container;
+      check(container.read(contextWindowOverridesProvider))
+          .deepEquals({_sampleModel.id: _sampleWindow});
+
+      await container
+          .read(contextWindowOverridesProvider.notifier)
+          .clear(_sampleModel.id);
+      check(container.read(contextWindowOverridesProvider)).isEmpty();
+    });
+
     test('rejects a window outside the supported range', () {
       final container = containerFor(model: null, messages: const []).container;
       check(
