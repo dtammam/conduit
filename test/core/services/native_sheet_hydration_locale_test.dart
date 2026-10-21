@@ -385,6 +385,7 @@ void main() {
         'send-on-enter',
         'temporary-chat-default',
         'citation-show-titles',
+        'wave-typing-indicator',
       ]);
     });
 

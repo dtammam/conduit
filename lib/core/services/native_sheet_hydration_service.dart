@@ -1581,6 +1581,14 @@ class NativeSheetHydrationService {
         kind: NativeSheetItemKind.toggle,
         value: appSettings.citationShowTitles,
       ),
+      NativeSheetItemConfig(
+        id: nativeWaveTypingIndicatorId,
+        title: l10n.waveTypingIndicator,
+        subtitle: l10n.waveTypingIndicatorDescription,
+        sfSymbol: 'ellipsis',
+        kind: NativeSheetItemKind.toggle,
+        value: appSettings.waveTypingIndicator,
+      ),
     ];
   }
 

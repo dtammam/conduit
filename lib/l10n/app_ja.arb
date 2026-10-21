@@ -5058,6 +5058,8 @@
   "backendChooserSelfHostedSectionTitle": "セルフホストのサービス",
   "citationShowTitles": "引用にページタイトルを表示",
   "citationShowTitlesDescription": "引用バッジにサイトのドメインではなくページタイトルを使用します",
+  "waveTypingIndicator": "ウェーブ入力インジケーター",
+  "waveTypingIndicatorDescription": "返信の作成中に波打つ3つの点を表示します",
   "directContextCompactionDescription": "これらのモデルはコンテキストウィンドウを報告しません。Conduit はリクエストが大きくなりすぎる前に、選択した上限を使って古いメッセージを圧縮します。",
   "directContextCompactionPickerDescription": "Conduit が自動圧縮に使用するコンテキストウィンドウを選択してください。",
   "directContextCompactionTitle": "コンテキストの圧縮",

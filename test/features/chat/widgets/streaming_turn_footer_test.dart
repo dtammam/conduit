@@ -3,6 +3,7 @@ import 'package:conduit_core/models/chat_message.dart';
 import 'package:conduit_core/services/settings_service.dart';
 import 'package:conduit_core/features/chat/providers/queued_completion_provider.dart';
 import 'package:conduit/features/chat/widgets/conduit_streaming_orbit.dart';
+import 'package:conduit/features/chat/widgets/conduit_wave_dots.dart';
 import 'package:conduit/features/chat/widgets/streaming_turn_footer.dart';
 import 'package:conduit/shared/theme/app_theme.dart';
 import 'package:conduit/shared/theme/tweakcn_themes.dart';
@@ -152,6 +153,108 @@ void main() {
         .getTopLeft(find.byType(ConduitStreamingOrbit))
         .dx;
     expect(indicatorLeft, lessThan(48));
+  });
+
+  testWidgets('the wave setting swaps the orbit for the wave dots', (
+    tester,
+  ) async {
+    final message = ChatMessage(
+      id: 'assistant-live',
+      role: 'assistant',
+      content: 'Hello',
+      timestamp: DateTime(2024, 1, 1),
+      isStreaming: true,
+    );
+    Future<Size> footerSize({required bool wave}) async {
+      final container = ProviderContainer(
+        overrides: [
+          appSettingsProvider.overrideWithValue(
+            AppSettings(
+              disableHapticsWhileStreaming: true,
+              waveTypingIndicator: wave,
+            ),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      await tester.pumpWidget(
+        _buildHarness(container: container, message: message),
+      );
+      await tester.pump();
+      return tester.getSize(find.byKey(const ValueKey('typing')));
+    }
+
+    final orbitSize = await footerSize(wave: false);
+    check(find.byType(ConduitStreamingOrbit).evaluate()).length.equals(1);
+    check(find.byType(ConduitWaveDots).evaluate()).isEmpty();
+
+    // Remount so the new container's setting is read from scratch.
+    await tester.pumpWidget(const SizedBox.shrink());
+    final waveSize = await footerSize(wave: true);
+    check(find.byType(ConduitWaveDots).evaluate()).length.equals(1);
+    check(find.byType(ConduitStreamingOrbit).evaluate()).isEmpty();
+    check(tester.getSize(find.byType(ConduitWaveDots)).height).equals(28);
+    // The harness disables animations, so the dots hold still.
+    check(tester.widget<ConduitWaveDots>(find.byType(ConduitWaveDots)).animate)
+        .isFalse();
+
+    check(waveSize).equals(orbitSize);
+  });
+
+  testWidgets('the wave paces itself once reply text arrives', (tester) async {
+    final container = ProviderContainer(
+      overrides: [
+        appSettingsProvider.overrideWithValue(
+          const AppSettings(
+            disableHapticsWhileStreaming: true,
+            waveTypingIndicator: true,
+          ),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    Widget footer(String content) => UncontrolledProviderScope(
+      container: container,
+      child: MaterialApp(
+        theme: AppTheme.light(TweakcnThemes.t3Chat),
+        home: Scaffold(
+          body: StreamingTurnFooter(
+            message: ChatMessage(
+              id: 'assistant-live',
+              role: 'assistant',
+              content: content,
+              timestamp: DateTime(2024, 1, 1),
+              isStreaming: true,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(footer(''));
+    await tester.pump(const Duration(milliseconds: 250));
+
+    var dots = tester.widget<ConduitWaveDots>(find.byType(ConduitWaveDots));
+    check(dots.animate).isTrue();
+    check(dots.paced).isFalse();
+    check(
+      find
+          .ancestor(
+            of: find.byType(ConduitWaveDots),
+            matching: find.byType(RepaintBoundary),
+          )
+          .evaluate(),
+    ).isNotEmpty();
+
+    await tester.pumpWidget(footer('Hello'));
+    await tester.pump(const Duration(milliseconds: 250));
+    dots = tester.widget<ConduitWaveDots>(find.byType(ConduitWaveDots));
+    check(dots.animate).isTrue();
+    check(dots.paced).isTrue();
+
+    // Unmount so the wave's controller and timer do not outlive the test.
+    await tester.pumpWidget(const SizedBox.shrink());
   });
 
   testWidgets('stays visible while status rows are pending', (tester) async {

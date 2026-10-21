@@ -3455,6 +3455,8 @@
   "backendChooserSelfHostedSectionTitle": "Selbst gehostete Dienste",
   "citationShowTitles": "Seitentitel in Quellenangaben anzeigen",
   "citationShowTitlesDescription": "In Quellen-Badges Seitentitel statt Website-Domains verwenden",
+  "waveTypingIndicator": "Wellen-Tippindikator",
+  "waveTypingIndicatorDescription": "Drei wogende Punkte anzeigen, während eine Antwort geschrieben wird",
   "directContextCompactionDescription": "Diese Modelle geben kein Kontextfenster an. Conduit verwendet das gewählte Limit, um ältere Nachrichten zu komprimieren, bevor Anfragen zu groß werden.",
   "directContextCompactionPickerDescription": "Wähle das Kontextfenster, das Conduit für die automatische Komprimierung verwenden soll.",
   "directContextCompactionTitle": "Kontextkomprimierung",

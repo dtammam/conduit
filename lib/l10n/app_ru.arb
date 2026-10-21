@@ -3501,6 +3501,8 @@
   "directApiKeyHeaderAzureOnlyDescription": "Отправляет учётные данные в заголовке api-key. Используйте только для Azure OpenAI; другие OpenAI-совместимые серверы ожидают токен Bearer.",
   "citationShowTitles": "Показывать заголовки страниц в источниках",
   "citationShowTitlesDescription": "Использовать заголовки страниц вместо доменов сайтов в значках источников",
+  "waveTypingIndicator": "Волновой индикатор набора",
+  "waveTypingIndicatorDescription": "Показывать три плавно качающиеся точки, пока пишется ответ",
   "notificationSystemSettingsDescription": "Измените разрешения, звук и параметры баннеров для Conduit.",
   "notificationSystemSettingsOpenFailed": "Не удалось открыть системные настройки уведомлений.",
   "notificationTargetsTitle": "Адреса webhook",

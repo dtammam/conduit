@@ -3455,6 +3455,8 @@
   "backendChooserSelfHostedSectionTitle": "Servizi self-hosted",
   "citationShowTitles": "Mostra i titoli delle pagine citate",
   "citationShowTitlesDescription": "Usa i titoli delle pagine invece dei domini nei badge delle citazioni",
+  "waveTypingIndicator": "Indicatore di scrittura a onda",
+  "waveTypingIndicatorDescription": "Mostra tre puntini ondeggianti mentre viene scritta una risposta",
   "directContextCompactionDescription": "Questi modelli non indicano la finestra di contesto. Conduit usa il limite selezionato per compattare i messaggi meno recenti prima che le richieste diventino troppo grandi.",
   "directContextCompactionPickerDescription": "Scegli la finestra di contesto che Conduit deve usare per la compattazione automatica.",
   "directContextCompactionTitle": "Compattazione del contesto",

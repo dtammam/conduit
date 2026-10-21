@@ -5364,6 +5364,8 @@
   "backendChooserSelfHostedSectionTitle": "Vlastné hostované služby",
   "citationShowTitles": "Zobrazovať názvy stránok pri citáciách",
   "citationShowTitlesDescription": "V odznakoch citácií používať názvy stránok namiesto domén webov",
+  "waveTypingIndicator": "Vlnitý indikátor písania",
+  "waveTypingIndicatorDescription": "Zobrazovať tri vlniace sa bodky, kým sa píše odpoveď",
   "directContextCompactionDescription": "Tieto modely neuvádzajú veľkosť kontextového okna. Conduit použije zvolený limit na zhustenie starších správ skôr, než budú požiadavky príliš veľké.",
   "directContextCompactionPickerDescription": "Vyberte kontextové okno, ktoré má Conduit použiť na automatické zhustenie.",
   "directContextCompactionTitle": "Zhustenie kontextu",

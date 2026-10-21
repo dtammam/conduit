@@ -590,6 +590,9 @@ const nativeAdvancedFeaturesId = 'advanced-features';
 /// page.
 const nativeCitationShowTitlesId = 'citation-show-titles';
 
+/// Control id of the "Wave typing indicator" toggle in the native Chats page.
+const nativeWaveTypingIndicatorId = 'wave-typing-indicator';
+
 /// Control id the accountless "Connect to Open WebUI" root row sends.
 const nativeConnectOpenWebUiActionId = 'add-owui-server';
 
