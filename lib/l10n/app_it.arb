@@ -4267,5 +4267,7 @@
   "accountsAddressConfirmTitle": "Verificare questo indirizzo?",
   "accountsAddressConfirmMessage": "Per assicurarsi che {host} sia questo server, Conduit gli invia la sessione di un account salvato qui. Continua solo se ti fidi di questo indirizzo.",
   "accountsAddressConfirmAction": "Verifica indirizzo",
-  "modelPickerHint": "Apre il selettore del modello"
+  "modelPickerHint": "Apre il selettore del modello",
+  "assistantAvatarMediaDefault": "Predefinito",
+  "assistantAvatarRemoveRestoresDefault": "Rimuovendolo torna quello predefinito"
 }

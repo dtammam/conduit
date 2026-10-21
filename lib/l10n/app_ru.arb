@@ -4305,5 +4305,7 @@
   "accountsAddressConfirmTitle": "Проверить этот адрес?",
   "accountsAddressConfirmMessage": "Чтобы убедиться, что {host} — это тот же сервер, Conduit отправит туда сеанс аккаунта, сохранённого на этом устройстве. Продолжайте, только если доверяете этому адресу.",
   "accountsAddressConfirmAction": "Проверить адрес",
-  "modelPickerHint": "Открывает выбор модели"
+  "modelPickerHint": "Открывает выбор модели",
+  "assistantAvatarMediaDefault": "По умолчанию",
+  "assistantAvatarRemoveRestoresDefault": "Удаление вернёт вариант по умолчанию"
 }

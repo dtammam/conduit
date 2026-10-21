@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:conduit_core/utils/debug_logger.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -11,33 +12,50 @@ const String _logScope = 'chat/avatar';
 
 enum AssistantAvatarMediaKind { video, image }
 
-/// One clip the avatar can show: a video or an image the user picked.
+/// One clip the avatar can show: a user file or a bundled default asset.
 class AssistantAvatarMedia {
-  const AssistantAvatarMedia.file(this.path, this.kind);
+  const AssistantAvatarMedia.file(this.path, this.kind) : isBundled = false;
 
-  /// The file system path of the clip.
+  const AssistantAvatarMedia.asset(this.path)
+    : kind = AssistantAvatarMediaKind.video,
+      isBundled = true;
+
+  /// A file system path for user files, an asset key for bundled clips.
   final String path;
   final AssistantAvatarMediaKind kind;
+  final bool isBundled;
 
   /// Stable identity used to key video controllers.
-  String get id => 'file:$path';
+  String get id => isBundled ? 'asset:$path' : 'file:$path';
 }
 
-/// The clips on disk, read once at strip init and again after every change.
+/// What is available on disk and in the bundle, read once at strip init and
+/// again after every change.
 class AssistantAvatarMediaSet {
-  const AssistantAvatarMediaSet({this.userFiles = const {}});
+  const AssistantAvatarMediaSet({
+    this.userFiles = const {},
+    this.bundled = const {},
+  });
 
   static const empty = AssistantAvatarMediaSet();
 
   final Map<AssistantActivity, AssistantAvatarMedia> userFiles;
+  final Set<AssistantActivity> bundled;
 
   /// The clip assigned to [state] itself, without any fallback.
-  AssistantAvatarMedia? ownMedia(AssistantActivity state) => userFiles[state];
+  AssistantAvatarMedia? ownMedia(AssistantActivity state) {
+    final user = userFiles[state];
+    if (user != null) return user;
+    if (bundled.contains(state)) {
+      return AssistantAvatarMedia.asset(_bundledAsset(state));
+    }
+    return null;
+  }
 
-  /// The clip to show for [state]: its own, else
-  /// [AssistantActivity.making] borrows the working clip and
-  /// [AssistantActivity.done] the idle clip. Null means the strip shows the
-  /// model's initial.
+  /// The clip to show for [state]: the user file, then the bundled default,
+  /// then with neither, [AssistantActivity.making] borrows the working clip
+  /// and [AssistantActivity.done] the idle clip. Null means the strip shows
+  /// the model's initial.
   AssistantAvatarMedia? resolve(AssistantActivity state) {
     final own = ownMedia(state);
     if (own != null) return own;
@@ -48,6 +66,10 @@ class AssistantAvatarMediaSet {
     };
   }
 }
+
+/// Asset key of the optional default clip bundled for [state].
+String _bundledAsset(AssistantActivity state) =>
+    'assets/assistant_avatar/${state.name}.mp4';
 
 const Set<String> _videoExtensions = {
   'mp4',
@@ -71,12 +93,15 @@ AssistantAvatarMediaKind _kindForExtension(String extension) {
 class AssistantAvatarMediaStore {
   AssistantAvatarMediaStore({
     Future<Directory> Function()? documentsDirectory,
+    AssetBundle? bundle,
     Future<XFile?> Function()? pickMedia,
   }) : _documentsDirectory =
            documentsDirectory ?? getApplicationDocumentsDirectory,
+       _bundle = bundle,
        _pickMedia = pickMedia ?? (() => ImagePicker().pickMedia());
 
   final Future<Directory> Function() _documentsDirectory;
+  final AssetBundle? _bundle;
   final Future<XFile?> Function() _pickMedia;
 
   Future<Directory> _folder() async {
@@ -85,8 +110,13 @@ class AssistantAvatarMediaStore {
   }
 
   /// Everything currently available. Never throws.
-  Future<AssistantAvatarMediaSet> load() async =>
-      AssistantAvatarMediaSet(userFiles: await _loadUserFiles());
+  Future<AssistantAvatarMediaSet> load() async {
+    final results = await Future.wait([_loadUserFiles(), _probeBundled()]);
+    return AssistantAvatarMediaSet(
+      userFiles: results[0] as Map<AssistantActivity, AssistantAvatarMedia>,
+      bundled: results[1] as Set<AssistantActivity>,
+    );
+  }
 
   Future<Map<AssistantActivity, AssistantAvatarMedia>> _loadUserFiles() async {
     final found = <AssistantActivity, AssistantAvatarMedia>{};
@@ -114,6 +144,29 @@ class AssistantAvatarMediaStore {
       );
     }
     return found;
+  }
+
+  /// Reads the asset manifest once, so a missing default is silent and no
+  /// clip is loaded into memory just to learn that it exists.
+  Future<Set<AssistantActivity>> _probeBundled() async {
+    try {
+      final manifest = await AssetManifest.loadFromAssetBundle(
+        _bundle ?? rootBundle,
+      );
+      final assets = manifest.listAssets().toSet();
+      return {
+        for (final state in AssistantActivity.values)
+          if (assets.contains(_bundledAsset(state))) state,
+      };
+    } catch (error, stackTrace) {
+      DebugLogger.error(
+        'probe-bundled-failed',
+        scope: _logScope,
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return const {};
+    }
   }
 
   /// Opens the photo library and stores the picked video or image as the
@@ -170,7 +223,7 @@ class AssistantAvatarMediaStore {
     }
   }
 
-  /// Deletes the user file for [state].
+  /// Deletes the user file for [state]; a bundled default then shows again.
   Future<void> remove(AssistantActivity state) async {
     try {
       final folder = await _folder();

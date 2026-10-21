@@ -5870,5 +5870,7 @@
   "accountsAddressConfirmTitle": "このアドレスを確認しますか？",
   "accountsAddressConfirmMessage": "{host} がこのサーバーであることを確かめるため、Conduit はこのデバイスに保存されたアカウントのセッションをそこへ送信します。このアドレスを信頼できる場合のみ続行してください。",
   "accountsAddressConfirmAction": "アドレスを確認",
-  "modelPickerHint": "モデルの選択を開きます"
+  "modelPickerHint": "モデルの選択を開きます",
+  "assistantAvatarMediaDefault": "デフォルト",
+  "assistantAvatarRemoveRestoresDefault": "削除するとデフォルトに戻ります"
 }

@@ -4267,5 +4267,7 @@
   "accountsAddressConfirmTitle": "要检查此地址吗？",
   "accountsAddressConfirmMessage": "为确认 {host} 就是这台服务器，Conduit 会向它发送此设备上已保存账户的会话。仅在你信任此地址时继续。",
   "accountsAddressConfirmAction": "检查地址",
-  "modelPickerHint": "打开模型选择器"
+  "modelPickerHint": "打开模型选择器",
+  "assistantAvatarMediaDefault": "默认",
+  "assistantAvatarRemoveRestoresDefault": "移除后恢复默认"
 }
