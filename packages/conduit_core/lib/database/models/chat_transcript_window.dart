@@ -13,13 +13,16 @@ List<T> latestTranscriptWindow<T>(List<T> complete, int loadedCount) {
 }
 
 /// How many of the [total] messages the timeline shows: the paging state's
-/// [loadedCount], or a first page while paging has not caught up with a
-/// transcript that just loaded.
+/// [loadedCount], and never less than a first page, which paging always
+/// keeps. Paging catches up with a transcript that just loaded or grew a
+/// frame late; without the floor a chat shorter than a page would drop its
+/// oldest rows for that frame and the viewport would lose its center row.
 int renderedTranscriptCount({required int total, required int loadedCount}) {
-  if (loadedCount == 0 && total > 0) {
-    return total < kChatTranscriptPageSize ? total : kChatTranscriptPageSize;
-  }
-  return loadedCount < total ? loadedCount : total;
+  final firstPage = total < kChatTranscriptPageSize
+      ? total
+      : kChatTranscriptPageSize;
+  final loaded = loadedCount < total ? loadedCount : total;
+  return loaded > firstPage ? loaded : firstPage;
 }
 
 /// Whether to load the next older page: the user has scrolled the timeline
