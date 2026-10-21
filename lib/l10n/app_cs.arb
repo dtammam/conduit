@@ -6292,5 +6292,7 @@
         "example": "3"
       }
     }
-  }
+  },
+  "assistantAvatarMediaDefault": "Výchozí",
+  "assistantAvatarRemoveRestoresDefault": "Odebráním se vrátí výchozí"
 }

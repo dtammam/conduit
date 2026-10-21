@@ -4155,5 +4155,7 @@
         "example": "3"
       }
     }
-  }
+  },
+  "assistantAvatarMediaDefault": "기본값",
+  "assistantAvatarRemoveRestoresDefault": "제거하면 기본값으로 돌아갑니다"
 }

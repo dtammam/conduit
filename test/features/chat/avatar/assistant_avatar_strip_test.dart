@@ -28,7 +28,7 @@ class _Messages extends ChatMessagesNotifier {
   void replace(List<ChatMessage> messages) => state = messages;
 }
 
-/// A store that never touches the disk.
+/// A store that never touches the disk or the bundle.
 class _FakeStore extends AssistantAvatarMediaStore {
   _FakeStore([this.media = AssistantAvatarMediaSet.empty]);
 
@@ -327,6 +327,7 @@ void main() {
             AssistantAvatarMediaKind.image,
           ),
         },
+        bundled: {AssistantActivity.idle},
       ),
     );
     await mount(tester, store: store);
@@ -355,11 +356,15 @@ void main() {
       if (previousTop != null) check(top).isGreaterThan(previousTop);
       previousTop = top;
     }
+    final idleRow = find.byKey(const ValueKey('assistant-avatar-row-idle'));
+    check(
+      find.descendant(of: idleRow, matching: find.text('Default')).evaluate(),
+    ).length.equals(1);
     final doneRow = find.byKey(const ValueKey('assistant-avatar-row-done'));
     check(find.descendant(of: doneRow, matching: find.text('Image')).evaluate())
         .length
         .equals(1);
-    check(find.text('None').evaluate()).length.equals(3);
+    check(find.text('None').evaluate()).length.equals(2);
     check(find.text('Choose').evaluate()).length.equals(4);
     check(find.text('Remove').evaluate()).length.equals(4);
   });

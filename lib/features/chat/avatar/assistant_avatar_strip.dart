@@ -134,12 +134,17 @@ class _AssistantAvatarStripState extends ConsumerState<AssistantAvatarStrip> {
   Future<void> _reloadMedia() async {
     final media = await _store.load();
     if (_disposed) return;
-    // A replaced file keeps its path, so drop every controller; they are
-    // recreated lazily.
-    for (final controller in _controllers.values) {
-      unawaited(controller.dispose());
+    // A replaced file keeps its path, so drop every file controller and
+    // any asset controller no longer in use; they are recreated lazily.
+    final keep = {
+      for (final state in AssistantActivity.values)
+        if (media.resolve(state) case final resolved? when resolved.isBundled)
+          resolved.id,
+    };
+    final stale = _controllers.keys.where((id) => !keep.contains(id)).toList();
+    for (final id in stale) {
+      unawaited(_controllers.remove(id)?.dispose());
     }
-    _controllers.clear();
     _failedMedia.clear();
     _playingId = null;
     setState(() => _media = media);
@@ -260,7 +265,9 @@ class _AssistantAvatarStripState extends ConsumerState<AssistantAvatarStrip> {
     if (existing != null) return existing;
     final VideoPlayerController controller;
     try {
-      controller = VideoPlayerController.file(File(media.path));
+      controller = media.isBundled
+          ? VideoPlayerController.asset(media.path)
+          : VideoPlayerController.file(File(media.path));
     } catch (error, stackTrace) {
       DebugLogger.error(
         'video-create-failed',
@@ -685,6 +692,7 @@ class _AssistantAvatarSheetState extends ConsumerState<_AssistantAvatarSheet> {
           ? l10n.assistantAvatarMediaVideo
           : l10n.assistantAvatarMediaImage;
     }
+    if (_media.bundled.contains(state)) return l10n.assistantAvatarMediaDefault;
     return l10n.assistantAvatarMediaNone;
   }
 
@@ -732,6 +740,7 @@ class _AssistantAvatarSheetState extends ConsumerState<_AssistantAvatarSheet> {
     AssistantActivity state,
   ) {
     final hasUserFile = _media.userFiles.containsKey(state);
+    final overridesDefault = hasUserFile && _media.bundled.contains(state);
     final busy = _busy != null;
     return Padding(
       key: ValueKey('assistant-avatar-row-${state.name}'),
@@ -749,7 +758,10 @@ class _AssistantAvatarSheetState extends ConsumerState<_AssistantAvatarSheet> {
                   ),
                 ),
                 Text(
-                  _kindLabel(l10n, state),
+                  overridesDefault
+                      ? '${_kindLabel(l10n, state)} · '
+                            '${l10n.assistantAvatarRemoveRestoresDefault}'
+                      : _kindLabel(l10n, state),
                   style: AppTypography.bodySmallStyle.copyWith(
                     color: theme.textSecondary,
                   ),

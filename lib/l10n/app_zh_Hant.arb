@@ -4383,5 +4383,7 @@
         "example": "3"
       }
     }
-  }
+  },
+  "assistantAvatarMediaDefault": "預設",
+  "assistantAvatarRemoveRestoresDefault": "移除後恢復預設"
 }

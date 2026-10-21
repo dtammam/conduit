@@ -4383,5 +4383,7 @@
         "example": "3"
       }
     }
-  }
+  },
+  "assistantAvatarMediaDefault": "Standard",
+  "assistantAvatarRemoveRestoresDefault": "Entfernen stellt den Standard wieder her"
 }

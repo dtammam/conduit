@@ -4421,5 +4421,7 @@
         "example": "3"
       }
     }
-  }
+  },
+  "assistantAvatarMediaDefault": "По умолчанию",
+  "assistantAvatarRemoveRestoresDefault": "Удаление вернёт вариант по умолчанию"
 }

@@ -4383,5 +4383,7 @@
         "example": "3"
       }
     }
-  }
+  },
+  "assistantAvatarMediaDefault": "默认",
+  "assistantAvatarRemoveRestoresDefault": "移除后恢复默认"
 }

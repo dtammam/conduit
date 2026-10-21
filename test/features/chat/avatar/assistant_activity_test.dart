@@ -463,6 +463,29 @@ void main() {
       check(workingOnly.resolve(AssistantActivity.done)).isNull();
     });
 
+    test('a user file beats the bundled default', () {
+      const media = AssistantAvatarMediaSet(
+        userFiles: {AssistantActivity.working: workingFile},
+        bundled: {AssistantActivity.working},
+      );
+      check(media.resolve(AssistantActivity.working)).equals(workingFile);
+    });
+
+    test('a bundled default is used when no user file exists', () {
+      const media = AssistantAvatarMediaSet(bundled: {AssistantActivity.idle});
+      final resolved = media.resolve(AssistantActivity.idle)!;
+      check(resolved.isBundled).isTrue();
+      check(resolved.path).equals('assets/assistant_avatar/idle.mp4');
+      check(resolved.kind).equals(AssistantAvatarMediaKind.video);
+      check(media.resolve(AssistantActivity.done)!.path)
+          .equals('assets/assistant_avatar/idle.mp4');
+      const bundledWorking = AssistantAvatarMediaSet(
+        bundled: {AssistantActivity.working},
+      );
+      check(bundledWorking.resolve(AssistantActivity.making)!.path)
+          .equals('assets/assistant_avatar/working.mp4');
+    });
+
     test('working and idle have no fallback, so the initial shows', () {
       const media = AssistantAvatarMediaSet(
         userFiles: {AssistantActivity.done: idleFile},

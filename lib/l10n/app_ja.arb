@@ -5986,5 +5986,7 @@
         "example": "3"
       }
     }
-  }
+  },
+  "assistantAvatarMediaDefault": "デフォルト",
+  "assistantAvatarRemoveRestoresDefault": "削除するとデフォルトに戻ります"
 }

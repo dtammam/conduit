@@ -8292,5 +8292,13 @@
         "example": "3"
       }
     }
+  },
+  "assistantAvatarMediaDefault": "Domyślny",
+  "@assistantAvatarMediaDefault": {
+    "description": "Shown in the assistant avatar sheet for a state that uses the clip bundled with the app."
+  },
+  "assistantAvatarRemoveRestoresDefault": "Usunięcie przywraca domyślny",
+  "@assistantAvatarRemoveRestoresDefault": {
+    "description": "Hint in the assistant avatar sheet that removing a picked clip brings back the bundled one."
   }
 }
