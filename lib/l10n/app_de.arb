@@ -4285,5 +4285,7 @@
   "accountsAddressConfirmTitle": "Diese Adresse prüfen?",
   "accountsAddressConfirmMessage": "Um sicherzugehen, dass {host} dieser Server ist, schickt Conduit dorthin die Sitzung eines hier gespeicherten Kontos. Fahre nur fort, wenn du dieser Adresse vertraust.",
   "accountsAddressConfirmAction": "Adresse prüfen",
-  "modelPickerHint": "Öffnet die Modellauswahl"
+  "modelPickerHint": "Öffnet die Modellauswahl",
+  "chatDragToFolder": "Chats in Ordner ziehen",
+  "chatDragToFolderDescription": "Einen Chat in der Seitenleiste halten und auf einen Ordner ziehen"
 }

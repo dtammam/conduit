@@ -4285,5 +4285,7 @@
   "accountsAddressConfirmTitle": "Dit adres controleren?",
   "accountsAddressConfirmMessage": "Om zeker te weten dat {host} deze server is, stuurt Conduit er de sessie van een hier opgeslagen account naartoe. Ga alleen verder als je dit adres vertrouwt.",
   "accountsAddressConfirmAction": "Adres controleren",
-  "modelPickerHint": "Opent de modelkiezer"
+  "modelPickerHint": "Opent de modelkiezer",
+  "chatDragToFolder": "Chats naar mappen slepen",
+  "chatDragToFolderDescription": "Houd een chat in de zijbalk vast en sleep hem naar een map"
 }

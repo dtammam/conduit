@@ -391,6 +391,7 @@ void main() {
         'message-bubbles',
         'compact-tool-summaries',
         'wave-typing-indicator',
+        'chat-drag-to-folder',
       ]);
     });
 

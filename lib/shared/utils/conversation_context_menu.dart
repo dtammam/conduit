@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:conduit/shared/widgets/platform_ui/platform_ui.dart';
 import 'package:conduit_core/database/chat_database_repository.dart';
 import 'package:conduit_core/models/conversation.dart';
@@ -13,6 +15,7 @@ import 'package:conduit/shared/widgets/themed_sheets.dart';
 import 'package:cupertino_ui/cupertino_ui.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:conduit/core/services/haptic_service.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:conduit_core/features/chat/providers/chat_providers.dart'
@@ -41,6 +44,47 @@ class ConduitContextMenuAction {
   });
 }
 
+/// How long a press must stay put on iOS before moving it drags.
+///
+/// The iOS menu preview starts its 800 ms lift once the press is recognized
+/// (after [kPressTimeout]), claims the pointer halfway through, about 500 ms
+/// after touch down, and opens the menu at about 900 ms. Moving between this
+/// delay and the menu opening drags; moving earlier stays a scroll or a swipe.
+const Duration kConduitContextMenuHoldDragDelay = Duration(milliseconds: 600);
+
+/// How long a held press waits, after the long press is recognized, before
+/// the menu opens on platforms other than iOS when [ConduitContextMenu.holdDrag]
+/// is set. Moving in this window drags; lifting opens the menu at once.
+const Duration kConduitContextMenuHeldMenuDelay = Duration(milliseconds: 300);
+
+/// Where a held press turned into a drag.
+class ConduitContextMenuDragStartDetails {
+  const ConduitContextMenuDragStartDetails({
+    required this.pointer,
+    required this.globalPosition,
+  });
+
+  /// The pointer that is dragging. It stays down; the receiver follows it
+  /// until it lifts or is cancelled.
+  final int pointer;
+  final Offset globalPosition;
+}
+
+/// Lets a held press on a [ConduitContextMenu] child turn into a drag.
+///
+/// A press that moves before the menu claims it is left to scrolling and
+/// swipes, as before. A press that stays put opens the menu as before. A press
+/// held until the menu claims it and then moved past touch slop, before the
+/// menu opens, stops the menu and hands the pointer to [onStart].
+///
+/// The window closes when the menu opens because opening it pushes a route,
+/// and a route push cancels every pointer that is down.
+class ConduitContextMenuHoldDrag {
+  const ConduitContextMenuHoldDrag({required this.onStart});
+
+  final void Function(ConduitContextMenuDragStartDetails details) onStart;
+}
+
 /// A long-press context menu widget with platform-specific presentation.
 ///
 /// The app keeps its own action model so call sites can share haptics and
@@ -55,6 +99,10 @@ class ConduitContextMenu extends StatefulWidget {
   final Widget Function(BuildContext context, Widget child)? previewBuilder;
   final bool stabilizePreviewSize;
 
+  /// When set, holding the child and then moving starts a drag instead of
+  /// opening the menu. Ignored when there are no [actions].
+  final ConduitContextMenuHoldDrag? holdDrag;
+
   const ConduitContextMenu({
     super.key,
     required this.actions,
@@ -62,6 +110,7 @@ class ConduitContextMenu extends StatefulWidget {
     this.topWidgetBuilder,
     this.previewBuilder,
     this.stabilizePreviewSize = true,
+    this.holdDrag,
   });
 
   @override
@@ -71,12 +120,138 @@ class ConduitContextMenu extends StatefulWidget {
 class _ConduitContextMenuState extends State<ConduitContextMenu> {
   Size? _childSize;
 
+  // Rebuilding the iOS menu under a new key drops its opening preview.
+  int _menuGeneration = 0;
+  int? _holdPointer;
+  Offset? _holdOrigin;
+  Timer? _holdTimer;
+  bool _menuClaimedHold = false;
+  Timer? _heldMenuTimer;
+
+  @override
+  void didUpdateWidget(covariant ConduitContextMenu oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.holdDrag == null) _resetHold();
+  }
+
+  @override
+  void dispose() {
+    _holdTimer?.cancel();
+    _heldMenuTimer?.cancel();
+    super.dispose();
+  }
+
+  void _handlePointerDown(PointerDownEvent event) {
+    if (_holdPointer != null || event.buttons != kPrimaryButton) return;
+    if (widget.holdDrag == null) return;
+    _holdPointer = event.pointer;
+    _holdOrigin = event.position;
+    _menuClaimedHold = false;
+    _holdTimer?.cancel();
+    // Elsewhere the long press recognizer reports the claim itself.
+    _holdTimer = PlatformInfo.isIOS
+        ? Timer(kConduitContextMenuHoldDragDelay, () => _menuClaimedHold = true)
+        : null;
+  }
+
+  void _handlePointerMove(PointerMoveEvent event) {
+    final origin = _holdOrigin;
+    if (event.pointer != _holdPointer || origin == null) return;
+    final slop = computeHitSlop(
+      event.kind,
+      MediaQuery.maybeGestureSettingsOf(context),
+    );
+    if ((event.position - origin).distance <= slop) return;
+    if (!_menuClaimedHold) {
+      // Moving early is a scroll or a swipe; leave it to them.
+      _resetHold();
+      return;
+    }
+    final holdDrag = widget.holdDrag;
+    _resetHold();
+    if (holdDrag == null) return;
+    _stopMenu();
+    holdDrag.onStart(
+      ConduitContextMenuDragStartDetails(
+        pointer: event.pointer,
+        globalPosition: event.position,
+      ),
+    );
+  }
+
+  void _handlePointerEnd(PointerEvent event) {
+    if (event.pointer == _holdPointer) _resetHold();
+  }
+
+  void _resetHold() {
+    _holdTimer?.cancel();
+    _holdTimer = null;
+    _holdPointer = null;
+    _holdOrigin = null;
+    _menuClaimedHold = false;
+  }
+
+  /// Keeps the menu this press began from opening.
+  void _stopMenu() {
+    _heldMenuTimer?.cancel();
+    _heldMenuTimer = null;
+    if (PlatformInfo.isIOS && mounted) {
+      setState(() => _menuGeneration++);
+    }
+  }
+
+  void _handleHeldLongPressStart(List<AdaptiveContextMenuAction> actions) {
+    if (_holdPointer == null) return;
+    _menuClaimedHold = true;
+    _heldMenuTimer?.cancel();
+    _heldMenuTimer = Timer(
+      kConduitContextMenuHeldMenuDelay,
+      () => _showHeldMenu(actions),
+    );
+  }
+
+  void _handleHeldLongPressUp(List<AdaptiveContextMenuAction> actions) {
+    if (_heldMenuTimer == null) return;
+    _showHeldMenu(actions);
+  }
+
+  void _showHeldMenu(List<AdaptiveContextMenuAction> actions) {
+    _heldMenuTimer?.cancel();
+    _heldMenuTimer = null;
+    if (!mounted) return;
+    final renderObject = context.findRenderObject();
+    if (renderObject is! RenderBox || !renderObject.attached) return;
+    final topLeft = renderObject.localToGlobal(Offset.zero);
+    final bottomRight = renderObject.localToGlobal(
+      renderObject.size.bottomRight(Offset.zero),
+    );
+    showAdaptiveContextMenu(
+      context: context,
+      actions: actions,
+      globalAnchor: Rect.fromPoints(topLeft, bottomRight),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (widget.actions.isEmpty) {
       return widget.child;
     }
+    final menu = _buildMenu(context);
+    if (widget.holdDrag == null) {
+      return menu;
+    }
+    return Listener(
+      behavior: HitTestBehavior.translucent,
+      onPointerDown: _handlePointerDown,
+      onPointerMove: _handlePointerMove,
+      onPointerUp: _handlePointerEnd,
+      onPointerCancel: _handlePointerEnd,
+      child: menu,
+    );
+  }
 
+  Widget _buildMenu(BuildContext context) {
     final adaptiveActions = [
       for (final action in widget.actions)
         AdaptiveContextMenuAction(
@@ -108,11 +283,32 @@ class _ConduitContextMenuState extends State<ConduitContextMenu> {
       );
     }
 
+    if (widget.holdDrag != null) {
+      // Same menu as [AdaptiveContextMenu], held back briefly so a held press
+      // can still become a drag before the menu's route cancels the pointer.
+      return GestureDetector(
+        onSecondaryTapDown: (details) => showAdaptiveContextMenu(
+          context: context,
+          actions: adaptiveActions,
+          globalAnchor: Rect.fromLTWH(
+            details.globalPosition.dx,
+            details.globalPosition.dy,
+            0,
+            0,
+          ),
+        ),
+        onLongPressStart: (_) => _handleHeldLongPressStart(adaptiveActions),
+        onLongPressUp: () => _handleHeldLongPressUp(adaptiveActions),
+        child: widget.child,
+      );
+    }
+
     return AdaptiveContextMenu(actions: adaptiveActions, child: widget.child);
   }
 
   Widget _buildCupertinoContextMenu(BuildContext context) {
     final contextMenu = CupertinoContextMenu.builder(
+      key: ValueKey<int>(_menuGeneration),
       actions: [
         for (final action in widget.actions)
           CupertinoContextMenuAction(
@@ -378,20 +574,40 @@ Future<void> _moveConversation(
   required String? currentFolderId,
   required List<Folder> folders,
 }) async {
-  final rawConversationId = ChatStorageIdentity.parse(conversationId).rawId;
   final target = await _showConversationMoveSheet(
     context,
     folders: folders,
     currentFolderId: currentFolderId,
   );
   if (!context.mounted || target == null) return;
-  if (target.folderId == currentFolderId) return;
+  await moveConversationToFolder(
+    context,
+    ref,
+    conversationId,
+    currentFolderId: currentFolderId,
+    targetFolderId: target.folderId,
+  );
+}
+
+/// Moves the chat with scoped id [conversationId] into [targetFolderId], or
+/// out of any folder when it is null, and updates the cached chats.
+///
+/// The "Move" menu action and dragging a chat onto a folder both land here.
+Future<void> moveConversationToFolder(
+  BuildContext context,
+  WidgetRef ref,
+  String conversationId, {
+  required String? currentFolderId,
+  required String? targetFolderId,
+}) async {
+  if (targetFolderId == currentFolderId) return;
+  final rawConversationId = ChatStorageIdentity.parse(conversationId).rawId;
 
   final l10n = AppLocalizations.of(context)!;
   try {
     final api = ref.read(apiServiceProvider);
     if (api == null) throw Exception('No API service');
-    await api.moveConversationToFolder(rawConversationId, target.folderId);
+    await api.moveConversationToFolder(rawConversationId, targetFolderId);
     if (!context.mounted) return;
 
     ConduitHaptics.selectionClick();
@@ -400,11 +616,11 @@ Future<void> _moveConversation(
         .updateConversation(
           conversationId,
           (conversation) => conversation.copyWith(
-            folderId: target.folderId,
+            folderId: targetFolderId,
             updatedAt: DateTime.now(),
           ),
           trustFolderConversation:
-              target.folderId != null && target.folderId!.isNotEmpty,
+              targetFolderId != null && targetFolderId.isNotEmpty,
         );
 
     final activeConversation = ref.read(activeConversationProvider);
@@ -414,7 +630,7 @@ Future<void> _moveConversation(
           .read(activeConversationProvider.notifier)
           .set(
             activeConversation.copyWith(
-              folderId: target.folderId,
+              folderId: targetFolderId,
               updatedAt: DateTime.now(),
             ),
           );

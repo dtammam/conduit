@@ -9016,5 +9016,13 @@
   "modelPickerHint": "Opens the model picker",
   "@modelPickerHint": {
     "description": "Screen reader hint on the model name under the assistant avatar; tapping it opens the model picker."
+  },
+  "chatDragToFolder": "Drag chats into folders",
+  "@chatDragToFolder": {
+    "description": "Toggle title for dragging a held chat in the sidebar onto a folder."
+  },
+  "chatDragToFolderDescription": "Hold a chat in the sidebar, then drag it onto a folder",
+  "@chatDragToFolderDescription": {
+    "description": "Subtitle for the drag chats into folders toggle."
   }
 }

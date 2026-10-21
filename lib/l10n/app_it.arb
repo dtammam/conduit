@@ -4285,5 +4285,7 @@
   "accountsAddressConfirmTitle": "Verificare questo indirizzo?",
   "accountsAddressConfirmMessage": "Per assicurarsi che {host} sia questo server, Conduit gli invia la sessione di un account salvato qui. Continua solo se ti fidi di questo indirizzo.",
   "accountsAddressConfirmAction": "Verifica indirizzo",
-  "modelPickerHint": "Apre il selettore del modello"
+  "modelPickerHint": "Apre il selettore del modello",
+  "chatDragToFolder": "Trascina le chat nelle cartelle",
+  "chatDragToFolderDescription": "Tieni premuta una chat nella barra laterale, poi trascinala su una cartella"
 }

@@ -6194,5 +6194,7 @@
   "accountsAddressConfirmTitle": "Overiť túto adresu?",
   "accountsAddressConfirmMessage": "Aby Conduit overil, že {host} je tento server, pošle mu reláciu účtu uloženého v tomto zariadení. Pokračujte, len ak tejto adrese dôverujete.",
   "accountsAddressConfirmAction": "Overiť adresu",
-  "modelPickerHint": "Otvorí výber modelu"
+  "modelPickerHint": "Otvorí výber modelu",
+  "chatDragToFolder": "Presúvať chaty do priečinkov",
+  "chatDragToFolderDescription": "Podržte chat na bočnom paneli a potiahnite ho na priečinok"
 }

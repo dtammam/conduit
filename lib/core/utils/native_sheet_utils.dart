@@ -608,6 +608,10 @@ const nativeCompactToolSummariesId = 'compact-tool-summaries';
 /// Control id of the "Wave typing indicator" toggle in the native Chats page.
 const nativeWaveTypingIndicatorId = 'wave-typing-indicator';
 
+/// Control id of the "Drag chats into folders" toggle in the native Chats
+/// page.
+const nativeChatDragToFolderId = 'chat-drag-to-folder';
+
 /// Control id the accountless "Connect to Open WebUI" root row sends.
 const nativeConnectOpenWebUiActionId = 'add-owui-server';
 

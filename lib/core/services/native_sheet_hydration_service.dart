@@ -1629,6 +1629,14 @@ class NativeSheetHydrationService {
         kind: NativeSheetItemKind.toggle,
         value: appSettings.waveTypingIndicator,
       ),
+      NativeSheetItemConfig(
+        id: nativeChatDragToFolderId,
+        title: l10n.chatDragToFolder,
+        subtitle: l10n.chatDragToFolderDescription,
+        sfSymbol: 'folder',
+        kind: NativeSheetItemKind.toggle,
+        value: appSettings.chatDragToFolder,
+      ),
     ];
   }
 
