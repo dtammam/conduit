@@ -71,6 +71,10 @@ class AssistantAvatarMediaSet {
 String _bundledAsset(AssistantActivity state) =>
     'assets/assistant_avatar/${state.name}.mp4';
 
+/// File names of the earlier busy states, in the order the migration
+/// prefers them for the working clip.
+const List<String> _legacyWorkingStates = ['tools', 'writing', 'thinking'];
+
 const Set<String> _videoExtensions = {
   'mp4',
   'm4v',
@@ -109,8 +113,12 @@ class AssistantAvatarMediaStore {
     return Directory(p.join(documents.path, 'assistant_avatar'));
   }
 
+  /// Runs once per store; the strip and its sheet share one store.
+  Future<void>? _migration;
+
   /// Everything currently available. Never throws.
   Future<AssistantAvatarMediaSet> load() async {
+    await (_migration ??= migrateLegacyFiles());
     final results = await Future.wait([_loadUserFiles(), _probeBundled()]);
     return AssistantAvatarMediaSet(
       userFiles: results[0] as Map<AssistantActivity, AssistantAvatarMedia>,
@@ -144,6 +152,59 @@ class AssistantAvatarMediaStore {
       );
     }
     return found;
+  }
+
+  /// Moves clips saved under the earlier five states to the four of today:
+  /// when there is no working clip yet, the old tools clip becomes it, else
+  /// the writing clip, else the thinking clip. Every leftover file of those
+  /// three old states is then deleted. Idle and done keep their files and
+  /// making starts empty. Safe to run again: with no old files it does
+  /// nothing. Never throws.
+  Future<void> migrateLegacyFiles() async {
+    try {
+      final folder = await _folder();
+      if (!await folder.exists()) return;
+      final legacy = <File>[];
+      final byName = <String, File>{};
+      var hasWorking = false;
+      await for (final entity in folder.list(followLinks: false)) {
+        if (entity is! File) continue;
+        final name = p.basenameWithoutExtension(entity.path);
+        if (name == AssistantActivity.working.name) hasWorking = true;
+        if (_legacyWorkingStates.contains(name)) {
+          legacy.add(entity);
+          byName.putIfAbsent(name, () => entity);
+        }
+      }
+      if (legacy.isEmpty) return;
+      if (!hasWorking) {
+        for (final name in _legacyWorkingStates) {
+          final source = byName[name];
+          if (source == null) continue;
+          final target = p.join(
+            folder.path,
+            '${AssistantActivity.working.name}${p.extension(source.path)}',
+          );
+          await source.rename(target);
+          DebugLogger.log(
+            'migrated',
+            scope: _logScope,
+            data: {'from': name, 'to': AssistantActivity.working.name},
+          );
+          break;
+        }
+      }
+      for (final file in legacy) {
+        if (await file.exists()) await file.delete();
+      }
+    } catch (error, stackTrace) {
+      DebugLogger.error(
+        'migrate-failed',
+        scope: _logScope,
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
   }
 
   /// Reads the asset manifest once, so a missing default is silent and no

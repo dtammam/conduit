@@ -542,6 +542,138 @@ void main() {
           .deepEquals({AssistantActivity.done});
     });
 
+    group('migration from the five earlier states', () {
+      Directory folder() => Directory('${documents.path}/assistant_avatar');
+
+      void seed(Map<String, List<int>> files) {
+        folder().createSync(recursive: true);
+        files.forEach(
+          (name, bytes) =>
+              File('${folder().path}/$name').writeAsBytesSync(bytes),
+        );
+      }
+
+      Map<String, List<int>> onDisk() => {
+        for (final entity in folder().listSync())
+          if (entity is File)
+            entity.uri.pathSegments.last: entity.readAsBytesSync(),
+      };
+
+      AssistantAvatarMediaStore newStore() =>
+          AssistantAvatarMediaStore(documentsDirectory: () async => documents);
+
+      test('working takes the tools clip first', () async {
+        seed({
+          'idle.mov': [1],
+          'thinking.mp4': [2],
+          'writing.gif': [3],
+          'tools.mov': [4],
+          'done.png': [5],
+        });
+        final media = await newStore().load();
+        check(onDisk()).deepEquals({
+          'idle.mov': [1],
+          'working.mov': [4],
+          'done.png': [5],
+        });
+        check(media.userFiles.keys.toSet()).deepEquals({
+          AssistantActivity.idle,
+          AssistantActivity.working,
+          AssistantActivity.done,
+        });
+        check(media.userFiles[AssistantActivity.making]).isNull();
+        check(media.resolve(AssistantActivity.making)!.path)
+            .endsWith('assistant_avatar/working.mov');
+      });
+
+      test('working takes the writing clip without a tools clip', () async {
+        seed({
+          'thinking.mp4': [2],
+          'writing.gif': [3],
+        });
+        final media = await newStore().load();
+        check(onDisk()).deepEquals({
+          'working.gif': [3],
+        });
+        check(media.userFiles[AssistantActivity.working]!.kind)
+            .equals(AssistantAvatarMediaKind.image);
+      });
+
+      test('working takes the thinking clip when it is the only one', () async {
+        seed({
+          'thinking.mp4': [2],
+          'done.png': [5],
+        });
+        await newStore().load();
+        check(onDisk()).deepEquals({
+          'working.mp4': [2],
+          'done.png': [5],
+        });
+      });
+
+      test('nothing to move leaves idle and done untouched', () async {
+        seed({
+          'idle.mov': [1],
+          'done.png': [5],
+        });
+        final media = await newStore().load();
+        check(onDisk()).deepEquals({
+          'idle.mov': [1],
+          'done.png': [5],
+        });
+        check(media.userFiles.keys.toSet())
+            .deepEquals({AssistantActivity.idle, AssistantActivity.done});
+      });
+
+      test('an existing working clip wins and old files are removed', () async {
+        seed({
+          'working.mp4': [9],
+          'tools.mov': [4],
+          'thinking.mp4': [2],
+        });
+        await newStore().load();
+        check(onDisk()).deepEquals({
+          'working.mp4': [9],
+        });
+      });
+
+      test('running it again changes nothing', () async {
+        seed({
+          'idle.mov': [1],
+          'writing.gif': [3],
+          'tools.mov': [4],
+        });
+        final store = newStore();
+        await store.load();
+        final first = onDisk();
+        await store.migrateLegacyFiles();
+        await newStore().load();
+        check(onDisk()).deepEquals(first);
+        check(first).deepEquals({
+          'idle.mov': [1],
+          'working.mov': [4],
+        });
+      });
+
+      test('a later pick for making is kept', () async {
+        seed({
+          'tools.mov': [4],
+        });
+        final store = newStore();
+        await store.load();
+        check(await store.assign(AssistantActivity.making, source('m.mp4')))
+            .isTrue();
+        final media = await newStore().load();
+        check(media.userFiles.keys.toSet())
+            .deepEquals({AssistantActivity.working, AssistantActivity.making});
+      });
+
+      test('no folder is fine', () async {
+        await newStore().migrateLegacyFiles();
+        check(folder().existsSync()).isFalse();
+      });
+    });
+
     test(
       'a failing documents directory yields nothing, never throws',
       () async {
