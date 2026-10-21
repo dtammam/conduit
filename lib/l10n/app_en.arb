@@ -4566,6 +4566,18 @@
   "@notificationChannelDescription": {
     "description": "Toggle description for channel-message notifications."
   },
+  "notificationScheduledTaskRemindersTitle": "Scheduled task reminders",
+  "@notificationScheduledTaskRemindersTitle": {
+    "description": "Toggle title for reminders posted after a scheduled task runs."
+  },
+  "notificationScheduledTaskRemindersDescription": "Notify shortly after a scheduled task runs, even when the app is closed.",
+  "@notificationScheduledTaskRemindersDescription": {
+    "description": "Toggle description for scheduled task reminders."
+  },
+  "scheduledTaskReminderBody": "Your scheduled task ran. Tap to see the reply.",
+  "@scheduledTaskReminderBody": {
+    "description": "Body of a scheduled task reminder, written before the reply exists."
+  },
   "notificationRequiresMaster": "Turn on notifications to change this setting.",
   "@notificationRequiresMaster": {
     "description": "Shown when an option is unavailable because notifications are off."

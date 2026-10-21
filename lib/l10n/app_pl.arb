@@ -4349,6 +4349,18 @@
   "@notificationChannelDescription": {
     "description": "Toggle description for channel-message notifications."
   },
+  "notificationScheduledTaskRemindersTitle": "Przypomnienia o zaplanowanych zadaniach",
+  "@notificationScheduledTaskRemindersTitle": {
+    "description": "Toggle title for reminders posted after a scheduled task runs."
+  },
+  "notificationScheduledTaskRemindersDescription": "Powiadamiaj krótko po uruchomieniu zaplanowanego zadania, nawet gdy aplikacja jest zamknięta.",
+  "@notificationScheduledTaskRemindersDescription": {
+    "description": "Toggle description for scheduled task reminders."
+  },
+  "scheduledTaskReminderBody": "Twoje zaplanowane zadanie zostało uruchomione. Stuknij, aby zobaczyć odpowiedź.",
+  "@scheduledTaskReminderBody": {
+    "description": "Body of a scheduled task reminder, written before the reply exists."
+  },
   "notificationRequiresMaster": "Włącz powiadomienia, aby zmienić to ustawienie.",
   "@notificationRequiresMaster": {
     "description": "Shown when an option is unavailable because notifications are off."

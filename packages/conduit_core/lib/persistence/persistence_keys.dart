@@ -109,6 +109,8 @@ final class PreferenceKeys {
   static const String notificationChatEnabled = 'notification_chat_enabled';
   static const String notificationChannelEnabled =
       'notification_channel_enabled';
+  static const String notificationScheduledTaskReminders =
+      'notification_scheduled_task_reminders';
 
   // Hermes Agent (direct second backend) — non-secret config. The API key and
   // long-term memory session key are secrets and live in SecureCredentialStorage.

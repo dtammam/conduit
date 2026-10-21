@@ -4,12 +4,15 @@ import 'dart:io';
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:timezone/timezone.dart' as tz;
 
 import '../../../core/utils/current_localizations.dart';
 
 import 'package:conduit_core/utils/debug_logger.dart';
 
 import 'package:conduit_core/features/notifications/models/app_notification.dart';
+
+import 'scheduled_task_reminders.dart';
 
 part 'local_notification_service.g.dart';
 
@@ -73,6 +76,13 @@ class LocalNotificationService {
 
   /// Emits when the user taps a message notification while the app is running.
   Stream<NotificationTap> get taps => _taps.stream;
+
+  final StreamController<ScheduledTaskReminderTap> _reminderTaps =
+      StreamController<ScheduledTaskReminderTap>.broadcast();
+
+  /// Emits when the user taps a scheduled task reminder while the app is
+  /// running.
+  Stream<ScheduledTaskReminderTap> get reminderTaps => _reminderTaps.stream;
 
   Future<void>? _initializing;
 
@@ -147,6 +157,11 @@ class LocalNotificationService {
     final tap = NotificationTap.tryDecode(response.payload);
     if (tap != null) {
       _taps.add(tap);
+      return;
+    }
+    final reminder = ScheduledTaskReminderTap.tryDecode(response.payload);
+    if (reminder != null && !_reminderTaps.isClosed) {
+      _reminderTaps.add(reminder);
     }
   }
 
@@ -157,6 +172,78 @@ class LocalNotificationService {
     final details = await _plugin.getNotificationAppLaunchDetails();
     if (details?.didNotificationLaunchApp != true) return null;
     return NotificationTap.tryDecode(details?.notificationResponse?.payload);
+  }
+
+  /// The scheduled task reminder that cold-launched the app, if any.
+  Future<ScheduledTaskReminderTap?> launchReminderTap() async {
+    if (!Platform.isAndroid && !Platform.isIOS) return null;
+    final details = await _plugin.getNotificationAppLaunchDetails();
+    if (details?.didNotificationLaunchApp != true) return null;
+    return ScheduledTaskReminderTap.tryDecode(
+      details?.notificationResponse?.payload,
+    );
+  }
+
+  /// Whether this platform can hold a notification scheduled ahead of time.
+  /// iOS only: Android would need the plugin's scheduled-notification
+  /// receivers declared in the app manifest, which this app does not declare.
+  bool get supportsScheduledNotifications => Platform.isIOS;
+
+  /// Schedules a one-off notification for [fireAt]. The system delivers it
+  /// even when the app is suspended or not running.
+  ///
+  /// With [presentInForeground] false, a notification that comes due while
+  /// the app is in the foreground is handed to the app without an alert,
+  /// sound or badge.
+  Future<void> scheduleAt({
+    required int id,
+    required String title,
+    required String body,
+    required DateTime fireAt,
+    required String payload,
+    required bool playSound,
+    bool presentInForeground = true,
+  }) async {
+    if (!supportsScheduledNotifications) return;
+    if (!_initialized) await initialize();
+    final iosDetails = DarwinNotificationDetails(
+      presentAlert: presentInForeground,
+      presentBanner: presentInForeground,
+      presentList: presentInForeground,
+      presentBadge: presentInForeground,
+      presentSound: presentInForeground && playSound,
+      // The plugin only attaches the default sound when presentSound is true,
+      // which would also sound in the foreground, and it has no option for
+      // "default sound, silent in the foreground". A sound name that matches
+      // no bundled file gets the content a sound, and iOS falls back to the
+      // default one for it.
+      sound: playSound && !presentInForeground ? '' : null,
+    );
+    await _plugin.zonedSchedule(
+      id: id,
+      title: title,
+      body: body,
+      // UTC needs no time zone database: the instant is what counts.
+      scheduledDate: tz.TZDateTime.from(fireAt.toUtc(), tz.UTC),
+      notificationDetails: NotificationDetails(iOS: iosDetails),
+      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      payload: payload,
+    );
+  }
+
+  /// Notifications scheduled and not yet delivered.
+  Future<List<PendingNotificationRequest>> pendingNotifications() async {
+    if (!supportsScheduledNotifications) {
+      return const <PendingNotificationRequest>[];
+    }
+    if (!_initialized) await initialize();
+    return _plugin.pendingNotificationRequests();
+  }
+
+  /// Cancels the notification with [id], scheduled or posted.
+  Future<void> cancel(int id) async {
+    if (!Platform.isAndroid && !Platform.isIOS) return;
+    await _plugin.cancel(id: id);
   }
 
   Future<bool> requestPermissions() async {
@@ -261,6 +348,7 @@ class LocalNotificationService {
 
   void dispose() {
     _taps.close();
+    _reminderTaps.close();
   }
 }
 

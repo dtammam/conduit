@@ -385,6 +385,58 @@ class Automations extends _$Automations {
     await _reload(owner);
   }
 
+  /// The account's active tasks, each read on its own so it carries the
+  /// server's `next_runs`, for reminders this device schedules ahead of them.
+  /// The list route leaves `next_runs` out, so the active list is read first
+  /// (up to [maxPages] pages) and at most [maxTasks] tasks, soonest
+  /// `next_run_at` first, are then read one by one. A task whose own read
+  /// fails keeps the list's single `next_run_at`.
+  ///
+  /// This does not touch the list this notifier shows, whose search and
+  /// status filter belong to the Scheduled tasks screen.
+  Future<List<Automation>> activeTasksWithUpcomingRuns({
+    required AutomationsOwner owner,
+    int maxTasks = 40,
+    int maxPages = 5,
+  }) async {
+    final operation = await _admit(owner);
+    final listed = <Automation>[];
+    final known = <String>{};
+    for (var page = 1; page <= maxPages; page++) {
+      final result = await operation._api.getAutomations(
+        status: AutomationStatusFilter.active.query,
+        page: page,
+        authSnapshot: operation._auth,
+      );
+      final added = [
+        for (final item in result.items)
+          if (known.add(item.id)) item,
+      ];
+      listed.addAll(added);
+      if (added.isEmpty || listed.length >= result.total) break;
+    }
+    _stillOwned(owner, listed);
+    final upcoming = [
+      for (final task in listed)
+        if (task.isActive && task.nextRunNs != null) task,
+    ]..sort((a, b) => a.nextRunNs!.compareTo(b.nextRunNs!));
+    final tasks = <Automation>[];
+    for (final task in upcoming.take(maxTasks)) {
+      try {
+        tasks.add(
+          await operation._api.getAutomation(
+            task.id,
+            authSnapshot: operation._auth,
+          ),
+        );
+      } on DioException {
+        tasks.add(task);
+      }
+      _stillOwned(owner, tasks);
+    }
+    return List<Automation>.unmodifiable(tasks);
+  }
+
   /// A page of the task's history, newest first, from offset [skip]. Runs are
   /// separate from the definition and are never merged into it.
   Future<List<AutomationRun>> runs(

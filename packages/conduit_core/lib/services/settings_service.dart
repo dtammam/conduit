@@ -99,6 +99,8 @@ class SettingsService {
       PreferenceKeys.notificationChatEnabled;
   static const String _notificationChannelEnabledKey =
       PreferenceKeys.notificationChannelEnabled;
+  static const String _notificationScheduledTaskRemindersKey =
+      PreferenceKeys.notificationScheduledTaskReminders;
 
   // Settings that name a server's data are stored per Open WebUI account;
   // see account_scoped_preferences.dart. Every read and write below resolves
@@ -219,6 +221,16 @@ class SettingsService {
     return _putPreference(_notificationChannelEnabledKey, value);
   }
 
+  static Future<bool> getNotificationScheduledTaskReminders() {
+    return Future.value(
+      _getPreference<bool>(_notificationScheduledTaskRemindersKey) ?? false,
+    );
+  }
+
+  static Future<void> setNotificationScheduledTaskReminders(bool value) {
+    return _putPreference(_notificationScheduledTaskRemindersKey, value);
+  }
+
   /// Get high contrast preference
   static Future<bool> getHighContrast() {
     final value = _getPreference<bool>(_highContrastKey);
@@ -317,6 +329,8 @@ class SettingsService {
       _notificationSystemKey: settings.notificationSystem,
       _notificationChatEnabledKey: settings.notificationChatEnabled,
       _notificationChannelEnabledKey: settings.notificationChannelEnabled,
+      _notificationScheduledTaskRemindersKey:
+          settings.notificationScheduledTaskReminders,
     };
 
     // Resolve every account-scoped key now, before the first write yields: a
@@ -819,6 +833,8 @@ class SettingsService {
           get<bool>(_notificationChatEnabledKey) ?? true,
       notificationChannelEnabled:
           get<bool>(_notificationChannelEnabledKey) ?? true,
+      notificationScheduledTaskReminders:
+          get<bool>(_notificationScheduledTaskRemindersKey) ?? false,
       webSearchEngine: WebSearchEngineChoice.parse(
         get<String>(PreferenceKeys.webSearchEngine),
       ),
@@ -892,6 +908,10 @@ class AppSettings {
   final bool notificationSystem;
   final bool notificationChatEnabled;
   final bool notificationChannelEnabled;
+
+  /// Local reminders scheduled ahead of a scheduled task's known run times.
+  /// Off by default.
+  final bool notificationScheduledTaskReminders;
   // On-device web search (Direct models without provider-hosted search).
   final WebSearchEngineChoice webSearchEngine;
   final SafeSearch webSearchSafeSearch;
@@ -943,6 +963,7 @@ class AppSettings {
     this.notificationSystem = true,
     this.notificationChatEnabled = true,
     this.notificationChannelEnabled = true,
+    this.notificationScheduledTaskReminders = false,
     this.webSearchEngine = WebSearchEngineChoice.auto,
     this.webSearchSafeSearch = SafeSearch.moderate,
     this.webSearchRegion,
@@ -990,6 +1011,7 @@ class AppSettings {
     bool? notificationSystem,
     bool? notificationChatEnabled,
     bool? notificationChannelEnabled,
+    bool? notificationScheduledTaskReminders,
     WebSearchEngineChoice? webSearchEngine,
     SafeSearch? webSearchSafeSearch,
     Object? webSearchRegion = const _DefaultValue(),
@@ -1060,6 +1082,9 @@ class AppSettings {
           notificationChatEnabled ?? this.notificationChatEnabled,
       notificationChannelEnabled:
           notificationChannelEnabled ?? this.notificationChannelEnabled,
+      notificationScheduledTaskReminders:
+          notificationScheduledTaskReminders ??
+          this.notificationScheduledTaskReminders,
       webSearchEngine: webSearchEngine ?? this.webSearchEngine,
       webSearchSafeSearch: webSearchSafeSearch ?? this.webSearchSafeSearch,
       webSearchRegion: webSearchRegion is _DefaultValue
@@ -1113,6 +1138,8 @@ class AppSettings {
         other.notificationSystem == notificationSystem &&
         other.notificationChatEnabled == notificationChatEnabled &&
         other.notificationChannelEnabled == notificationChannelEnabled &&
+        other.notificationScheduledTaskReminders ==
+            notificationScheduledTaskReminders &&
         other.webSearchEngine == webSearchEngine &&
         other.webSearchSafeSearch == webSearchSafeSearch &&
         other.webSearchRegion == webSearchRegion &&
@@ -1162,6 +1189,7 @@ class AppSettings {
       notificationSystem,
       notificationChatEnabled,
       notificationChannelEnabled,
+      notificationScheduledTaskReminders,
       webSearchEngine,
       webSearchSafeSearch,
       webSearchRegion,
@@ -1273,6 +1301,11 @@ class AppSettingsNotifier extends _$AppSettingsNotifier {
   Future<void> setNotificationChannelEnabled(bool value) async {
     state = state.copyWith(notificationChannelEnabled: value);
     await SettingsService.setNotificationChannelEnabled(value);
+  }
+
+  Future<void> setNotificationScheduledTaskReminders(bool value) async {
+    state = state.copyWith(notificationScheduledTaskReminders: value);
+    await SettingsService.setNotificationScheduledTaskReminders(value);
   }
 
   /// Applies the three server-synced notification prefs fetched from Open WebUI
