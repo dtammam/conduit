@@ -4243,5 +4243,8 @@
   "accountsAddressConfirmMessage": "为确认 {host} 就是这台服务器，Conduit 会向它发送此设备上已保存账户的会话。仅在你信任此地址时继续。",
   "accountsAddressConfirmAction": "检查地址",
   "chatDragToFolder": "将聊天拖入文件夹",
-  "chatDragToFolderDescription": "在侧边栏中按住聊天，然后将其拖到文件夹上"
+  "chatDragToFolderDescription": "在侧边栏中按住聊天，然后将其拖到文件夹上",
+  "chatSwipeToDelete": "滑动删除聊天",
+  "chatSwipeToDeleteDescription": "在侧边栏中向右滑动聊天即可删除，几秒内可撤销",
+  "chatDeletedNotice": "聊天已删除"
 }

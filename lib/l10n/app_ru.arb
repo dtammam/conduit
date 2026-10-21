@@ -4281,5 +4281,8 @@
   "accountsAddressConfirmMessage": "Чтобы убедиться, что {host} — это тот же сервер, Conduit отправит туда сеанс аккаунта, сохранённого на этом устройстве. Продолжайте, только если доверяете этому адресу.",
   "accountsAddressConfirmAction": "Проверить адрес",
   "chatDragToFolder": "Перетаскивать чаты в папки",
-  "chatDragToFolderDescription": "Удерживайте чат на боковой панели, затем перетащите его в папку"
+  "chatDragToFolderDescription": "Удерживайте чат на боковой панели, затем перетащите его в папку",
+  "chatSwipeToDelete": "Удалять чаты свайпом",
+  "chatSwipeToDeleteDescription": "Смахните чат вправо на боковой панели, чтобы удалить его; отменить можно в течение нескольких секунд",
+  "chatDeletedNotice": "Чат удалён"
 }

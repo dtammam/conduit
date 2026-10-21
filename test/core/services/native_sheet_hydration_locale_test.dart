@@ -386,6 +386,7 @@ void main() {
         'temporary-chat-default',
         'citation-show-titles',
         'chat-drag-to-folder',
+        'chat-swipe-to-delete',
       ]);
     });
 

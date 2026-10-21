@@ -7,6 +7,7 @@ final class PreferenceKeys {
       'disable_haptics_while_streaming';
   static const String citationShowTitles = 'citation_show_titles';
   static const String chatDragToFolder = 'chat_drag_to_folder';
+  static const String chatSwipeToDelete = 'chat_swipe_to_delete';
   static const String highContrast = 'high_contrast';
   static const String darkMode = 'dark_mode';
   static const String defaultModel = 'default_model';

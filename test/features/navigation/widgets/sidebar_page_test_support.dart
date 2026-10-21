@@ -14,6 +14,7 @@ import 'package:conduit_core/models/model.dart';
 import 'package:conduit_core/models/note.dart';
 import 'package:conduit_core/models/user.dart';
 import 'package:conduit/shared/services/navigation_service.dart';
+import 'package:conduit_core/auth/api_auth_interceptor.dart';
 import 'package:conduit_core/services/api_service.dart';
 import 'package:conduit_core/services/optimized_storage_service.dart';
 import 'package:conduit_core/services/settings_service.dart';
@@ -324,6 +325,19 @@ final class SidebarTestSidebarApiService extends Mock implements ApiService {
   ) async {
     folderMoves.add((conversationId, folderId));
   }
+
+  /// Raw chat ids passed to [deleteConversation].
+  final List<String> deletedConversationIds = <String>[];
+
+  @override
+  Future<void> deleteConversation(String id) async {
+    deletedConversationIds.add(id);
+  }
+
+  // The delete path captures who owns the chat before it deletes.
+  @override
+  ApiAuthSnapshot captureAuthSnapshot() =>
+      ApiAuthInterceptor(serverUrl: 'https://sidebar.test').captureSnapshot();
 
   @override
   Future<List<Conversation>> searchConversations(String query) async =>

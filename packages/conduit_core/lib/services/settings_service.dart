@@ -289,6 +289,7 @@ class SettingsService {
       _disableHapticsWhileStreamingKey: settings.disableHapticsWhileStreaming,
       PreferenceKeys.citationShowTitles: settings.citationShowTitles,
       PreferenceKeys.chatDragToFolder: settings.chatDragToFolder,
+      PreferenceKeys.chatSwipeToDelete: settings.chatSwipeToDelete,
       _highContrastKey: settings.highContrast,
       _darkModeKey: settings.darkMode,
       _voiceHoldToTalkKey: settings.voiceHoldToTalk,
@@ -737,6 +738,7 @@ class SettingsService {
           get<bool>(PreferenceKeys.citationShowTitles) ??
           false,
       chatDragToFolder: get<bool>(PreferenceKeys.chatDragToFolder) ?? false,
+      chatSwipeToDelete: get<bool>(PreferenceKeys.chatSwipeToDelete) ?? false,
       highContrast: get<bool>(_highContrastKey) ?? false,
       darkMode: get<bool>(_darkModeKey) ?? true,
       defaultModel: get<String>(_defaultModelKey),
@@ -861,6 +863,10 @@ class AppSettings {
   /// Whether holding a chat in the sidebar and then moving drags it onto a
   /// folder. It delays the row menu briefly on platforms other than iOS.
   final bool chatDragToFolder;
+
+  /// Whether a right swipe on a chat in the sidebar deletes it, without the
+  /// confirmation and with a short Undo window.
+  final bool chatSwipeToDelete;
   final bool highContrast;
   final bool darkMode;
   final String? defaultModel;
@@ -914,6 +920,7 @@ class AppSettings {
     this.disableHapticsWhileStreaming = false,
     this.citationShowTitles = false,
     this.chatDragToFolder = false,
+    this.chatSwipeToDelete = false,
     this.highContrast = false,
     this.darkMode = true,
     this.defaultModel,
@@ -962,6 +969,7 @@ class AppSettings {
     bool? disableHapticsWhileStreaming,
     bool? citationShowTitles,
     bool? chatDragToFolder,
+    bool? chatSwipeToDelete,
     bool? highContrast,
     bool? darkMode,
     Object? defaultModel = const _DefaultValue(),
@@ -1010,6 +1018,7 @@ class AppSettings {
           disableHapticsWhileStreaming ?? this.disableHapticsWhileStreaming,
       citationShowTitles: citationShowTitles ?? this.citationShowTitles,
       chatDragToFolder: chatDragToFolder ?? this.chatDragToFolder,
+      chatSwipeToDelete: chatSwipeToDelete ?? this.chatSwipeToDelete,
       highContrast: highContrast ?? this.highContrast,
       darkMode: darkMode ?? this.darkMode,
       defaultModel: defaultModel is _DefaultValue
@@ -1089,6 +1098,7 @@ class AppSettings {
         other.disableHapticsWhileStreaming == disableHapticsWhileStreaming &&
         other.citationShowTitles == citationShowTitles &&
         other.chatDragToFolder == chatDragToFolder &&
+        other.chatSwipeToDelete == chatSwipeToDelete &&
         other.highContrast == highContrast &&
         other.darkMode == darkMode &&
         other.defaultModel == defaultModel &&
@@ -1140,6 +1150,7 @@ class AppSettings {
       disableHapticsWhileStreaming,
       citationShowTitles,
       chatDragToFolder,
+      chatSwipeToDelete,
       highContrast,
       darkMode,
       defaultModel,
@@ -1255,6 +1266,14 @@ class AppSettingsNotifier extends _$AppSettingsNotifier {
     state = state.copyWith(chatDragToFolder: value);
     await SettingsService._putPreference(
       PreferenceKeys.chatDragToFolder,
+      value,
+    );
+  }
+
+  Future<void> setChatSwipeToDelete(bool value) async {
+    state = state.copyWith(chatSwipeToDelete: value);
+    await SettingsService._putPreference(
+      PreferenceKeys.chatSwipeToDelete,
       value,
     );
   }

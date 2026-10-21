@@ -4243,5 +4243,8 @@
   "accountsAddressConfirmMessage": "Pour s'assurer que {host} est bien ce serveur, Conduit lui envoie la session d'un compte enregistré ici. Ne continuez que si vous faites confiance à cette adresse.",
   "accountsAddressConfirmAction": "Vérifier l'adresse",
   "chatDragToFolder": "Glisser les discussions dans des dossiers",
-  "chatDragToFolderDescription": "Maintenez une discussion dans la barre latérale, puis faites-la glisser sur un dossier"
+  "chatDragToFolderDescription": "Maintenez une discussion dans la barre latérale, puis faites-la glisser sur un dossier",
+  "chatSwipeToDelete": "Balayer pour supprimer les discussions",
+  "chatSwipeToDeleteDescription": "Balayez une discussion vers la droite dans la barre latérale pour la supprimer, avec quelques secondes pour annuler",
+  "chatDeletedNotice": "Discussion supprimée"
 }

@@ -8821,5 +8821,17 @@
   "chatDragToFolderDescription": "Hold a chat in the sidebar, then drag it onto a folder",
   "@chatDragToFolderDescription": {
     "description": "Subtitle for the drag chats into folders toggle."
+  },
+  "chatSwipeToDelete": "Swipe to delete chats",
+  "@chatSwipeToDelete": {
+    "description": "Toggle title for deleting a chat in the sidebar with a right swipe."
+  },
+  "chatSwipeToDeleteDescription": "Swipe a chat right in the sidebar to delete it, with a few seconds to undo",
+  "@chatSwipeToDeleteDescription": {
+    "description": "Subtitle for the swipe to delete chats toggle."
+  },
+  "chatDeletedNotice": "Chat deleted",
+  "@chatDeletedNotice": {
+    "description": "Notice after a chat is swiped away; it is deleted when the notice ends unless undone."
   }
 }

@@ -4243,5 +4243,8 @@
   "accountsAddressConfirmMessage": "Para asegurarse de que {host} es este servidor, Conduit le envía la sesión de una cuenta guardada aquí. Continúa solo si confías en esta dirección.",
   "accountsAddressConfirmAction": "Comprobar dirección",
   "chatDragToFolder": "Arrastrar chats a carpetas",
-  "chatDragToFolderDescription": "Mantén pulsado un chat en la barra lateral y arrástralo a una carpeta"
+  "chatDragToFolderDescription": "Mantén pulsado un chat en la barra lateral y arrástralo a una carpeta",
+  "chatSwipeToDelete": "Deslizar para eliminar chats",
+  "chatSwipeToDeleteDescription": "Desliza un chat hacia la derecha en la barra lateral para eliminarlo, con unos segundos para deshacer",
+  "chatDeletedNotice": "Chat eliminado"
 }

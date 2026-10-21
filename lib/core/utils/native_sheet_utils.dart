@@ -594,6 +594,10 @@ const nativeCitationShowTitlesId = 'citation-show-titles';
 /// page.
 const nativeChatDragToFolderId = 'chat-drag-to-folder';
 
+/// Control id of the "Swipe to delete chats" toggle in the native Chats
+/// page.
+const nativeChatSwipeToDeleteId = 'chat-swipe-to-delete';
+
 /// Control id the accountless "Connect to Open WebUI" root row sends.
 const nativeConnectOpenWebUiActionId = 'add-owui-server';
 

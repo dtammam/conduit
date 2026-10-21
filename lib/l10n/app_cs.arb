@@ -6152,5 +6152,8 @@
   "accountsAddressConfirmMessage": "Aby Conduit ověřil, že {host} je tento server, pošle mu relaci účtu uloženého v tomto zařízení. Pokračujte, jen pokud této adrese důvěřujete.",
   "accountsAddressConfirmAction": "Ověřit adresu",
   "chatDragToFolder": "Přetahovat chaty do složek",
-  "chatDragToFolderDescription": "Podržte chat na postranním panelu a přetáhněte ho na složku"
+  "chatDragToFolderDescription": "Podržte chat na postranním panelu a přetáhněte ho na složku",
+  "chatSwipeToDelete": "Mazat chaty přejetím",
+  "chatSwipeToDeleteDescription": "Přejetím chatu doprava na postranním panelu ho smažete, s několika sekundami na vrácení",
+  "chatDeletedNotice": "Chat smazán"
 }

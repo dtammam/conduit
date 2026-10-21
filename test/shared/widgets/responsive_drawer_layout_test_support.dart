@@ -104,6 +104,7 @@ Widget drawerTestBuildHarness({
   ValueChanged<double>? onTabletDrawerWidthChanged,
   TextDirection textDirection = TextDirection.ltr,
   double? layoutWidth,
+  bool mobileOpenPanelYieldsRightwardDrags = false,
 }) {
   final content = Directionality(
     textDirection: textDirection,
@@ -113,6 +114,8 @@ Widget drawerTestBuildHarness({
         key: layoutKey,
         edgeFraction: edgeFraction,
         onOpenStart: onOpenStart,
+        mobileOpenPanelYieldsRightwardDrags:
+            mobileOpenPanelYieldsRightwardDrags,
         tabletDismissible: tabletDismissible,
         tabletInitiallyDocked: tabletInitiallyDocked,
         tabletDrawerWidth: tabletDrawerWidth,

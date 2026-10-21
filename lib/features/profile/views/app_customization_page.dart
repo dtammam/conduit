@@ -504,6 +504,29 @@ class AppCustomizationPage extends ConsumerWidget {
               .read(appSettingsProvider.notifier)
               .setChatDragToFolder(!settings.chatDragToFolder),
         ),
+        const SizedBox(height: Spacing.sm),
+        CustomizationTile(
+          leading: _buildIconBadge(
+            context,
+            Platform.isIOS
+                ? CupertinoIcons.delete
+                : Icons.delete_sweep_outlined,
+            color: theme.buttonPrimary,
+          ),
+          title: l10n.chatSwipeToDelete,
+          subtitle: l10n.chatSwipeToDeleteDescription,
+          toggled: settings.chatSwipeToDelete,
+          trailing: AdaptiveSwitch(
+            value: settings.chatSwipeToDelete,
+            onChanged: (value) => ref
+                .read(appSettingsProvider.notifier)
+                .setChatSwipeToDelete(value),
+          ),
+          showChevron: false,
+          onTap: () => ref
+              .read(appSettingsProvider.notifier)
+              .setChatSwipeToDelete(!settings.chatSwipeToDelete),
+        ),
         if (Platform.isAndroid) ...[
           const SizedBox(height: Spacing.sm),
           CustomizationTile(

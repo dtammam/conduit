@@ -4015,5 +4015,8 @@
   "accountsAddressConfirmMessage": "{host}이(가) 이 서버인지 확인하기 위해 Conduit이 이 기기에 저장된 계정의 세션을 해당 주소로 보냅니다. 이 주소를 신뢰하는 경우에만 계속하세요.",
   "accountsAddressConfirmAction": "주소 확인",
   "chatDragToFolder": "채팅을 폴더로 끌어 놓기",
-  "chatDragToFolderDescription": "사이드바에서 채팅을 길게 누른 다음 폴더로 끌어 놓습니다"
+  "chatDragToFolderDescription": "사이드바에서 채팅을 길게 누른 다음 폴더로 끌어 놓습니다",
+  "chatSwipeToDelete": "밀어서 채팅 삭제",
+  "chatSwipeToDeleteDescription": "사이드바에서 채팅을 오른쪽으로 밀면 삭제되며, 몇 초 동안 실행 취소할 수 있습니다",
+  "chatDeletedNotice": "채팅을 삭제했습니다"
 }
