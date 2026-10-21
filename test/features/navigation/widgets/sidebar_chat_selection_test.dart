@@ -197,7 +197,10 @@ void main() {
   testWidgets('with the setting off the chat menu has no Select', (
     tester,
   ) async {
-    await pumpDrawer(tester, settings: const AppSettings());
+    await pumpDrawer(
+      tester,
+      settings: const AppSettings(chatMultiSelect: false),
+    );
 
     await tester.longPress(_chatTile(first));
     await tester.pumpAndSettle();

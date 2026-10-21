@@ -124,12 +124,12 @@ void main() {
         check(settings.temporaryChatByDefault).equals(false);
       });
 
-      test('deliveryReceiptsEnabled defaults to false', () {
-        check(settings.deliveryReceiptsEnabled).equals(false);
+      test('deliveryReceiptsEnabled defaults to true', () {
+        check(settings.deliveryReceiptsEnabled).equals(true);
       });
 
-      test('quickReplyReactionsEnabled defaults to false', () {
-        check(settings.quickReplyReactionsEnabled).equals(false);
+      test('quickReplyReactionsEnabled defaults to true', () {
+        check(settings.quickReplyReactionsEnabled).equals(true);
       });
     });
 

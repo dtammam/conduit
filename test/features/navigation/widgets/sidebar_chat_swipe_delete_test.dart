@@ -257,7 +257,10 @@ void main() {
   testWidgets('with the setting off a right swipe never deletes', (
     tester,
   ) async {
-    final api = await pumpDrawer(tester, settings: const AppSettings());
+    final api = await pumpDrawer(
+      tester,
+      settings: const AppSettings(chatSwipeToDelete: false),
+    );
 
     await _swipeRight(tester, _chatTile(chat), 0.6);
     await tester.pumpAndSettle();

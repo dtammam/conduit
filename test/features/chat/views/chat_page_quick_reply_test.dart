@@ -330,7 +330,10 @@ void main() {
     await mountPage(
       tester,
       messages: transcript,
-      settings: const AppSettings(deliveryReceiptsEnabled: true),
+      settings: const AppSettings(
+        deliveryReceiptsEnabled: true,
+        quickReplyReactionsEnabled: false,
+      ),
     );
 
     check(find.text('Yes').evaluate()).length.equals(1);

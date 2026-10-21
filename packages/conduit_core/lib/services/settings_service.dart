@@ -763,7 +763,7 @@ class SettingsService {
           get<bool>(PreferenceKeys.citationShowTitles) ??
           false,
       quickReplyReactionsEnabled:
-          get<bool>(PreferenceKeys.quickReplyReactionsEnabled) ?? false,
+          get<bool>(PreferenceKeys.quickReplyReactionsEnabled) ?? true,
       assistantAvatarEnabled:
           get<bool>(PreferenceKeys.assistantAvatarEnabled) ?? false,
       messageBubbles: get<bool>(PreferenceKeys.messageBubbles) ?? false,
@@ -771,15 +771,15 @@ class SettingsService {
           get<String>(PreferenceKeys.assistantAvatarBubbleColor) ??
           assistantAvatarBubbleColorAuto,
       deliveryReceiptsEnabled:
-          get<bool>(PreferenceKeys.deliveryReceiptsEnabled) ?? false,
+          get<bool>(PreferenceKeys.deliveryReceiptsEnabled) ?? true,
       compactToolSummaries:
           get<bool>(PreferenceKeys.compactToolSummaries) ?? false,
       waveTypingIndicator:
           get<bool>(PreferenceKeys.waveTypingIndicator) ?? false,
-      chatDragToFolder: get<bool>(PreferenceKeys.chatDragToFolder) ?? false,
-      chatSwipeToDelete: get<bool>(PreferenceKeys.chatSwipeToDelete) ?? false,
-      chatMultiSelect: get<bool>(PreferenceKeys.chatMultiSelect) ?? false,
-      showContextUsage: get<bool>(PreferenceKeys.showContextUsage) ?? false,
+      chatDragToFolder: get<bool>(PreferenceKeys.chatDragToFolder) ?? true,
+      chatSwipeToDelete: get<bool>(PreferenceKeys.chatSwipeToDelete) ?? true,
+      chatMultiSelect: get<bool>(PreferenceKeys.chatMultiSelect) ?? true,
+      showContextUsage: get<bool>(PreferenceKeys.showContextUsage) ?? true,
       highContrast: get<bool>(_highContrastKey) ?? false,
       darkMode: get<bool>(_darkModeKey) ?? true,
       defaultModel: get<String>(_defaultModelKey),
@@ -1002,17 +1002,17 @@ class AppSettings {
     this.animationSpeed = 1.0,
     this.disableHapticsWhileStreaming = false,
     this.citationShowTitles = false,
-    this.quickReplyReactionsEnabled = false,
+    this.quickReplyReactionsEnabled = true,
     this.assistantAvatarEnabled = false,
-    this.deliveryReceiptsEnabled = false,
+    this.deliveryReceiptsEnabled = true,
     this.messageBubbles = false,
     this.assistantAvatarBubbleColor = assistantAvatarBubbleColorAuto,
     this.compactToolSummaries = false,
     this.waveTypingIndicator = false,
-    this.chatDragToFolder = false,
-    this.chatSwipeToDelete = false,
-    this.chatMultiSelect = false,
-    this.showContextUsage = false,
+    this.chatDragToFolder = true,
+    this.chatSwipeToDelete = true,
+    this.chatMultiSelect = true,
+    this.showContextUsage = true,
     this.highContrast = false,
     this.darkMode = true,
     this.defaultModel,

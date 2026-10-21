@@ -558,16 +558,16 @@ void main() {
   ) async {
     final container = await pumpApp(tester);
     bool saved() => container.read(appSettingsProvider).deliveryReceiptsEnabled;
-    check(saved()).isFalse();
+    check(saved()).isTrue();
 
     NativeSheetBridge.instance.onControlChanged(
       PlatformNativeSheetControlChangedEvent(
         id: 'delivery-receipts',
-        value: true,
+        value: false,
       ),
     );
     await tester.pumpAndSettle();
-    check(saved()).isTrue();
+    check(saved()).isFalse();
   });
 
   testWidgets('the native quick-reply reactions toggle saves its boolean', (
@@ -576,16 +576,16 @@ void main() {
     final container = await pumpApp(tester);
     bool saved() =>
         container.read(appSettingsProvider).quickReplyReactionsEnabled;
-    check(saved()).isFalse();
+    check(saved()).isTrue();
 
     NativeSheetBridge.instance.onControlChanged(
       PlatformNativeSheetControlChangedEvent(
         id: 'quick-reply-reactions',
-        value: true,
+        value: false,
       ),
     );
     await tester.pumpAndSettle();
-    check(saved()).isTrue();
+    check(saved()).isFalse();
   });
 
   testWidgets('Licenses open as the sheet closes itself, with no second '
