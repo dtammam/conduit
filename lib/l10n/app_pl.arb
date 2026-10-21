@@ -1757,6 +1757,22 @@
   "@citationShowTitlesDescription": {
     "description": "Subtitle for the citation page titles toggle."
   },
+  "deliveryReceipts": "Potwierdzenia dostarczenia",
+  "@deliveryReceipts": {
+    "description": "Toggle title for the mark on the user's latest message showing whether its reply started or failed."
+  },
+  "deliveryReceiptsDescription": "Oznaczaj ostatnią wiadomość, gdy odpowiedź się zacznie lub nie powiedzie",
+  "@deliveryReceiptsDescription": {
+    "description": "Subtitle for the delivery receipts toggle."
+  },
+  "messageReceiptDelivered": "Dostarczono",
+  "@messageReceiptDelivered": {
+    "description": "Screen reader label for the mark on the user's latest message once its reply started."
+  },
+  "messageReceiptFailed": "Nie dostarczono",
+  "@messageReceiptFailed": {
+    "description": "Screen reader label for the mark on the user's latest message when the send or the reply failed."
+  },
   "androidAssistantTitle": "Asystent systemu Android",
   "@androidAssistantTitle": {
     "description": "Tile title for configuring the Android digital assistant trigger."

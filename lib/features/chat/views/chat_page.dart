@@ -29,6 +29,7 @@ import '../../../core/services/native_sheet_bridge.dart';
 import '../../../core/services/native_sheet_hydration_service.dart';
 
 import 'package:conduit_core/services/performance_profiler.dart';
+import 'package:conduit_core/services/settings_service.dart';
 
 import 'package:conduit_core/services/api_service.dart';
 import 'package:conduit_core/services/connectivity_service.dart';
@@ -155,6 +156,33 @@ Widget _buildArchivedAssistantPlaceholder({Key? key}) =>
 @visibleForTesting
 Widget debugBuildArchivedAssistantPlaceholderForTesting({Key? key}) =>
     _buildArchivedAssistantPlaceholder(key: key);
+
+/// The delivery mark for the user message [messageId]. Only the latest user
+/// turn carries one. A send that did not dispatch it ([failedSendMessageId])
+/// or an error on the reply that follows it is a failure; a reply that has
+/// started (content or a status) or finished is a delivery; anything earlier
+/// shows nothing.
+MessageReceipt deriveMessageReceipt({
+  required List<ChatMessage> messages,
+  required String messageId,
+  String? failedSendMessageId,
+}) {
+  for (var i = messages.length - 1; i >= 0; i--) {
+    final message = messages[i];
+    if (message.role != 'user') continue;
+    if (message.id != messageId) return MessageReceipt.none;
+    if (failedSendMessageId == messageId) return MessageReceipt.failed;
+    final reply = i + 1 < messages.length ? messages[i + 1] : null;
+    if (reply == null || reply.role != 'assistant') return MessageReceipt.none;
+    if (reply.error != null) return MessageReceipt.failed;
+    final started =
+        !reply.isStreaming ||
+        reply.content.isNotEmpty ||
+        reply.statusHistory.isNotEmpty;
+    return started ? MessageReceipt.delivered : MessageReceipt.none;
+  }
+  return MessageReceipt.none;
+}
 
 class _ChatToolbarActionDescriptor {
   const _ChatToolbarActionDescriptor({
@@ -491,6 +519,11 @@ class _ChatPageState extends ConsumerState<ChatPage> {
         hideThreshold: _scrollButtonHideThreshold,
       );
   bool _showScrollToBottom = false;
+  // The user message a send appended but did not dispatch; its bubble shows
+  // the failed delivery mark.
+  final ValueNotifier<String?> _failedSendMessageId = ValueNotifier<String?>(
+    null,
+  );
   bool _scrollToBottomVisibilitySyncScheduled = false;
   bool _scrollToBottomPrewarmPending = false;
   bool _hasUserScrolled = false;
@@ -867,10 +900,11 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       (conversation) =>
           conversation == null ? null : conversationScopedId(conversation),
     );
-    _conversationIdSub = ref.listenManual(
-      conversationIdListenable,
-      (_, next) => _handleConversationChanged(next),
-    );
+    _conversationIdSub = ref.listenManual(conversationIdListenable, (_, next) {
+      // A failed mark belongs to the conversation it was sent in.
+      _failedSendMessageId.value = null;
+      _handleConversationChanged(next);
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _handleConversationChanged(ref.read(conversationIdListenable));
@@ -939,6 +973,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   @override
   void dispose() {
     markConversationRead(ref, _lastConversationId);
+    _failedSendMessageId.dispose();
     _livePromptNotifier.cancel();
     _screenContextSub?.close();
     _conversationLoadingSub?.close();
@@ -1256,7 +1291,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     final sendOwner = _messageSendAdmission.tryAcquire();
     if (sendOwner == null) return (admitted: false, dispatched: false);
     if (mounted) setState(() {});
-    late final bool dispatched;
+    final latestUserIdBefore = _latestUserMessageId();
+    var dispatched = false;
     try {
       dispatched = await _sendMessageAfterAdmission(
         text,
@@ -1267,8 +1303,41 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       );
     } finally {
       _releaseMessageSendAdmission(sendOwner);
+      _recordSendReceipt(latestUserIdBefore, dispatched: dispatched);
     }
     return (admitted: true, dispatched: dispatched);
+  }
+
+  String? _latestUserMessageId() {
+    if (!mounted) return null;
+    final messages = ref.read(chatMessagesProvider);
+    for (var i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role == 'user') return messages[i].id;
+    }
+    return null;
+  }
+
+  /// A send that appended a user message but did not dispatch it marks that
+  /// bubble failed. A send that never appended one leaves older turns alone.
+  void _recordSendReceipt(
+    String? latestUserIdBefore, {
+    required bool dispatched,
+  }) {
+    if (!mounted) return;
+    if (dispatched) {
+      _failedSendMessageId.value = null;
+      return;
+    }
+    final latestUserIdAfter = _latestUserMessageId();
+    if (latestUserIdAfter == null || latestUserIdAfter == latestUserIdBefore) {
+      return;
+    }
+    DebugLogger.log(
+      'send-not-dispatched',
+      scope: 'chat/send',
+      data: {'messageId': latestUserIdAfter},
+    );
+    _failedSendMessageId.value = latestUserIdAfter;
   }
 
   Future<bool> _sendMessageAfterAdmission(
@@ -3310,17 +3379,34 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     }
 
     if (message.role == 'user') {
-      return Consumer(
+      Widget userRow(String? failedSendMessageId) => Consumer(
         builder: (context, rowRef, _) {
           final latestMessage = rowRef.watch(
             chatMessageByIdProvider(messageId),
           );
           if (latestMessage == null) return const SizedBox.shrink();
+          final receiptsEnabled = rowRef.watch(
+            appSettingsProvider.select((s) => s.deliveryReceiptsEnabled),
+          );
+          // Selected, so a streaming reply rebuilds this row only when the
+          // mark itself changes.
+          final receipt = receiptsEnabled
+              ? rowRef.watch(
+                  chatMessagesProvider.select(
+                    (messages) => deriveMessageReceipt(
+                      messages: messages,
+                      messageId: messageId,
+                      failedSendMessageId: failedSendMessageId,
+                    ),
+                  ),
+                )
+              : MessageReceipt.none;
           final bubble = UserMessageBubble(
             message: latestMessage,
             isUser: true,
             readOnly: rowRef.watch(activeConversationReadOnlyProvider),
             isStreaming: latestMessage.isStreaming,
+            receipt: receipt,
             modelName: rowMetadata.displayModelName,
             onCopy: () {
               final currentMessage = rowRef.read(
@@ -3350,6 +3436,11 @@ class _ChatPageState extends ConsumerState<ChatPage> {
             children: [bubble, ChatBranchSwitcher(messageId: messageId)],
           );
         },
+      );
+      return ValueListenableBuilder<String?>(
+        valueListenable: _failedSendMessageId,
+        builder: (context, failedSendMessageId, _) =>
+            userRow(failedSendMessageId),
       );
     }
 
@@ -3578,6 +3669,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   }
 
   void _regenerateMessage(String assistantMessageId) async {
+    // A retry replaces the reply; its own state decides the mark from here.
+    _failedSendMessageId.value = null;
     try {
       await regenerateHistoricalMessageById(ref, assistantMessageId);
     } catch (e) {
