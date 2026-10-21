@@ -79,6 +79,7 @@ import 'package:conduit_markdown/conduit_markdown.dart';
 
 import '../../../platform/android_assistant_handler.dart';
 import '../widgets/chat_branch_actions.dart';
+import '../widgets/composer_reveal_request_listener.dart';
 import '../widgets/chat_export_sheet.dart';
 import '../widgets/chat_comparison_widgets.dart';
 import '../widgets/model_selector_sheet.dart';
@@ -4427,7 +4428,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       );
     }
 
-    return page;
+    return ComposerRevealRequestListener(child: page);
   }
 
   void _toggleResponsiveDrawer(BuildContext context) {

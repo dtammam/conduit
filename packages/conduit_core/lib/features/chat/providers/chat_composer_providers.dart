@@ -54,6 +54,31 @@ class ComposerTextInsertionNotifier extends Notifier<ComposerTextInsertion?> {
   }
 }
 
+/// Pending request to bring the new-chat composer on screen.
+///
+/// External entry points (the share sheet) fill the composer from outside the
+/// widget tree, where the chat page may still sit behind the open mobile
+/// drawer. The request stays pending until a mounted chat page consumes it,
+/// so a cold start that builds the page after the request still honors it.
+final composerRevealRequestProvider =
+    NotifierProvider<ComposerRevealRequestNotifier, bool>(
+      ComposerRevealRequestNotifier.new,
+    );
+
+class ComposerRevealRequestNotifier extends Notifier<bool> {
+  @override
+  bool build() => false;
+
+  void request() => state = true;
+
+  /// Clears the request and returns whether one was pending.
+  bool consume() {
+    if (!state) return false;
+    state = false;
+    return true;
+  }
+}
+
 // Trigger to request focus on the chat input (increment to signal)
 @Riverpod(keepAlive: true)
 class InputFocusTrigger extends _$InputFocusTrigger {

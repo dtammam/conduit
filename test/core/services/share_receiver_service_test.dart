@@ -17,6 +17,8 @@ import 'package:conduit/platform/share_receiver_service.dart';
 import 'package:conduit_core/services/share_staging_cleanup.dart';
 import 'package:conduit/features/chat/services/file_attachment_service.dart';
 import 'package:conduit_core/features/hermes/models/hermes_model.dart';
+import 'package:conduit_core/features/chat/providers/chat_providers.dart';
+import 'package:checks/checks.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -962,6 +964,26 @@ void main() {
         container.read(attachedFilesProvider).single.fileName,
         'notes.txt',
       );
+    });
+
+    test('shared text asks the chat page to show the composer', () async {
+      const importId = 'share-text-reveal';
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      _markComposerPrepared(container, importId);
+      check(container.read(composerRevealRequestProvider)).isFalse();
+
+      final result = await processSharedPayloadForTest(
+        container,
+        const SharedPayload(id: importId, text: 'read this later'),
+      );
+
+      check(result).equals(SharedPayloadProcessResult.processed);
+      check(container.read(prefilledInputTextProvider))
+          .equals('read this later');
+      // Without this request the text sits in a composer hidden behind the
+      // open chats drawer on phones.
+      check(container.read(composerRevealRequestProvider)).isTrue();
     });
 
     test('consumes invalid file-only payloads instead of retrying', () async {
