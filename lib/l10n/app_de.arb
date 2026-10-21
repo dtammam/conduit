@@ -4246,5 +4246,49 @@
   "chatDragToFolderDescription": "Einen Chat in der Seitenleiste halten und auf einen Ordner ziehen",
   "chatSwipeToDelete": "Chats durch Wischen löschen",
   "chatSwipeToDeleteDescription": "Einen Chat in der Seitenleiste nach rechts wischen, um ihn zu löschen, mit ein paar Sekunden zum Rückgängigmachen",
-  "chatDeletedNotice": "Chat gelöscht"
+  "chatDeletedNotice": "Chat gelöscht",
+  "chatMultiSelect": "Mehrere Chats auswählen",
+  "chatMultiSelectDescription": "Fügt dem Chatmenü „Auswählen“ hinzu, um mehrere Chats auf einmal zu verschieben oder zu löschen",
+  "selectChats": "Auswählen",
+  "chatsSelectedCount": "{count, plural, one{1 ausgewählt} other{{count} ausgewählt}}",
+  "@chatsSelectedCount": {
+    "description": "How many chats are selected, shown in the bar for acting on them together.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "deleteChatsTitle": "{count, plural, one{1 Chat löschen?} other{{count} Chats löschen?}}",
+  "@deleteChatsTitle": {
+    "description": "Dialog title asking to confirm deleting the selected chats.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "deleteChatsMessage": "Diese Chats werden endgültig gelöscht.",
+  "failedToMoveChats": "{count, plural, one{1 Chat konnte nicht verschoben werden} other{{count} Chats konnten nicht verschoben werden}}",
+  "@failedToMoveChats": {
+    "description": "Error shown once after moving several selected chats, with how many failed.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "failedToDeleteChats": "{count, plural, one{1 Chat konnte nicht gelöscht werden} other{{count} Chats konnten nicht gelöscht werden}}",
+  "@failedToDeleteChats": {
+    "description": "Error shown once after deleting several selected chats, with how many failed.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  }
 }

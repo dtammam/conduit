@@ -6155,5 +6155,49 @@
   "chatDragToFolderDescription": "Podržte chat na postranním panelu a přetáhněte ho na složku",
   "chatSwipeToDelete": "Mazat chaty přejetím",
   "chatSwipeToDeleteDescription": "Přejetím chatu doprava na postranním panelu ho smažete, s několika sekundami na vrácení",
-  "chatDeletedNotice": "Chat smazán"
+  "chatDeletedNotice": "Chat smazán",
+  "chatMultiSelect": "Výběr více chatů",
+  "chatMultiSelectDescription": "Přidá do nabídky chatu volbu Vybrat pro přesun nebo smazání více chatů najednou",
+  "selectChats": "Vybrat",
+  "chatsSelectedCount": "{count, plural, one{1 vybraný} few{{count} vybrané} many{{count} vybraných} other{{count} vybraných}}",
+  "@chatsSelectedCount": {
+    "description": "How many chats are selected, shown in the bar for acting on them together.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "deleteChatsTitle": "{count, plural, one{Smazat 1 chat?} few{Smazat {count} chaty?} many{Smazat {count} chatu?} other{Smazat {count} chatů?}}",
+  "@deleteChatsTitle": {
+    "description": "Dialog title asking to confirm deleting the selected chats.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "deleteChatsMessage": "Tyto chaty budou trvale smazány.",
+  "failedToMoveChats": "{count, plural, one{Nepodařilo se přesunout 1 chat} few{Nepodařilo se přesunout {count} chaty} many{Nepodařilo se přesunout {count} chatu} other{Nepodařilo se přesunout {count} chatů}}",
+  "@failedToMoveChats": {
+    "description": "Error shown once after moving several selected chats, with how many failed.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "failedToDeleteChats": "{count, plural, one{Nepodařilo se smazat 1 chat} few{Nepodařilo se smazat {count} chaty} many{Nepodařilo se smazat {count} chatu} other{Nepodařilo se smazat {count} chatů}}",
+  "@failedToDeleteChats": {
+    "description": "Error shown once after deleting several selected chats, with how many failed.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  }
 }

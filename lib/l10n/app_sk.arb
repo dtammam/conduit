@@ -6155,5 +6155,49 @@
   "chatDragToFolderDescription": "Podržte chat na bočnom paneli a potiahnite ho na priečinok",
   "chatSwipeToDelete": "Mazať chaty potiahnutím",
   "chatSwipeToDeleteDescription": "Potiahnutím chatu doprava na bočnom paneli ho odstránite, s niekoľkými sekundami na vrátenie",
-  "chatDeletedNotice": "Chat odstránený"
+  "chatDeletedNotice": "Chat odstránený",
+  "chatMultiSelect": "Výber viacerých chatov",
+  "chatMultiSelectDescription": "Pridá do ponuky chatu možnosť Vybrať na presun alebo odstránenie viacerých chatov naraz",
+  "selectChats": "Vybrať",
+  "chatsSelectedCount": "{count, plural, one{1 vybraný} few{{count} vybrané} many{{count} vybraných} other{{count} vybraných}}",
+  "@chatsSelectedCount": {
+    "description": "How many chats are selected, shown in the bar for acting on them together.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "deleteChatsTitle": "{count, plural, one{Odstrániť 1 chat?} few{Odstrániť {count} chaty?} many{Odstrániť {count} chatu?} other{Odstrániť {count} chatov?}}",
+  "@deleteChatsTitle": {
+    "description": "Dialog title asking to confirm deleting the selected chats.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "deleteChatsMessage": "Tieto chaty budú natrvalo odstránené.",
+  "failedToMoveChats": "{count, plural, one{Nepodarilo sa presunúť 1 chat} few{Nepodarilo sa presunúť {count} chaty} many{Nepodarilo sa presunúť {count} chatu} other{Nepodarilo sa presunúť {count} chatov}}",
+  "@failedToMoveChats": {
+    "description": "Error shown once after moving several selected chats, with how many failed.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "failedToDeleteChats": "{count, plural, one{Nepodarilo sa odstrániť 1 chat} few{Nepodarilo sa odstrániť {count} chaty} many{Nepodarilo sa odstrániť {count} chatu} other{Nepodarilo sa odstrániť {count} chatov}}",
+  "@failedToDeleteChats": {
+    "description": "Error shown once after deleting several selected chats, with how many failed.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  }
 }

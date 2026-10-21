@@ -598,6 +598,10 @@ const nativeChatDragToFolderId = 'chat-drag-to-folder';
 /// page.
 const nativeChatSwipeToDeleteId = 'chat-swipe-to-delete';
 
+/// Control id of the "Select multiple chats" toggle in the native Chats
+/// page.
+const nativeChatMultiSelectId = 'chat-multi-select';
+
 /// Control id the accountless "Connect to Open WebUI" root row sends.
 const nativeConnectOpenWebUiActionId = 'add-owui-server';
 

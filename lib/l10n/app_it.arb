@@ -4246,5 +4246,49 @@
   "chatDragToFolderDescription": "Tieni premuta una chat nella barra laterale, poi trascinala su una cartella",
   "chatSwipeToDelete": "Scorri per eliminare le chat",
   "chatSwipeToDeleteDescription": "Scorri una chat verso destra nella barra laterale per eliminarla, con qualche secondo per annullare",
-  "chatDeletedNotice": "Chat eliminata"
+  "chatDeletedNotice": "Chat eliminata",
+  "chatMultiSelect": "Seleziona più chat",
+  "chatMultiSelectDescription": "Aggiunge Seleziona al menu della chat per spostare o eliminare più chat insieme",
+  "selectChats": "Seleziona",
+  "chatsSelectedCount": "{count, plural, one{1 selezionata} other{{count} selezionate}}",
+  "@chatsSelectedCount": {
+    "description": "How many chats are selected, shown in the bar for acting on them together.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "deleteChatsTitle": "{count, plural, one{Eliminare 1 chat?} other{Eliminare {count} chat?}}",
+  "@deleteChatsTitle": {
+    "description": "Dialog title asking to confirm deleting the selected chats.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "deleteChatsMessage": "Queste chat verranno eliminate definitivamente.",
+  "failedToMoveChats": "{count, plural, one{Impossibile spostare 1 chat} other{Impossibile spostare {count} chat}}",
+  "@failedToMoveChats": {
+    "description": "Error shown once after moving several selected chats, with how many failed.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "failedToDeleteChats": "{count, plural, one{Impossibile eliminare 1 chat} other{Impossibile eliminare {count} chat}}",
+  "@failedToDeleteChats": {
+    "description": "Error shown once after deleting several selected chats, with how many failed.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  }
 }

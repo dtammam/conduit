@@ -1597,6 +1597,14 @@ class NativeSheetHydrationService {
         kind: NativeSheetItemKind.toggle,
         value: appSettings.chatSwipeToDelete,
       ),
+      NativeSheetItemConfig(
+        id: nativeChatMultiSelectId,
+        title: l10n.chatMultiSelect,
+        subtitle: l10n.chatMultiSelectDescription,
+        sfSymbol: 'checkmark.circle',
+        kind: NativeSheetItemKind.toggle,
+        value: appSettings.chatMultiSelect,
+      ),
     ];
   }
 

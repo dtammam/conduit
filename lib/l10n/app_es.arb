@@ -4246,5 +4246,49 @@
   "chatDragToFolderDescription": "Mantén pulsado un chat en la barra lateral y arrástralo a una carpeta",
   "chatSwipeToDelete": "Deslizar para eliminar chats",
   "chatSwipeToDeleteDescription": "Desliza un chat hacia la derecha en la barra lateral para eliminarlo, con unos segundos para deshacer",
-  "chatDeletedNotice": "Chat eliminado"
+  "chatDeletedNotice": "Chat eliminado",
+  "chatMultiSelect": "Seleccionar varios chats",
+  "chatMultiSelectDescription": "Añade Seleccionar al menú del chat para mover o eliminar varios chats a la vez",
+  "selectChats": "Seleccionar",
+  "chatsSelectedCount": "{count, plural, one{1 seleccionada} other{{count} seleccionadas}}",
+  "@chatsSelectedCount": {
+    "description": "How many chats are selected, shown in the bar for acting on them together.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "deleteChatsTitle": "{count, plural, one{¿Eliminar 1 conversación?} other{¿Eliminar {count} conversaciones?}}",
+  "@deleteChatsTitle": {
+    "description": "Dialog title asking to confirm deleting the selected chats.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "deleteChatsMessage": "Estas conversaciones se eliminarán de forma permanente.",
+  "failedToMoveChats": "{count, plural, one{No se pudo mover 1 chat} other{No se pudieron mover {count} chats}}",
+  "@failedToMoveChats": {
+    "description": "Error shown once after moving several selected chats, with how many failed.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "failedToDeleteChats": "{count, plural, one{No se pudo eliminar 1 chat} other{No se pudieron eliminar {count} chats}}",
+  "@failedToDeleteChats": {
+    "description": "Error shown once after deleting several selected chats, with how many failed.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  }
 }

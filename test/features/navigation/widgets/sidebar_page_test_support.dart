@@ -318,11 +318,17 @@ final class SidebarTestSidebarApiService extends Mock implements ApiService {
   /// (raw chat id, target folder id).
   final List<(String, String?)> folderMoves = <(String, String?)>[];
 
+  /// Raw chat ids whose move or delete throws, as a server error would.
+  final Set<String> failingConversationIds = <String>{};
+
   @override
   Future<void> moveConversationToFolder(
     String conversationId,
     String? folderId,
   ) async {
+    if (failingConversationIds.contains(conversationId)) {
+      throw Exception('move failed');
+    }
     folderMoves.add((conversationId, folderId));
   }
 
@@ -331,6 +337,7 @@ final class SidebarTestSidebarApiService extends Mock implements ApiService {
 
   @override
   Future<void> deleteConversation(String id) async {
+    if (failingConversationIds.contains(id)) throw Exception('delete failed');
     deletedConversationIds.add(id);
   }
 

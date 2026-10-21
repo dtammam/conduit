@@ -8833,5 +8833,61 @@
   "chatDeletedNotice": "Chat deleted",
   "@chatDeletedNotice": {
     "description": "Notice after a chat is swiped away; it is deleted when the notice ends unless undone."
+  },
+  "chatMultiSelect": "Select multiple chats",
+  "@chatMultiSelect": {
+    "description": "Toggle title for selecting several chats in the sidebar to act on them together."
+  },
+  "chatMultiSelectDescription": "Add Select to the chat menu to move or delete several chats at once",
+  "@chatMultiSelectDescription": {
+    "description": "Subtitle for the select multiple chats toggle."
+  },
+  "selectChats": "Select",
+  "@selectChats": {
+    "description": "Context menu action on a chat that starts selecting several chats, with this one selected."
+  },
+  "chatsSelectedCount": "{count, plural, one{1 selected} other{{count} selected}}",
+  "@chatsSelectedCount": {
+    "description": "How many chats are selected, shown in the bar for acting on them together.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "deleteChatsTitle": "{count, plural, one{Delete 1 chat?} other{Delete {count} chats?}}",
+  "@deleteChatsTitle": {
+    "description": "Dialog title asking to confirm deleting the selected chats.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "deleteChatsMessage": "These chats will be permanently deleted.",
+  "@deleteChatsMessage": {
+    "description": "Warning that deleting the selected chats cannot be undone."
+  },
+  "failedToMoveChats": "{count, plural, one{Failed to move 1 chat} other{Failed to move {count} chats}}",
+  "@failedToMoveChats": {
+    "description": "Error shown once after moving several selected chats, with how many failed.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "failedToDeleteChats": "{count, plural, one{Failed to delete 1 chat} other{Failed to delete {count} chats}}",
+  "@failedToDeleteChats": {
+    "description": "Error shown once after deleting several selected chats, with how many failed.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
   }
 }

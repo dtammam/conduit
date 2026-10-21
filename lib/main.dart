@@ -100,6 +100,7 @@ import 'core/utils/native_sheet_utils.dart'
         nativeCitationShowTitlesId,
         nativeChatDragToFolderId,
         nativeChatSwipeToDeleteId,
+        nativeChatMultiSelectId,
         nativeMemoryEditorActionPrefix,
         nativeMemoryEditorNewActionId,
         nativeNotificationTargetsActionId;
@@ -1170,6 +1171,12 @@ class _ConduitAppState extends ConsumerState<ConduitApp> {
             await ref
                 .read(appSettingsProvider.notifier)
                 .setChatSwipeToDelete(value);
+          }
+        case nativeChatMultiSelectId:
+          if (value is bool) {
+            await ref
+                .read(appSettingsProvider.notifier)
+                .setChatMultiSelect(value);
           }
         case 'disable-haptics-streaming':
           if (value is bool) {

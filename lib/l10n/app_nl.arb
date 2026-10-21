@@ -4246,5 +4246,49 @@
   "chatDragToFolderDescription": "Houd een chat in de zijbalk vast en sleep hem naar een map",
   "chatSwipeToDelete": "Vegen om chats te verwijderen",
   "chatSwipeToDeleteDescription": "Veeg een chat in de zijbalk naar rechts om hem te verwijderen, met een paar seconden om dit ongedaan te maken",
-  "chatDeletedNotice": "Chat verwijderd"
+  "chatDeletedNotice": "Chat verwijderd",
+  "chatMultiSelect": "Meerdere chats selecteren",
+  "chatMultiSelectDescription": "Voegt Selecteren toe aan het chatmenu om meerdere chats tegelijk te verplaatsen of te verwijderen",
+  "selectChats": "Selecteren",
+  "chatsSelectedCount": "{count, plural, one{1 geselecteerd} other{{count} geselecteerd}}",
+  "@chatsSelectedCount": {
+    "description": "How many chats are selected, shown in the bar for acting on them together.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "deleteChatsTitle": "{count, plural, one{1 chat verwijderen?} other{{count} chats verwijderen?}}",
+  "@deleteChatsTitle": {
+    "description": "Dialog title asking to confirm deleting the selected chats.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "deleteChatsMessage": "Deze chats worden definitief verwijderd.",
+  "failedToMoveChats": "{count, plural, one{1 chat verplaatsen mislukt} other{{count} chats verplaatsen mislukt}}",
+  "@failedToMoveChats": {
+    "description": "Error shown once after moving several selected chats, with how many failed.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "failedToDeleteChats": "{count, plural, one{1 chat verwijderen mislukt} other{{count} chats verwijderen mislukt}}",
+  "@failedToDeleteChats": {
+    "description": "Error shown once after deleting several selected chats, with how many failed.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  }
 }
