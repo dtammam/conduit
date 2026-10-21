@@ -1363,6 +1363,11 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
                   StreamingStatusWidget(
                     updates: displayStatusHistory,
                     isStreaming: _uiTreatsAsStreaming,
+                    compactToolSummaries: ref.watch(
+                      appSettingsProvider.select(
+                        (settings) => settings.compactToolSummaries,
+                      ),
+                    ),
                   ),
                   const SizedBox(height: Spacing.xs),
                 ],

@@ -1,9 +1,37 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:conduit/l10n/app_localizations.dart';
+import 'package:conduit_core/services/settings_service.dart';
 
 import '../../../theme/theme_extensions.dart';
 import '../../assistant_detail_header.dart';
+
+/// Whether the tool rows above a reply read "Used tools" instead of naming
+/// each tool (the "Compact tool summaries" setting). Read where the row is
+/// built so the chat and the status timeline agree.
+bool compactToolSummariesOf(WidgetRef ref) => ref.watch(
+  appSettingsProvider.select((settings) => settings.compactToolSummaries),
+);
+
+/// The title of a group of [count] tool calls: the tool names joined in
+/// [summary], or the compact "Used tools" form.
+String toolCallGroupTitle(
+  AppLocalizations l10n, {
+  required String summary,
+  required int count,
+  required bool isPending,
+  required bool compact,
+}) {
+  if (compact) {
+    return isPending
+        ? l10n.markdownDetailsGroupCompactPendingTitle
+        : l10n.markdownDetailsGroupCompactCompleteTitle(count);
+  }
+  return isPending
+      ? l10n.markdownDetailsGroupPendingTitle(summary)
+      : l10n.markdownDetailsGroupCompleteTitle(summary);
+}
 
 enum MarkdownDetailsGroupRenderMode { details, previewsOnly }
 
@@ -115,17 +143,26 @@ class _MarkdownDetailsGroupState extends State<MarkdownDetailsGroup> {
     return parts.join(', ');
   }
 
-  String _buildTitle() {
+  String _buildTitle({required bool compact}) {
     final l10n = AppLocalizations.of(context)!;
-    final summary = _buildSummaryText();
-    final title = _hasPending
-        ? l10n.markdownDetailsGroupPendingTitle(summary)
-        : l10n.markdownDetailsGroupCompleteTitle(summary);
-    return title.trim();
+    return toolCallGroupTitle(
+      l10n,
+      summary: _buildSummaryText(),
+      count: widget.items.length,
+      isPending: _hasPending,
+      compact: compact,
+    ).trim();
   }
 
   @override
   Widget build(BuildContext context) {
+    return Consumer(
+      builder: (context, ref, _) =>
+          _buildGroup(context, compact: compactToolSummariesOf(ref)),
+    );
+  }
+
+  Widget _buildGroup(BuildContext context, {required bool compact}) {
     final theme = context.conduitTheme;
 
     return Padding(
@@ -142,7 +179,7 @@ class _MarkdownDetailsGroupState extends State<MarkdownDetailsGroup> {
               _persistExpansionState();
             },
             child: AssistantDetailHeader(
-              title: _buildTitle(),
+              title: _buildTitle(compact: compact),
               showShimmer: _hasPending,
               showChevron: true,
               allowWrap: true,

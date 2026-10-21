@@ -1,4 +1,5 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:conduit/l10n/app_localizations.dart';
 
@@ -139,6 +140,39 @@ class _MarkdownDetailsBlockState extends State<MarkdownDetailsBlock> {
             );
     }
 
+    if (_isToolCall && groupRenderMode == null) {
+      // A lone tool call at the top level: with compact tool summaries on it
+      // reads "Used a tool" like a group would, and its own row (name and
+      // result) sits one tap inside, exactly as in a group of several.
+      return Consumer(
+        builder: (context, ref, _) {
+          if (!compactToolSummariesOf(ref)) return _buildBlock(context);
+          final stateId = widget.inlineExpansionStateId;
+          return MarkdownDetailsGroup(
+            stateId: stateId == null ? null : 'group:$stateId',
+            items: [
+              MarkdownDetailsGroupItem(
+                type: _detailsData.type,
+                name: _detailsData.name,
+                isDone: !_isPending,
+                childBuilder: (_) => MarkdownDetailsBlock(
+                  detailsData: widget.detailsData,
+                  bodyBuilder: widget.bodyBuilder,
+                  inlineExpansionStateId: widget.inlineExpansionStateId,
+                  deferHeavyContent: widget.deferHeavyContent,
+                ),
+              ),
+            ],
+          );
+        },
+      );
+    }
+
+    return _buildBlock(context);
+  }
+
+  Widget _buildBlock(BuildContext context) {
+    final groupRenderMode = MarkdownDetailsGroupRenderScope.maybeOf(context);
     final title = _headerTitle(context);
     final showInlineChevron = _usesInlineExpansion && _canExpand;
     final inlineBody = showInlineChevron && _isInlineExpanded

@@ -590,6 +590,9 @@ const nativeAdvancedFeaturesId = 'advanced-features';
 /// page.
 const nativeCitationShowTitlesId = 'citation-show-titles';
 
+/// Control id of the "Compact tool summaries" toggle in the native Chats page.
+const nativeCompactToolSummariesId = 'compact-tool-summaries';
+
 /// Control id the accountless "Connect to Open WebUI" root row sends.
 const nativeConnectOpenWebUiActionId = 'add-owui-server';
 

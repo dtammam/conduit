@@ -1581,6 +1581,14 @@ class NativeSheetHydrationService {
         kind: NativeSheetItemKind.toggle,
         value: appSettings.citationShowTitles,
       ),
+      NativeSheetItemConfig(
+        id: nativeCompactToolSummariesId,
+        title: l10n.compactToolSummaries,
+        subtitle: l10n.compactToolSummariesDescription,
+        sfSymbol: 'wrench.and.screwdriver',
+        kind: NativeSheetItemKind.toggle,
+        value: appSettings.compactToolSummaries,
+      ),
     ];
   }
 

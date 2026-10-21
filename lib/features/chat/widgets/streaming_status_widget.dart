@@ -9,6 +9,8 @@ import '../../../shared/services/raster_media_policy.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/theme/theme_extensions.dart';
 import '../../../shared/utils/external_link_launcher.dart';
+import '../../../shared/widgets/markdown/renderer/details_group_widget.dart'
+    show toolCallGroupTitle;
 import '../../../shared/widgets/themed_sheets.dart';
 import 'assistant_detail_header.dart';
 
@@ -40,10 +42,15 @@ class StreamingStatusWidget extends StatefulWidget {
     super.key,
     required this.updates,
     this.isStreaming = true,
+    this.compactToolSummaries = false,
   });
 
   final List<ChatStatusUpdate> updates;
   final bool isStreaming;
+
+  /// Titles a group of tool steps "Used tools" instead of naming each tool
+  /// (the "Compact tool summaries" setting).
+  final bool compactToolSummaries;
 
   @override
   State<StreamingStatusWidget> createState() => _StreamingStatusWidgetState();
@@ -61,7 +68,12 @@ class _StreamingStatusWidgetState extends State<StreamingStatusWidget> {
     final current = displayUpdates.last;
     final hermesTools = displayUpdates.where(_isHermesToolUpdate).toList();
     final groupedHermesTitle = hermesTools.length > 1
-        ? _buildHermesToolGroupTitle(context, hermesTools, widget.isStreaming)
+        ? _buildHermesToolGroupTitle(
+            context,
+            hermesTools,
+            widget.isStreaming,
+            compact: widget.compactToolSummaries,
+          )
         : null;
     final isPending = groupedHermesTitle != null
         ? hermesTools.any((update) => update.done != true) && widget.isStreaming
@@ -102,7 +114,12 @@ class _StreamingStatusWidgetState extends State<StreamingStatusWidget> {
     final current = updates.last;
     final hermesTools = updates.where(_isHermesToolUpdate).toList();
     final title = hermesTools.length > 1
-        ? _buildHermesToolGroupTitle(context, hermesTools, isStreaming)
+        ? _buildHermesToolGroupTitle(
+            context,
+            hermesTools,
+            isStreaming,
+            compact: widget.compactToolSummaries,
+          )
         : _resolveStatusDescription(current);
 
     if (Platform.isIOS) {
@@ -712,8 +729,9 @@ bool _isHermesToolUpdate(ChatStatusUpdate update) =>
 String _buildHermesToolGroupTitle(
   BuildContext context,
   List<ChatStatusUpdate> updates,
-  bool isStreaming,
-) {
+  bool isStreaming, {
+  required bool compact,
+}) {
   final counts = <String, int>{};
   for (final update in updates) {
     final action = update.action!;
@@ -732,10 +750,13 @@ String _buildHermesToolGroupTitle(
             entry.value > 1 ? '${entry.key} (${entry.value})' : entry.key,
       )
       .join(', ');
-  final l10n = AppLocalizations.of(context)!;
-  return isStreaming && updates.any((update) => update.done != true)
-      ? l10n.markdownDetailsGroupPendingTitle(summary)
-      : l10n.markdownDetailsGroupCompleteTitle(summary);
+  return toolCallGroupTitle(
+    AppLocalizations.of(context)!,
+    summary: summary,
+    count: updates.length,
+    isPending: isStreaming && updates.any((update) => update.done != true),
+    compact: compact,
+  );
 }
 
 String _resolveStatusDescription(ChatStatusUpdate update) {
