@@ -1817,6 +1817,68 @@
   "@quickReplyTextCancel": {
     "description": "Message sent when the user answers an assistant reply with the cross reaction, calling an action off."
   },
+  "assistantAvatar": "Awatar asystenta",
+  "@assistantAvatar": {
+    "description": "Title of the assistant avatar setting and of the sheet that assigns a clip to each state."
+  },
+  "assistantAvatarDescription": "Pokazuj nad czatem awatar, który reaguje na to, co robi asystent",
+  "@assistantAvatarDescription": {
+    "description": "Subtitle for the assistant avatar toggle."
+  },
+  "assistantActivityIdle": "Bezczynny",
+  "@assistantActivityIdle": {
+    "description": "Word in the pill under the assistant avatar while no reply is being generated."
+  },
+  "assistantActivityWorking": "Pracuje",
+  "@assistantActivityWorking": {
+    "description": "Word in the pill under the assistant avatar while the assistant reasons, writes its reply or runs a tool that has no more specific name."
+  },
+  "assistantActivityMaking": "Tworzy",
+  "@assistantActivityMaking": {
+    "description": "Word in the pill under the assistant avatar while the assistant generates or edits an image and the stream does not name the step."
+  },
+  "assistantActivityDone": "Gotowe",
+  "@assistantActivityDone": {
+    "description": "Word in the pill under the assistant avatar for a few seconds after a reply finished without an error."
+  },
+  "assistantAvatarMediaVideo": "Wideo",
+  "@assistantAvatarMediaVideo": {
+    "description": "Shown in the assistant avatar sheet for a state that has a video clip assigned."
+  },
+  "assistantAvatarMediaImage": "Obraz",
+  "@assistantAvatarMediaImage": {
+    "description": "Shown in the assistant avatar sheet for a state that has an image or GIF assigned."
+  },
+  "assistantAvatarMediaNone": "Brak",
+  "@assistantAvatarMediaNone": {
+    "description": "Shown in the assistant avatar sheet for a state with no clip assigned; the avatar shows the model initial instead."
+  },
+  "assistantAvatarChoose": "Wybierz",
+  "@assistantAvatarChoose": {
+    "description": "Button in the assistant avatar sheet that opens the photo library to pick a video or image for one state."
+  },
+  "assistantAvatarRemove": "Usuń",
+  "@assistantAvatarRemove": {
+    "description": "Button in the assistant avatar sheet that deletes the clip assigned to one state."
+  },
+  "assistantAvatarEditLabel": "{name}, {state}",
+  "@assistantAvatarEditLabel": {
+    "description": "Screen reader label for the avatar circle, such as \"Assistant, Working\"; tapping it opens the clip sheet.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Assistant"
+      },
+      "state": {
+        "type": "String",
+        "example": "Working"
+      }
+    }
+  },
+  "assistantAvatarPickFailed": "Nie można użyć tego pliku",
+  "@assistantAvatarPickFailed": {
+    "description": "Error shown when a picked video or image could not be copied for the assistant avatar."
+  },
   "androidAssistantTitle": "Asystent systemu Android",
   "@androidAssistantTitle": {
     "description": "Tile title for configuring the Android digital assistant trigger."
@@ -7961,5 +8023,9 @@
         "example": "gpt-realtime-2.1-mini"
       }
     }
+  },
+  "modelPickerHint": "Otwiera wybór modelu",
+  "@modelPickerHint": {
+    "description": "Screen reader hint on the model name under the assistant avatar; tapping it opens the model picker."
   }
 }

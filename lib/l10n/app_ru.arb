@@ -3513,6 +3513,19 @@
   "quickReplyTextNo": "Нет",
   "quickReplyTextConfirm": "Да, сделай это.",
   "quickReplyTextCancel": "Отмена.",
+  "assistantAvatar": "Аватар ассистента",
+  "assistantAvatarDescription": "Показывать над чатом аватар, который реагирует на то, что делает ассистент",
+  "assistantActivityIdle": "Ожидание",
+  "assistantActivityWorking": "Работает",
+  "assistantActivityMaking": "Создаёт",
+  "assistantActivityDone": "Готово",
+  "assistantAvatarMediaVideo": "Видео",
+  "assistantAvatarMediaImage": "Изображение",
+  "assistantAvatarMediaNone": "Нет",
+  "assistantAvatarChoose": "Выбрать",
+  "assistantAvatarRemove": "Удалить",
+  "assistantAvatarEditLabel": "{name}, {state}",
+  "assistantAvatarPickFailed": "Не удалось использовать этот файл",
   "notificationSystemSettingsDescription": "Измените разрешения, звук и параметры баннеров для Conduit.",
   "notificationSystemSettingsOpenFailed": "Не удалось открыть системные настройки уведомлений.",
   "notificationTargetsTitle": "Адреса webhook",
@@ -4291,5 +4304,6 @@
   "accountsRemoveAddressMessage": "Conduit перестанет пробовать этот адрес. Вход в ваши аккаунты сохранится.",
   "accountsAddressConfirmTitle": "Проверить этот адрес?",
   "accountsAddressConfirmMessage": "Чтобы убедиться, что {host} — это тот же сервер, Conduit отправит туда сеанс аккаунта, сохранённого на этом устройстве. Продолжайте, только если доверяете этому адресу.",
-  "accountsAddressConfirmAction": "Проверить адрес"
+  "accountsAddressConfirmAction": "Проверить адрес",
+  "modelPickerHint": "Открывает выбор модели"
 }

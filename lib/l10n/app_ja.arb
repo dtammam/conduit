@@ -5070,6 +5070,19 @@
   "quickReplyTextNo": "いいえ",
   "quickReplyTextConfirm": "はい、お願いします。",
   "quickReplyTextCancel": "キャンセル。",
+  "assistantAvatar": "アシスタントのアバター",
+  "assistantAvatarDescription": "アシスタントの動作に反応するアバターをチャットの上に表示します",
+  "assistantActivityIdle": "待機中",
+  "assistantActivityWorking": "作業中",
+  "assistantActivityMaking": "生成中",
+  "assistantActivityDone": "完了",
+  "assistantAvatarMediaVideo": "動画",
+  "assistantAvatarMediaImage": "画像",
+  "assistantAvatarMediaNone": "なし",
+  "assistantAvatarChoose": "選択",
+  "assistantAvatarRemove": "削除",
+  "assistantAvatarEditLabel": "{name}、{state}",
+  "assistantAvatarPickFailed": "このファイルは使用できません",
   "directContextCompactionDescription": "これらのモデルはコンテキストウィンドウを報告しません。Conduit はリクエストが大きくなりすぎる前に、選択した上限を使って古いメッセージを圧縮します。",
   "directContextCompactionPickerDescription": "Conduit が自動圧縮に使用するコンテキストウィンドウを選択してください。",
   "directContextCompactionTitle": "コンテキストの圧縮",
@@ -5856,5 +5869,6 @@
   "accountsRemoveAddressMessage": "Conduit はこのアドレスを試さなくなります。アカウントはサインインしたままです。",
   "accountsAddressConfirmTitle": "このアドレスを確認しますか？",
   "accountsAddressConfirmMessage": "{host} がこのサーバーであることを確かめるため、Conduit はこのデバイスに保存されたアカウントのセッションをそこへ送信します。このアドレスを信頼できる場合のみ続行してください。",
-  "accountsAddressConfirmAction": "アドレスを確認"
+  "accountsAddressConfirmAction": "アドレスを確認",
+  "modelPickerHint": "モデルの選択を開きます"
 }

@@ -1597,6 +1597,14 @@ class NativeSheetHydrationService {
         kind: NativeSheetItemKind.toggle,
         value: appSettings.quickReplyReactionsEnabled,
       ),
+      NativeSheetItemConfig(
+        id: nativeAssistantAvatarId,
+        title: l10n.assistantAvatar,
+        subtitle: l10n.assistantAvatarDescription,
+        sfSymbol: 'person.crop.circle',
+        kind: NativeSheetItemKind.toggle,
+        value: appSettings.assistantAvatarEnabled,
+      ),
     ];
   }
 

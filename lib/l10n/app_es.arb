@@ -3467,6 +3467,19 @@
   "quickReplyTextNo": "No",
   "quickReplyTextConfirm": "Sí, hazlo.",
   "quickReplyTextCancel": "Cancelar.",
+  "assistantAvatar": "Avatar del asistente",
+  "assistantAvatarDescription": "Muestra sobre el chat un avatar que reacciona a lo que hace el asistente",
+  "assistantActivityIdle": "Inactivo",
+  "assistantActivityWorking": "Trabajando",
+  "assistantActivityMaking": "Creando",
+  "assistantActivityDone": "Listo",
+  "assistantAvatarMediaVideo": "Vídeo",
+  "assistantAvatarMediaImage": "Imagen",
+  "assistantAvatarMediaNone": "Ninguno",
+  "assistantAvatarChoose": "Elegir",
+  "assistantAvatarRemove": "Quitar",
+  "assistantAvatarEditLabel": "{name}, {state}",
+  "assistantAvatarPickFailed": "No se pudo usar ese archivo",
   "directContextCompactionDescription": "Estos modelos no indican su ventana de contexto. Conduit usa el límite seleccionado para compactar los mensajes antiguos antes de que las solicitudes sean demasiado grandes.",
   "directContextCompactionPickerDescription": "Elige la ventana de contexto que Conduit debe usar para la compactación automática.",
   "directContextCompactionTitle": "Compactación de contexto",
@@ -4253,5 +4266,6 @@
   "accountsRemoveAddressMessage": "Conduit dejará de probar esta dirección. Tus cuentas seguirán con la sesión iniciada.",
   "accountsAddressConfirmTitle": "¿Comprobar esta dirección?",
   "accountsAddressConfirmMessage": "Para asegurarse de que {host} es este servidor, Conduit le envía la sesión de una cuenta guardada aquí. Continúa solo si confías en esta dirección.",
-  "accountsAddressConfirmAction": "Comprobar dirección"
+  "accountsAddressConfirmAction": "Comprobar dirección",
+  "modelPickerHint": "Abre el selector de modelos"
 }

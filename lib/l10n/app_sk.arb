@@ -5376,6 +5376,19 @@
   "quickReplyTextNo": "Nie",
   "quickReplyTextConfirm": "Áno, urob to.",
   "quickReplyTextCancel": "Zrušiť.",
+  "assistantAvatar": "Avatar asistenta",
+  "assistantAvatarDescription": "Zobraziť nad chatom avatar, ktorý reaguje na to, čo asistent práve robí",
+  "assistantActivityIdle": "Nečinný",
+  "assistantActivityWorking": "Pracuje",
+  "assistantActivityMaking": "Tvorí",
+  "assistantActivityDone": "Hotovo",
+  "assistantAvatarMediaVideo": "Video",
+  "assistantAvatarMediaImage": "Obrázok",
+  "assistantAvatarMediaNone": "Žiadne",
+  "assistantAvatarChoose": "Vybrať",
+  "assistantAvatarRemove": "Odstrániť",
+  "assistantAvatarEditLabel": "{name}, {state}",
+  "assistantAvatarPickFailed": "Tento súbor sa nedá použiť",
   "directContextCompactionDescription": "Tieto modely neuvádzajú veľkosť kontextového okna. Conduit použije zvolený limit na zhustenie starších správ skôr, než budú požiadavky príliš veľké.",
   "directContextCompactionPickerDescription": "Vyberte kontextové okno, ktoré má Conduit použiť na automatické zhustenie.",
   "directContextCompactionTitle": "Zhustenie kontextu",
@@ -6162,5 +6175,6 @@
   "accountsRemoveAddressMessage": "Conduit prestane skúšať túto adresu. Vaše účty zostanú prihlásené.",
   "accountsAddressConfirmTitle": "Overiť túto adresu?",
   "accountsAddressConfirmMessage": "Aby Conduit overil, že {host} je tento server, pošle mu reláciu účtu uloženého v tomto zariadení. Pokračujte, len ak tejto adrese dôverujete.",
-  "accountsAddressConfirmAction": "Overiť adresu"
+  "accountsAddressConfirmAction": "Overiť adresu",
+  "modelPickerHint": "Otvorí výber modelu"
 }
