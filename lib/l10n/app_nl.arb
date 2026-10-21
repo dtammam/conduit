@@ -4287,5 +4287,8 @@
   "accountsAddressConfirmAction": "Adres controleren",
   "modelPickerHint": "Opent de modelkiezer",
   "chatDragToFolder": "Chats naar mappen slepen",
-  "chatDragToFolderDescription": "Houd een chat in de zijbalk vast en sleep hem naar een map"
+  "chatDragToFolderDescription": "Houd een chat in de zijbalk vast en sleep hem naar een map",
+  "chatSwipeToDelete": "Vegen om chats te verwijderen",
+  "chatSwipeToDeleteDescription": "Veeg een chat in de zijbalk naar rechts om hem te verwijderen, met een paar seconden om dit ongedaan te maken",
+  "chatDeletedNotice": "Chat verwijderd"
 }

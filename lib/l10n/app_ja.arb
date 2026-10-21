@@ -5890,5 +5890,8 @@
   "accountsAddressConfirmAction": "アドレスを確認",
   "modelPickerHint": "モデルの選択を開きます",
   "chatDragToFolder": "チャットをフォルダにドラッグ",
-  "chatDragToFolderDescription": "サイドバーのチャットを長押ししてフォルダにドラッグします"
+  "chatDragToFolderDescription": "サイドバーのチャットを長押ししてフォルダにドラッグします",
+  "chatSwipeToDelete": "スワイプでチャットを削除",
+  "chatSwipeToDeleteDescription": "サイドバーでチャットを右にスワイプすると削除されます。数秒間は元に戻せます",
+  "chatDeletedNotice": "チャットを削除しました"
 }

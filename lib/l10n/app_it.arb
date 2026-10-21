@@ -4287,5 +4287,8 @@
   "accountsAddressConfirmAction": "Verifica indirizzo",
   "modelPickerHint": "Apre il selettore del modello",
   "chatDragToFolder": "Trascina le chat nelle cartelle",
-  "chatDragToFolderDescription": "Tieni premuta una chat nella barra laterale, poi trascinala su una cartella"
+  "chatDragToFolderDescription": "Tieni premuta una chat nella barra laterale, poi trascinala su una cartella",
+  "chatSwipeToDelete": "Scorri per eliminare le chat",
+  "chatSwipeToDeleteDescription": "Scorri una chat verso destra nella barra laterale per eliminarla, con qualche secondo per annullare",
+  "chatDeletedNotice": "Chat eliminata"
 }

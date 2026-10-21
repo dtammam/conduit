@@ -392,6 +392,7 @@ void main() {
         'compact-tool-summaries',
         'wave-typing-indicator',
         'chat-drag-to-folder',
+        'chat-swipe-to-delete',
       ]);
     });
 

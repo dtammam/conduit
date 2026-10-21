@@ -4287,5 +4287,8 @@
   "accountsAddressConfirmAction": "檢查位址",
   "modelPickerHint": "開啟模型選擇器",
   "chatDragToFolder": "將聊天拖入資料夾",
-  "chatDragToFolderDescription": "在側邊欄中按住聊天，然後將其拖到資料夾上"
+  "chatDragToFolderDescription": "在側邊欄中按住聊天，然後將其拖到資料夾上",
+  "chatSwipeToDelete": "滑動刪除聊天",
+  "chatSwipeToDeleteDescription": "在側邊欄中向右滑動聊天即可刪除，幾秒內可復原",
+  "chatDeletedNotice": "聊天已刪除"
 }

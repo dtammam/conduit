@@ -1637,6 +1637,14 @@ class NativeSheetHydrationService {
         kind: NativeSheetItemKind.toggle,
         value: appSettings.chatDragToFolder,
       ),
+      NativeSheetItemConfig(
+        id: nativeChatSwipeToDeleteId,
+        title: l10n.chatSwipeToDelete,
+        subtitle: l10n.chatSwipeToDeleteDescription,
+        sfSymbol: 'trash',
+        kind: NativeSheetItemKind.toggle,
+        value: appSettings.chatSwipeToDelete,
+      ),
     ];
   }
 

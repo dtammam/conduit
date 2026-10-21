@@ -6196,5 +6196,8 @@
   "accountsAddressConfirmAction": "Overiť adresu",
   "modelPickerHint": "Otvorí výber modelu",
   "chatDragToFolder": "Presúvať chaty do priečinkov",
-  "chatDragToFolderDescription": "Podržte chat na bočnom paneli a potiahnite ho na priečinok"
+  "chatDragToFolderDescription": "Podržte chat na bočnom paneli a potiahnite ho na priečinok",
+  "chatSwipeToDelete": "Mazať chaty potiahnutím",
+  "chatSwipeToDeleteDescription": "Potiahnutím chatu doprava na bočnom paneli ho odstránite, s niekoľkými sekundami na vrátenie",
+  "chatDeletedNotice": "Chat odstránený"
 }

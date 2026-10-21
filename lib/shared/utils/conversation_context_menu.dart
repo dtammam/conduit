@@ -871,8 +871,6 @@ Future<void> _confirmAndDeleteConversation(
   Conversation conversation, {
   required bool isOnDevice,
 }) async {
-  final conversationId = conversationScopedId(conversation);
-  final rawConversationId = ChatStorageIdentity.parse(conversationId).rawId;
   final l10n = AppLocalizations.of(context)!;
   final confirmed = await ThemedDialogs.confirm(
     context,
@@ -885,6 +883,29 @@ Future<void> _confirmAndDeleteConversation(
   if (!context.mounted) return;
   if (!confirmed) return;
 
+  await deleteConversationNow(
+    context,
+    ref,
+    conversation,
+    isOnDevice: isOnDevice,
+  );
+}
+
+/// Deletes [conversation] without asking, on the server or on the device,
+/// and clears it from the open chat and the cached list.
+///
+/// The menu's Delete action lands here after its confirmation; a swipe lands
+/// here once its Undo window has passed.
+Future<void> deleteConversationNow(
+  BuildContext context,
+  WidgetRef ref,
+  Conversation conversation, {
+  bool? isOnDevice,
+}) async {
+  final conversationId = conversationScopedId(conversation);
+  final rawConversationId = ChatStorageIdentity.parse(conversationId).rawId;
+  final l10n = AppLocalizations.of(context)!;
+  isOnDevice ??= isDirectLocalConversation(conversation);
   final deleteError = l10n.failedToDeleteChat;
   try {
     if (isOnDevice) {

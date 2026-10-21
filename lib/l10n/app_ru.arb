@@ -4325,5 +4325,8 @@
   "accountsAddressConfirmAction": "Проверить адрес",
   "modelPickerHint": "Открывает выбор модели",
   "chatDragToFolder": "Перетаскивать чаты в папки",
-  "chatDragToFolderDescription": "Удерживайте чат на боковой панели, затем перетащите его в папку"
+  "chatDragToFolderDescription": "Удерживайте чат на боковой панели, затем перетащите его в папку",
+  "chatSwipeToDelete": "Удалять чаты свайпом",
+  "chatSwipeToDeleteDescription": "Смахните чат вправо на боковой панели, чтобы удалить его; отменить можно в течение нескольких секунд",
+  "chatDeletedNotice": "Чат удалён"
 }

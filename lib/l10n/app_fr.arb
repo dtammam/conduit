@@ -4287,5 +4287,8 @@
   "accountsAddressConfirmAction": "Vérifier l'adresse",
   "modelPickerHint": "Ouvre le sélecteur de modèle",
   "chatDragToFolder": "Glisser les discussions dans des dossiers",
-  "chatDragToFolderDescription": "Maintenez une discussion dans la barre latérale, puis faites-la glisser sur un dossier"
+  "chatDragToFolderDescription": "Maintenez une discussion dans la barre latérale, puis faites-la glisser sur un dossier",
+  "chatSwipeToDelete": "Balayer pour supprimer les discussions",
+  "chatSwipeToDeleteDescription": "Balayez une discussion vers la droite dans la barre latérale pour la supprimer, avec quelques secondes pour annuler",
+  "chatDeletedNotice": "Discussion supprimée"
 }

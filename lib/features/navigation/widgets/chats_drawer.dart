@@ -32,6 +32,7 @@ import 'package:conduit_core/models/conversation.dart';
 import 'package:conduit_core/models/folder.dart';
 
 import 'chat_folder_drag.dart';
+import 'chat_swipe_to_delete.dart';
 import 'conversation_tile.dart';
 import 'create_folder_dialog.dart';
 import 'folder_tree_guides.dart';
@@ -68,12 +69,19 @@ class ChatsDrawer extends ConsumerStatefulWidget {
 class _ChatsDrawerState extends ConsumerState<ChatsDrawer>
     with
         AutomaticKeepAliveClientMixin,
-        SidebarTabScrollRegistration<ChatsDrawer> {
+        SidebarTabScrollRegistration<ChatsDrawer>,
+        WidgetsBindingObserver {
   @override
   bool get wantKeepAlive => true;
   late final TextEditingController _sidebarSearchController;
   final ScrollController _listController = ScrollController();
   final GlobalKey _listViewportKey = GlobalKey();
+
+  // The delete waits a little past the notice, so Undo is never offered
+  // after the delete has started.
+  static const Duration _swipeDeleteGrace = Duration(milliseconds: 500);
+  final Map<String, _PendingSwipeDelete> _pendingSwipeDeletes =
+      <String, _PendingSwipeDelete>{};
   late final ChatFolderDragController _chatDragController =
       ChatFolderDragController(
         scrollController: _listController,
@@ -98,6 +106,7 @@ class _ChatsDrawerState extends ConsumerState<ChatsDrawer>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _listController.addListener(_onListScrolled);
     _sidebarSearchController = ref.read(sidebarSearchFieldControllerProvider);
     _sidebarSearchController.addListener(_onSearchChanged);
@@ -464,6 +473,10 @@ class _ChatsDrawerState extends ConsumerState<ChatsDrawer>
     _debounce?.cancel();
     _refreshDoneHideTimer?.cancel();
     _chatDragController.dispose();
+    WidgetsBinding.instance.removeObserver(this);
+    // A swiped chat whose Undo window is still open survives: the delete
+    // path needs this widget, and keeping a chat is the safe outcome.
+    _cancelPendingSwipeDeletes(rebuild: false);
     _listController.removeListener(_onListScrolled);
     _sidebarSearchController.removeListener(_onSearchChanged);
     _listController.dispose();
@@ -1220,6 +1233,80 @@ class _ChatsDrawerState extends ConsumerState<ChatsDrawer>
     appSettingsProvider.select((settings) => settings.chatDragToFolder),
   );
 
+  /// Whether a right swipe on a chat deletes it (a setting, off by default,
+  /// since the swipe skips the delete confirmation).
+  bool get _swipeToDeleteEnabled => ref.watch(
+    appSettingsProvider.select((settings) => settings.chatSwipeToDelete),
+  );
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Leaving the app ends the Undo window by keeping the chat.
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      _cancelPendingSwipeDeletes(rebuild: true);
+    }
+  }
+
+  void _handleSwipeDelete(Conversation conversation) {
+    if (!mounted) return;
+    final scopedId = conversationScopedId(conversation);
+    if (_pendingSwipeDeletes.containsKey(scopedId)) return;
+    final pending = _PendingSwipeDelete(
+      conversation: conversation,
+      timer: Timer(
+        kChatSwipeDeleteUndoWindow + _swipeDeleteGrace,
+        () => unawaited(_commitSwipeDelete(scopedId)),
+      ),
+    );
+    setState(() => _pendingSwipeDeletes[scopedId] = pending);
+    final l10n = AppLocalizations.of(context)!;
+    AdaptiveSnackBar.show(
+      context,
+      message: l10n.chatDeletedNotice,
+      duration: kChatSwipeDeleteUndoWindow,
+      action: l10n.queuedDraftUndo,
+      onActionPressed: () => _undoSwipeDelete(scopedId, pending),
+    );
+  }
+
+  void _undoSwipeDelete(String scopedId, _PendingSwipeDelete pending) {
+    // Only the delete this notice offered, and only before it started.
+    if (!identical(_pendingSwipeDeletes[scopedId], pending) ||
+        pending.committed) {
+      return;
+    }
+    pending.timer.cancel();
+    _pendingSwipeDeletes.remove(scopedId);
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _commitSwipeDelete(String scopedId) async {
+    final pending = _pendingSwipeDeletes[scopedId];
+    if (pending == null || pending.committed || !mounted) return;
+    pending.committed = true;
+    try {
+      await deleteConversationNow(context, ref, pending.conversation);
+    } finally {
+      if (identical(_pendingSwipeDeletes[scopedId], pending)) {
+        _pendingSwipeDeletes.remove(scopedId);
+        if (mounted) setState(() {});
+      }
+    }
+  }
+
+  void _cancelPendingSwipeDeletes({required bool rebuild}) {
+    final waiting = _pendingSwipeDeletes.entries
+        .where((entry) => !entry.value.committed)
+        .map((entry) => entry.key)
+        .toList(growable: false);
+    if (waiting.isEmpty) return;
+    for (final scopedId in waiting) {
+      _pendingSwipeDeletes.remove(scopedId)?.timer.cancel();
+    }
+    if (rebuild && mounted) setState(() {});
+  }
+
   void _handleChatDrop(
     Conversation conversation,
     String? currentFolderId,
@@ -1896,6 +1983,11 @@ class _ChatsDrawerState extends ConsumerState<ChatsDrawer>
   }) {
     final conversation = conv as Conversation;
     final scopedId = conversationScopedId(conversation);
+    if (_pendingSwipeDeletes.containsKey(scopedId)) {
+      return SizedBox.shrink(
+        key: ValueKey<String>('drawer-chat-pending-delete-$scopedId'),
+      );
+    }
     // Only rebuild this tile when its own selected state changes.
     final isActive = ref.watch(
       activeConversationProvider.select(
@@ -1975,7 +2067,13 @@ class _ChatsDrawerState extends ConsumerState<ChatsDrawer>
               ),
             )
           : null,
-      child: tileWidget,
+      child: ChatSwipeToDelete(
+        key: ValueKey<String>('drawer-chat-swipe-$scopedId'),
+        // Delete is offered by the menu for every chat this account owns.
+        enabled: !isReadOnly && _swipeToDeleteEnabled,
+        onDelete: () => _handleSwipeDelete(conversation),
+        child: tileWidget,
+      ),
     );
     if (topLevelDropTarget) {
       contextTile = ChatFolderDropTarget(
@@ -2149,6 +2247,16 @@ class _ChatsDrawerState extends ConsumerState<ChatsDrawer>
     return !isDirectLocalConversation(conversation) &&
         activeChatIds.contains(conversation.id);
   }
+}
+
+class _PendingSwipeDelete {
+  _PendingSwipeDelete({required this.conversation, required this.timer});
+
+  final Conversation conversation;
+  final Timer timer;
+
+  /// Set once the delete has started; Undo no longer applies.
+  bool committed = false;
 }
 
 class _FolderMoveTarget {

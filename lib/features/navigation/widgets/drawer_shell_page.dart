@@ -13,6 +13,7 @@ import '../../../shared/widgets/sidebar_layout_constants.dart';
 import '../../../shared/widgets/platform_ui/platform_ui.dart';
 
 import 'package:conduit_core/features/chat/providers/chat_providers.dart';
+import 'package:conduit_core/services/settings_service.dart';
 
 import '../providers/sidebar_providers.dart';
 import 'responsive_drawer_layout.dart';
@@ -53,6 +54,10 @@ class DrawerShellPage extends ConsumerWidget {
       mobileBottomDragGestureExclusion: isTablet
           ? 0.0
           : sidebarBottomBarGestureExclusionHeight(context),
+      // A chat row's right swipe needs the drags the open drawer cannot use.
+      mobileOpenPanelYieldsRightwardDrags: ref.watch(
+        appSettingsProvider.select((settings) => settings.chatSwipeToDelete),
+      ),
       tabletDrawerWidth: tabletWidth,
       tabletDrawerMinWidth: minimumSidebarTabletWidth,
       tabletDrawerMaxWidth: maximumSidebarTabletWidth,

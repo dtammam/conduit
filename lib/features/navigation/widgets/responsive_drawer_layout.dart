@@ -43,6 +43,10 @@ class ResponsiveDrawerLayout extends StatefulWidget {
   final VoidCallback? onOpenStart;
   final double mobileBottomDragGestureExclusion;
 
+  /// Whether the fully open mobile drawer leaves rightward drags to its
+  /// content (a chat row's swipe to delete), since they cannot move it.
+  final bool mobileOpenPanelYieldsRightwardDrags;
+
   // Tablet-specific configuration
   final double tabletDrawerWidth; // Fixed width for tablet drawer
   final double tabletDrawerMinWidth;
@@ -69,6 +73,7 @@ class ResponsiveDrawerLayout extends StatefulWidget {
     this.contentScaleDelta = 0.02,
     this.onOpenStart,
     this.mobileBottomDragGestureExclusion = 0.0,
+    this.mobileOpenPanelYieldsRightwardDrags = false,
     this.tabletDrawerWidth = defaultSidebarTabletWidth,
     this.tabletDrawerMinWidth = minimumSidebarTabletWidth,
     this.tabletDrawerMaxWidth = maximumSidebarTabletWidth,
@@ -706,15 +711,41 @@ class ResponsiveDrawerLayoutState extends State<ResponsiveDrawerLayout>
         if (excludedHeight < MediaQuery.of(context).size.height)
           Positioned.fill(
             bottom: excludedHeight,
-            child: GestureDetector(
-              behavior: HitTestBehavior.translucent,
-              onHorizontalDragStart: _onDragStart,
-              onHorizontalDragUpdate: _onDragUpdate,
-              onHorizontalDragEnd: _onDragEnd,
-              onHorizontalDragCancel: _onDragCancel,
-            ),
+            child: widget.mobileOpenPanelYieldsRightwardDrags
+                ? _buildYieldingPanelDragDetector()
+                : GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    onHorizontalDragStart: _onDragStart,
+                    onHorizontalDragUpdate: _onDragUpdate,
+                    onHorizontalDragEnd: _onDragEnd,
+                    onHorizontalDragCancel: _onDragCancel,
+                  ),
           ),
       ],
+    );
+  }
+
+  /// Drags on the open panel that leave rightward movement to the rows
+  /// while the drawer is fully open.
+  Widget _buildYieldingPanelDragDetector() {
+    return RawGestureDetector(
+      behavior: HitTestBehavior.translucent,
+      gestures: <Type, GestureRecognizerFactory>{
+        DrawerPanelDragGestureRecognizer:
+            GestureRecognizerFactoryWithHandlers<
+              DrawerPanelDragGestureRecognizer
+            >(() => DrawerPanelDragGestureRecognizer(debugOwner: this), (
+              recognizer,
+            ) {
+              recognizer
+                ..rightwardAllowed = (() => _controller.value < 1.0)
+                ..gestureSettings = MediaQuery.maybeGestureSettingsOf(context)
+                ..onStart = _onDragStart
+                ..onUpdate = _onDragUpdate
+                ..onEnd = _onDragEnd
+                ..onCancel = _onDragCancel;
+            }),
+      },
     );
   }
 

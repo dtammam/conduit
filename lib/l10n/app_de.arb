@@ -4287,5 +4287,8 @@
   "accountsAddressConfirmAction": "Adresse prüfen",
   "modelPickerHint": "Öffnet die Modellauswahl",
   "chatDragToFolder": "Chats in Ordner ziehen",
-  "chatDragToFolderDescription": "Einen Chat in der Seitenleiste halten und auf einen Ordner ziehen"
+  "chatDragToFolderDescription": "Einen Chat in der Seitenleiste halten und auf einen Ordner ziehen",
+  "chatSwipeToDelete": "Chats durch Wischen löschen",
+  "chatSwipeToDeleteDescription": "Einen Chat in der Seitenleiste nach rechts wischen, um ihn zu löschen, mit ein paar Sekunden zum Rückgängigmachen",
+  "chatDeletedNotice": "Chat gelöscht"
 }
