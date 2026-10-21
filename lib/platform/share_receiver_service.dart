@@ -834,6 +834,7 @@ final shareReceiverInitializerProvider = Provider<void>((ref) {
 
     if (NavigationService.currentRoute == Routes.chat) {
       startNewChat(ref);
+      ref.read(composerRevealRequestProvider.notifier).request();
       if (importId != null) {
         preparedShareImportIds.add(importId);
       }
@@ -1356,6 +1357,9 @@ Future<SharedPayloadProcessResult> _processPayload(
       final current = ref.read(inputFocusTriggerProvider);
       ref.read(inputFocusTriggerProvider.notifier).set(current + 1);
     }
+    // Show the composer that now holds the share. Navigating to the chat
+    // route is not enough on phones: the chats drawer may still cover it.
+    ref.read(composerRevealRequestProvider.notifier).request();
     // Do NOT create a server chat here. The chat is created on first send
     // (with server syncing + title generation) in chat_providers.dart.
     return SharedPayloadProcessResult.processed;
