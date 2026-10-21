@@ -767,9 +767,13 @@ class SettingsService {
       assistantAvatarEnabled:
           get<bool>(PreferenceKeys.assistantAvatarEnabled) ?? false,
       messageBubbles: get<bool>(PreferenceKeys.messageBubbles) ?? false,
+      // The old build stored the gray choice as 'grey'.
       assistantAvatarBubbleColor:
-          get<String>(PreferenceKeys.assistantAvatarBubbleColor) ??
-          assistantAvatarBubbleColorAuto,
+          switch (get<String>(PreferenceKeys.assistantAvatarBubbleColor)) {
+            'grey' => assistantAvatarBubbleColorGray,
+            final String stored => stored,
+            null => assistantAvatarBubbleColorAuto,
+          },
       deliveryReceiptsEnabled:
           get<bool>(PreferenceKeys.deliveryReceiptsEnabled) ?? true,
       compactToolSummaries:

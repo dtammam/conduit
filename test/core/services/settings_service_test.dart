@@ -472,6 +472,20 @@ void main() {
     });
   });
 
+  group('AppSettings bubble color stored by the old build', () {
+    setUp(PreferencesStore.debugReset);
+    tearDown(PreferencesStore.debugReset);
+
+    test("reads the old 'grey' as the gray choice", () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        PreferenceKeys.assistantAvatarBubbleColor: 'grey',
+      });
+      PreferencesStore.debugOverride(await FlutterKeyValueStore.load());
+      check((await SettingsService.loadSettings()).assistantAvatarBubbleColor)
+          .equals(assistantAvatarBubbleColorGray);
+    });
+  });
+
   group('AppSettingsNotifier web search preferences', () {
     setUp(() {
       PreferencesStore.debugReset();
