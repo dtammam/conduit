@@ -85,6 +85,7 @@ import '../widgets/model_selector_sheet.dart';
 import '../widgets/openwebui_chat_settings_sheet.dart';
 import '../widgets/modern_chat_input.dart';
 import '../widgets/user_message_bubble.dart';
+import '../reactions/quick_reply_reactions.dart';
 import '../widgets/assistant_message_widget.dart' as assistant;
 import '../widgets/file_attachment_widget.dart';
 import '../widgets/context_attachment_widget.dart';
@@ -157,19 +158,49 @@ Widget _buildArchivedAssistantPlaceholder({Key? key}) =>
 Widget debugBuildArchivedAssistantPlaceholderForTesting({Key? key}) =>
     _buildArchivedAssistantPlaceholder(key: key);
 
+/// Whether a send pins its new turn to the top of the viewport. A reaction
+/// turn draws nothing, so pinning it would only jump the transcript; its
+/// reply follows the bottom like any other.
+bool shouldPinSentTurn({
+  required String text,
+  required bool includeComposerContext,
+  required bool quickRepliesEnabled,
+  required List<ChatMessage> messagesBeforeSend,
+}) =>
+    includeComposerContext ||
+    !quickRepliesEnabled ||
+    quickReplyReactionForText(text) == null ||
+    messagesBeforeSend.lastOrNull?.role != 'assistant';
+
+/// The tool ids a send names. The composer's turns carry the chat's selected
+/// tools; follow-up suggestions carry none; a quick reply asks for them
+/// explicitly ([includeSelectedTools]) because its answer continues the
+/// reply it was picked on, and a server given no tool ids attaches only its
+/// built-in tools.
+List<String> resolveSendToolIds({
+  required bool includeComposerContext,
+  required bool? includeSelectedTools,
+  required List<String> selectedToolIds,
+}) => (includeSelectedTools ?? includeComposerContext)
+    ? selectedToolIds
+    : const <String>[];
+
 /// The delivery mark for the user message [messageId]. Only the latest user
 /// turn carries one. A send that did not dispatch it ([failedSendMessageId])
 /// or an error on the reply that follows it is a failure; a reply that has
 /// started (content or a status) or finished is a delivery; anything earlier
-/// shows nothing.
+/// shows nothing. Turns [isHiddenTurn] accepts have no bubble and are passed
+/// over.
 MessageReceipt deriveMessageReceipt({
   required List<ChatMessage> messages,
   required String messageId,
   String? failedSendMessageId,
+  bool Function(List<ChatMessage> messages, int index)? isHiddenTurn,
 }) {
   for (var i = messages.length - 1; i >= 0; i--) {
     final message = messages[i];
     if (message.role != 'user') continue;
+    if (isHiddenTurn != null && isHiddenTurn(messages, i)) continue;
     if (message.id != messageId) return MessageReceipt.none;
     if (failedSendMessageId == messageId) return MessageReceipt.failed;
     final reply = i + 1 < messages.length ? messages[i + 1] : null;
@@ -1149,6 +1180,17 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     await _sendMessage(text, includeComposerContext: false);
   }
 
+  /// A quick reply answers the reply it was picked on, so it goes out with
+  /// the chat's selected tools (the server attaches only its built-in tools
+  /// when none are named) but without the composer's pending attachments.
+  Future<void> _handleQuickReplySend(String text) async {
+    await _sendMessage(
+      text,
+      includeComposerContext: false,
+      includeSelectedTools: true,
+    );
+  }
+
   void _scheduleScreenContextSubmission() {
     if (_screenContextSubmissionScheduled || _screenContextInFlight != null) {
       return;
@@ -1278,6 +1320,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   Future<({bool admitted, bool dispatched})> _sendMessage(
     String text, {
     required bool includeComposerContext,
+    bool? includeSelectedTools,
     List<Model>? compareModels,
     void Function(ChatSendPlaceholderHandle committed)? onComparisonCommitted,
   }) async {
@@ -1297,6 +1340,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       dispatched = await _sendMessageAfterAdmission(
         text,
         includeComposerContext: includeComposerContext,
+        includeSelectedTools: includeSelectedTools,
         sendOwner: sendOwner,
         compareModels: compareModels,
         onComparisonCommitted: onComparisonCommitted,
@@ -1343,12 +1387,21 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   Future<bool> _sendMessageAfterAdmission(
     String text, {
     required bool includeComposerContext,
+    bool? includeSelectedTools,
     required Object sendOwner,
     List<Model>? compareModels,
     void Function(ChatSendPlaceholderHandle committed)? onComparisonCommitted,
   }) async {
     final settlePinImmediately = debugShouldSettlePinImmediatelyForTesting(
       transcriptWasEmpty: ref.read(chatMessagesProvider).isEmpty,
+    );
+    final pinSentTurn = shouldPinSentTurn(
+      text: text,
+      includeComposerContext: includeComposerContext,
+      quickRepliesEnabled: ref
+          .read(appSettingsProvider)
+          .quickReplyReactionsEnabled,
+      messagesBeforeSend: ref.read(chatMessagesProvider),
     );
     dynamic selectedModel = ref.read(selectedModelProvider);
 
@@ -1395,9 +1448,11 @@ class _ChatPageState extends ConsumerState<ChatPage> {
           .toList();
 
       // Get selected tools
-      final toolIds = includeComposerContext
-          ? ref.read(selectedToolIdsProvider)
-          : const <String>[];
+      final toolIds = resolveSendToolIds(
+        includeComposerContext: includeComposerContext,
+        includeSelectedTools: includeSelectedTools,
+        selectedToolIds: ref.read(selectedToolIdsProvider),
+      );
       final wasOffline = !ref.read(isOnlineProvider);
       final hasDurableOutbox =
           ref.read(appDatabaseProvider) != null &&
@@ -1434,10 +1489,12 @@ class _ChatPageState extends ConsumerState<ChatPage> {
             didDispatch = true;
             _releaseMessageSendAdmission(sendOwner);
             pendingSend = handle;
-            _activatePinToTopAnchor(
-              handle,
-              settleImmediately: settlePinImmediately,
-            );
+            if (pinSentTurn) {
+              _activatePinToTopAnchor(
+                handle,
+                settleImmediately: settlePinImmediately,
+              );
+            }
           },
         );
       }
@@ -3385,6 +3442,21 @@ class _ChatPageState extends ConsumerState<ChatPage> {
             chatMessageByIdProvider(messageId),
           );
           if (latestMessage == null) return const SizedBox.shrink();
+          final quickRepliesEnabled = rowRef.watch(
+            appSettingsProvider.select((s) => s.quickReplyReactionsEnabled),
+          );
+          // A reaction turn shows as a badge on the reply it answers, so it
+          // keeps its row (indexes, grouping, scrolling) but draws nothing.
+          if (quickRepliesEnabled &&
+              messageId != failedSendMessageId &&
+              quickReplyReactionForText(latestMessage.content) != null &&
+              rowRef.watch(
+                quickReplyAnswersProvider.select(
+                  (answers) => answers.isTurn(messageId),
+                ),
+              )) {
+            return const SizedBox.shrink();
+          }
           final receiptsEnabled = rowRef.watch(
             appSettingsProvider.select((s) => s.deliveryReceiptsEnabled),
           );
@@ -3397,6 +3469,13 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                       messages: messages,
                       messageId: messageId,
                       failedSendMessageId: failedSendMessageId,
+                      isHiddenTurn: quickRepliesEnabled
+                          ? (messages, index) => isQuickReplyTurn(
+                              messages,
+                              index,
+                              failedSendMessageId: failedSendMessageId,
+                            )
+                          : null,
                     ),
                   ),
                 )
@@ -3475,6 +3554,9 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   }) {
     final groupIds = rowMetadata.groupMessageIds;
     final readOnly = rowRef.watch(activeConversationReadOnlyProvider);
+    final quickRepliesEnabled = rowRef.watch(
+      appSettingsProvider.select((s) => s.quickReplyReactionsEnabled),
+    );
     final displayedMessage = groupIds.length > 1
         ? _messageWithGroupedHermesToolStatuses(rowRef, latestMessage, groupIds)
         : latestMessage;
@@ -3487,7 +3569,16 @@ class _ChatPageState extends ConsumerState<ChatPage> {
         )) {
       return const SizedBox.shrink();
     }
-    return assistant.AssistantMessageWidget(
+    final quickReplyAnswer = quickRepliesEnabled && rowMetadata.showActionBar
+        ? rowRef.watch(
+            quickReplyAnswersProvider.select(
+              (answers) => answers.answerFor(messageId),
+            ),
+          )
+        : null;
+    Widget buildRow(
+      QuickReplyReaction? quickReplyBadge,
+    ) => assistant.AssistantMessageWidget(
       message: displayedMessage,
       isStreaming: latestMessage.isStreaming,
       showFollowUps: rowMetadata.showFollowUps,
@@ -3509,6 +3600,11 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       suppressStreamingHaptics: suppressStreamingHaptics,
       readOnly: readOnly,
       onFollowUpSelected: readOnly ? null : _handleFollowUpSend,
+      // A reaction is a typed reply without the composer's attachments.
+      onQuickReply: readOnly || !quickRepliesEnabled
+          ? null
+          : _handleQuickReplySend,
+      quickReplyBadge: quickReplyBadge,
       // The bar owner acts on the whole grouped response: a Hermes turn is one
       // answer split across rows, so copying or reading back only this row's
       // share would hand over a fragment.
@@ -3532,6 +3628,18 @@ class _ChatPageState extends ConsumerState<ChatPage> {
           _regenerateMessage(groupIds.isEmpty ? messageId : groupIds.first),
       onDelete: () => _deleteMessageGroup(
         groupIds.isEmpty ? <String>[messageId] : groupIds,
+      ),
+    );
+    if (!quickRepliesEnabled) return buildRow(null);
+    // A reaction that failed to send shows its own bubble and failure, not a
+    // badge here.
+    return ValueListenableBuilder<String?>(
+      valueListenable: _failedSendMessageId,
+      builder: (context, failedSendMessageId, _) => buildRow(
+        quickReplyAnswer == null ||
+                quickReplyAnswer.turnId == failedSendMessageId
+            ? null
+            : quickReplyAnswer.reaction,
       ),
     );
   }

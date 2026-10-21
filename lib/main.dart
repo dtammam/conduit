@@ -99,6 +99,7 @@ import 'core/utils/native_sheet_utils.dart'
         nativeAdvancedFeaturesId,
         nativeCitationShowTitlesId,
         nativeDeliveryReceiptsId,
+        nativeQuickReplyReactionsId,
         nativeMemoryEditorActionPrefix,
         nativeMemoryEditorNewActionId,
         nativeNotificationTargetsActionId;
@@ -1163,6 +1164,12 @@ class _ConduitAppState extends ConsumerState<ConduitApp> {
             await ref
                 .read(appSettingsProvider.notifier)
                 .setDeliveryReceiptsEnabled(value);
+          }
+        case nativeQuickReplyReactionsId:
+          if (value is bool) {
+            await ref
+                .read(appSettingsProvider.notifier)
+                .setQuickReplyReactionsEnabled(value);
           }
         case 'disable-haptics-streaming':
           if (value is bool) {

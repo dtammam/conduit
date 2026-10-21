@@ -74,8 +74,10 @@ import 'streaming_status_widget.dart';
 
 import 'package:conduit_core/features/chat/utils/file_utils.dart';
 
+import '../reactions/quick_reply_reactions.dart';
 import 'chat_branch_actions.dart';
 import 'chat_comparison_widgets.dart';
+import 'message_badge.dart';
 import 'code_execution_display.dart';
 import 'follow_up_suggestions.dart';
 import 'usage_stats_modal.dart';
@@ -132,6 +134,14 @@ class AssistantMessageWidget extends ConsumerStatefulWidget {
   final VoidCallback? onDislike;
   final FutureOr<void> Function(String suggestion)? onFollowUpSelected;
 
+  /// Sends a quick-reply reaction's text, in the app's language, as a user
+  /// message. Null turns off the long-press reaction picker on this reply.
+  final FutureOr<void> Function(String text)? onQuickReply;
+
+  /// The reaction the user answered this reply with, shown as a badge on its
+  /// bottom-trailing corner.
+  final QuickReplyReaction? quickReplyBadge;
+
   @visibleForTesting
   final VoidCallback? debugOnShellBuild;
 
@@ -159,6 +169,8 @@ class AssistantMessageWidget extends ConsumerStatefulWidget {
     this.onLike,
     this.onDislike,
     this.onFollowUpSelected,
+    this.onQuickReply,
+    this.quickReplyBadge,
     this.debugOnShellBuild,
     this.debugOnStreamingContentBuild,
   });
@@ -1339,79 +1351,81 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
           // Reasoning blocks are now rendered inline where they appear
 
           // Documentation-style content without heavy bubble; premium markdown
-          SizedBox(
-            width: double.infinity,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Display attachments - prioritize files array over attachmentIds to avoid duplication
-                if (activeFiles != null && activeFiles.isNotEmpty) ...[
-                  _buildFilesFromArray(),
-                  const SizedBox(height: Spacing.md),
-                ] else if (widget.message.attachmentIds != null &&
-                    widget.message.attachmentIds!.isNotEmpty) ...[
-                  _buildAttachmentItems(),
-                  const SizedBox(height: Spacing.md),
-                ],
+          _withQuickReplies(
+            SizedBox(
+              width: double.infinity,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Display attachments - prioritize files array over attachmentIds to avoid duplication
+                  if (activeFiles != null && activeFiles.isNotEmpty) ...[
+                    _buildFilesFromArray(),
+                    const SizedBox(height: Spacing.md),
+                  ] else if (widget.message.attachmentIds != null &&
+                      widget.message.attachmentIds!.isNotEmpty) ...[
+                    _buildAttachmentItems(),
+                    const SizedBox(height: Spacing.md),
+                  ],
 
-                if (activeEmbeds != null && activeEmbeds.isNotEmpty) ...[
-                  _buildEmbedsFromArray(activeEmbeds),
-                  const SizedBox(height: Spacing.md),
-                ],
+                  if (activeEmbeds != null && activeEmbeds.isNotEmpty) ...[
+                    _buildEmbedsFromArray(activeEmbeds),
+                    const SizedBox(height: Spacing.md),
+                  ],
 
-                if (hasStatusTimeline) ...[
-                  StreamingStatusWidget(
-                    updates: displayStatusHistory,
-                    isStreaming: _uiTreatsAsStreaming,
-                  ),
-                  const SizedBox(height: Spacing.xs),
-                ],
-
-                if (showQueuedAsEmptyState)
-                  _buildQueuedCompletionBanner(queuedCompletion)
-                else if (suppressEmptyQueuedContent)
-                  const SizedBox.shrink()
-                else
-                  // Content streams in here. Empty content renders as
-                  // SizedBox.shrink, and the footer indicator covers that
-                  // waiting state until visible content arrives. Keep this
-                  // subtree direct: a stable-key AnimatedSwitcher never
-                  // switched and only obscured the one-shot content fade.
-                  _buildStreamingContentBody(
-                    responseBuilder: responseBuilder,
-                    activeSources: contentSources,
-                  ),
-
-                if (showQueuedRecoveryBanner) ...[
-                  const SizedBox(height: Spacing.sm),
-                  _buildQueuedCompletionBanner(queuedCompletion),
-                ],
-
-                if (_activeMergedResponse case final merged?
-                    when merged.content.trim().isNotEmpty) ...[
-                  const SizedBox(height: Spacing.md),
-                  ChatMergedResponsePanel(
-                    child: _buildEnhancedMarkdownContent(
-                      merged.content,
-                      responseBuilder: null,
-                      activeSources: const <ChatSourceReference>[],
+                  if (hasStatusTimeline) ...[
+                    StreamingStatusWidget(
+                      updates: displayStatusHistory,
+                      isStreaming: _uiTreatsAsStreaming,
                     ),
-                  ),
-                ],
+                    const SizedBox(height: Spacing.xs),
+                  ],
 
-                // Display error banner if message or active version has an error
-                if (_getActiveError() != null) ...[
-                  const SizedBox(height: Spacing.sm),
-                  _buildErrorBanner(_getActiveError()!),
-                ],
+                  if (showQueuedAsEmptyState)
+                    _buildQueuedCompletionBanner(queuedCompletion)
+                  else if (suppressEmptyQueuedContent)
+                    const SizedBox.shrink()
+                  else
+                    // Content streams in here. Empty content renders as
+                    // SizedBox.shrink, and the footer indicator covers that
+                    // waiting state until visible content arrives. Keep this
+                    // subtree direct: a stable-key AnimatedSwitcher never
+                    // switched and only obscured the one-shot content fade.
+                    _buildStreamingContentBody(
+                      responseBuilder: responseBuilder,
+                      activeSources: contentSources,
+                    ),
 
-                if (hasCodeExecutions) ...[
-                  const SizedBox(height: Spacing.md),
-                  CodeExecutionListView(executions: activeCodeExecutions),
-                ],
+                  if (showQueuedRecoveryBanner) ...[
+                    const SizedBox(height: Spacing.sm),
+                    _buildQueuedCompletionBanner(queuedCompletion),
+                  ],
 
-                // Version switcher moved inline with action buttons below
-              ],
+                  if (_activeMergedResponse case final merged?
+                      when merged.content.trim().isNotEmpty) ...[
+                    const SizedBox(height: Spacing.md),
+                    ChatMergedResponsePanel(
+                      child: _buildEnhancedMarkdownContent(
+                        merged.content,
+                        responseBuilder: null,
+                        activeSources: const <ChatSourceReference>[],
+                      ),
+                    ),
+                  ],
+
+                  // Display error banner if message or active version has an error
+                  if (_getActiveError() != null) ...[
+                    const SizedBox(height: Spacing.sm),
+                    _buildErrorBanner(_getActiveError()!),
+                  ],
+
+                  if (hasCodeExecutions) ...[
+                    const SizedBox(height: Spacing.md),
+                    CodeExecutionListView(executions: activeCodeExecutions),
+                  ],
+
+                  // Version switcher moved inline with action buttons below
+                ],
+              ),
             ),
           ),
 
@@ -1468,6 +1482,57 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
     }
 
     return FadeTransition(opacity: _fadeController, child: content);
+  }
+
+  /// Whether this reply offers quick-reply reactions: a finished, non-error
+  /// answer in the user's own chat that a chat model gave.
+  bool get _showsQuickReplies =>
+      widget.onQuickReply != null &&
+      !widget.readOnly &&
+      !_isVoiceReply &&
+      _responseCompleted &&
+      !_uiTreatsAsStreaming &&
+      _getActiveError() == null &&
+      !_displayedContentLooksLikeError;
+
+  /// Long-press on the reply content opens the reaction picker, and the
+  /// reaction already sent sits on the content's bottom-trailing corner, with
+  /// room reserved under it so the footer never covers it. Both wrappers stay
+  /// in the tree when idle so the content keeps its state.
+  Widget _withQuickReplies(Widget content) {
+    final badge = widget.quickReplyBadge;
+    final l10n = AppLocalizations.of(context)!;
+    return QuickReplyLongPress(
+      enabled: _showsQuickReplies,
+      onSelected: _sendQuickReply,
+      // The message margin and the list's side padding leave 20 px past the
+      // trailing edge; the overhang needs a little more.
+      child: MessageBadgeAnchor(
+        trailingRoom: 8,
+        badge: badge == null
+            ? null
+            : MessageBadge(
+                key: const ValueKey<String>('assistant-quick-reply-badge'),
+                emoji: badge.emoji,
+                semanticsLabel: l10n.quickReplyReactionBadge(
+                  badge.localizedText(l10n),
+                ),
+              ),
+        child: content,
+      ),
+    );
+  }
+
+  void _sendQuickReply(QuickReplyReaction reaction) {
+    final onQuickReply = widget.onQuickReply;
+    if (onQuickReply == null) return;
+    DebugLogger.log(
+      'quick-reply-sent',
+      scope: 'chat/reactions',
+      data: {'messageId': _messageId, 'reaction': reaction.name},
+    );
+    final text = reaction.localizedText(AppLocalizations.of(context)!);
+    unawaited(Future.sync(() => onQuickReply(text)));
   }
 
   /// Builds the keyed child for the footer [AnimatedSwitcher]: the action row

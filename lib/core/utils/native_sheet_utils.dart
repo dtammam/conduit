@@ -593,6 +593,9 @@ const nativeCitationShowTitlesId = 'citation-show-titles';
 /// Control id of the "Delivery receipts" toggle in the native Chats page.
 const nativeDeliveryReceiptsId = 'delivery-receipts';
 
+/// Control id of the "Quick-reply reactions" toggle in the native Chats page.
+const nativeQuickReplyReactionsId = 'quick-reply-reactions';
+
 /// Control id the accountless "Connect to Open WebUI" root row sends.
 const nativeConnectOpenWebUiActionId = 'add-owui-server';
 
