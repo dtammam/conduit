@@ -3790,7 +3790,16 @@ class _ModernChatInputState extends ConsumerState<ModernChatInput>
         ),
       ];
 
-      // Multiline and quick-pill states use the full two-tier shell.
+      // Multiline and quick-pill states use the full two-tier shell. Once the
+      // shell reaches its height cap only the overlay and text scroll: the
+      // action row stays pinned below them, so send, attach and voice remain
+      // reachable however long the draft grows. It is taken out by its key,
+      // not its position, so a child added after it cannot be pinned instead.
+      final Widget actionRow = composerChildren.removeAt(
+        composerChildren.indexWhere(
+          (child) => child.key == const ValueKey('composer-expanded-buttons'),
+        ),
+      );
       shellContent = KeyedSubtree(
         key: const ValueKey('expanded-composer-shell'),
         child: ConstrainedBox(
@@ -3800,13 +3809,22 @@ class _ModernChatInputState extends ConsumerState<ModernChatInput>
           // Keep text-entry height changes direct. AnimatedSize here runs on
           // each new or removed line, making the composer trail the user's
           // typing and repeatedly relaying out the chat viewport.
-          child: SingleChildScrollView(
-            physics: const ClampingScrollPhysics(),
-            child: RepaintBoundary(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: composerChildren,
-              ),
+          child: RepaintBoundary(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Flexible(
+                  child: SingleChildScrollView(
+                    key: const ValueKey('composer-expanded-scroll'),
+                    physics: const ClampingScrollPhysics(),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: composerChildren,
+                    ),
+                  ),
+                ),
+                actionRow,
+              ],
             ),
           ),
         ),
