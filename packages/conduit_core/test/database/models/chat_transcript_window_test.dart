@@ -14,6 +14,12 @@ void main() {
       check(renderedTranscriptCount(total: 120, loadedCount: 100)).equals(100);
       check(renderedTranscriptCount(total: 80, loadedCount: 100)).equals(80);
     });
+
+    test('keeps a first page while paging catches up with a send', () {
+      // A chat shorter than a page grows by a user turn and its reply.
+      check(renderedTranscriptCount(total: 6, loadedCount: 4)).equals(6);
+      check(renderedTranscriptCount(total: 60, loadedCount: 48)).equals(50);
+    });
   });
 
   test('latestTranscriptWindow keeps the newest messages in order', () {
