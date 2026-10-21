@@ -123,6 +123,10 @@ void main() {
       test('temporaryChatByDefault defaults to false', () {
         check(settings.temporaryChatByDefault).equals(false);
       });
+
+      test('deliveryReceiptsEnabled defaults to false', () {
+        check(settings.deliveryReceiptsEnabled).equals(false);
+      });
     });
 
     group('copyWith', () {

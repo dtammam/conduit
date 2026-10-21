@@ -481,6 +481,29 @@ class AppCustomizationPage extends ConsumerWidget {
               .read(appSettingsProvider.notifier)
               .setCitationShowTitles(!settings.citationShowTitles),
         ),
+        const SizedBox(height: Spacing.sm),
+        CustomizationTile(
+          leading: _buildIconBadge(
+            context,
+            Platform.isIOS
+                ? CupertinoIcons.hand_thumbsup
+                : Icons.thumb_up_alt_outlined,
+            color: theme.buttonPrimary,
+          ),
+          title: l10n.deliveryReceipts,
+          subtitle: l10n.deliveryReceiptsDescription,
+          toggled: settings.deliveryReceiptsEnabled,
+          trailing: AdaptiveSwitch(
+            value: settings.deliveryReceiptsEnabled,
+            onChanged: (value) => ref
+                .read(appSettingsProvider.notifier)
+                .setDeliveryReceiptsEnabled(value),
+          ),
+          showChevron: false,
+          onTap: () => ref
+              .read(appSettingsProvider.notifier)
+              .setDeliveryReceiptsEnabled(!settings.deliveryReceiptsEnabled),
+        ),
         if (Platform.isAndroid) ...[
           const SizedBox(height: Spacing.sm),
           CustomizationTile(

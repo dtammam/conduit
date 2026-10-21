@@ -1581,6 +1581,14 @@ class NativeSheetHydrationService {
         kind: NativeSheetItemKind.toggle,
         value: appSettings.citationShowTitles,
       ),
+      NativeSheetItemConfig(
+        id: nativeDeliveryReceiptsId,
+        title: l10n.deliveryReceipts,
+        subtitle: l10n.deliveryReceiptsDescription,
+        sfSymbol: 'hand.thumbsup',
+        kind: NativeSheetItemKind.toggle,
+        value: appSettings.deliveryReceiptsEnabled,
+      ),
     ];
   }
 
