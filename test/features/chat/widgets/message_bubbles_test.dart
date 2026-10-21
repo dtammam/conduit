@@ -786,6 +786,25 @@ void main() {
           .equals('file:/idle.png|1|2');
     });
 
+    test('a blank video sample holds for the session only', () async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final notifier = container.read(
+        assistantAvatarAutoAccentProvider.notifier,
+      );
+      await notifier.record('file:/idle.mp4|1|2', null, persist: false);
+      check(notifier.cachedKey).equals('file:/idle.mp4|1|2');
+      check(
+        PreferencesStore.getString(PreferenceKeys.assistantAvatarAccentCache),
+      ).isNull();
+
+      // The next launch has nothing cached, so it samples again.
+      final next = ProviderContainer();
+      addTearDown(next.dispose);
+      check(next.read(assistantAvatarAutoAccentProvider.notifier).cachedKey)
+          .isNull();
+    });
+
     testWidgets('the avatar sheet offers and persists a bubble color', (
       tester,
     ) async {

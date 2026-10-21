@@ -10,6 +10,7 @@ import 'package:conduit/shared/widgets/themed_sheets.dart';
 import 'package:conduit_core/features/chat/providers/chat_providers.dart';
 import 'package:conduit_core/services/settings_service.dart';
 import 'package:conduit_core/utils/debug_logger.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:video_player/video_player.dart';
@@ -104,6 +105,14 @@ class _AssistantAvatarStripState extends ConsumerState<AssistantAvatarStrip> {
   /// for media that has since changed.
   int _accentGeneration = 0;
 
+  /// Wraps the circle's media so a playing video frame can be read back for
+  /// the bubble color.
+  final GlobalKey _mediaBoundaryKey = GlobalKey();
+
+  /// The video clip whose color is still to be sampled, with its cache key.
+  ({String mediaId, String cacheKey})? _pendingVideoAccent;
+  Timer? _videoAccentTimer;
+
   @override
   void initState() {
     super.initState();
@@ -114,6 +123,7 @@ class _AssistantAvatarStripState extends ConsumerState<AssistantAvatarStrip> {
   void dispose() {
     _disposed = true;
     _doneTimer?.cancel();
+    _videoAccentTimer?.cancel();
     for (final controller in _controllers.values) {
       unawaited(controller.dispose());
     }
@@ -138,19 +148,26 @@ class _AssistantAvatarStripState extends ConsumerState<AssistantAvatarStrip> {
 
   /// Derives the bubble color from the avatar's resting media once per
   /// clip, only while "Message bubbles" is on. Images are decoded at
-  /// thumbnail size; a video clip leaves the bubbles gray.
+  /// thumbnail size; a video is sampled from the circle once it plays.
   Future<void> _refreshAccent() async {
     final generation = ++_accentGeneration;
+    _pendingVideoAccent = null;
+    _videoAccentTimer?.cancel();
     if (!ref.read(appSettingsProvider).messageBubbles) return;
     final notifier = ref.read(assistantAvatarAutoAccentProvider.notifier);
     final source = assistantAvatarAccentSource(_media);
-    if (source == null || source.kind == AssistantAvatarMediaKind.video) {
+    if (source == null) {
       await notifier.clear();
       return;
     }
     final cacheKey = await assistantAvatarMediaCacheKey(source);
     if (_disposed || generation != _accentGeneration) return;
     if (notifier.cachedKey == cacheKey) return;
+    if (source.kind == AssistantAvatarMediaKind.video) {
+      _pendingVideoAccent = (mediaId: source.id, cacheKey: cacheKey);
+      _scheduleVideoAccentSample();
+      return;
+    }
     try {
       final bytes = await File(source.path).readAsBytes();
       final color = await dominantVividColorOfEncoded(bytes);
@@ -164,6 +181,58 @@ class _AssistantAvatarStripState extends ConsumerState<AssistantAvatarStrip> {
         stackTrace: stackTrace,
       );
     }
+  }
+
+  /// Samples the pending video once its clip has been playing on screen for
+  /// a moment, so a real frame has been composited.
+  void _scheduleVideoAccentSample() {
+    final pending = _pendingVideoAccent;
+    if (pending == null || _playingId != pending.mediaId) return;
+    final controller = _controllers[pending.mediaId];
+    if (controller == null || !controller.value.isInitialized) return;
+    if (_videoAccentTimer?.isActive ?? false) return;
+    _videoAccentTimer = Timer(
+      const Duration(milliseconds: 800),
+      () => unawaited(_sampleVideoAccent(pending)),
+    );
+  }
+
+  Future<void> _sampleVideoAccent(
+    ({String mediaId, String cacheKey}) pending,
+  ) async {
+    if (_disposed || _pendingVideoAccent != pending) return;
+    if (_playingId != pending.mediaId) return;
+    final boundary = _mediaBoundaryKey.currentContext?.findRenderObject();
+    if (boundary is! RenderRepaintBoundary || !boundary.hasSize) return;
+    _pendingVideoAccent = null;
+    Color? color;
+    try {
+      final image = await boundary.toImage();
+      try {
+        color = await dominantVividColorOfImage(image);
+      } finally {
+        image.dispose();
+      }
+    } catch (error, stackTrace) {
+      DebugLogger.error(
+        'accent-video-sample-failed',
+        scope: _logScope,
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+    if (_disposed) return;
+    // A blank read-back (the platform texture not captured) has no vivid
+    // pixels and yields null; it is kept for this session only, so the next
+    // launch tries again, and the bubbles stay gray meanwhile.
+    DebugLogger.log(
+      'accent-video-sample',
+      scope: _logScope,
+      data: {'found': color != null},
+    );
+    await ref
+        .read(assistantAvatarAutoAccentProvider.notifier)
+        .record(pending.cacheKey, color, persist: color != null);
   }
 
   void _onStreamingChanged(bool? previous, bool next) {
@@ -213,7 +282,10 @@ class _AssistantAvatarStripState extends ConsumerState<AssistantAvatarStrip> {
       await controller.setLooping(true);
       await controller.setVolume(0);
       if (_disposed || _controllers[id] != controller) return;
-      if (_playingId == id) await controller.play();
+      if (_playingId == id) {
+        await controller.play();
+        _scheduleVideoAccentSample();
+      }
       if (mounted) setState(() {});
     } catch (error, stackTrace) {
       DebugLogger.error(
@@ -242,6 +314,7 @@ class _AssistantAvatarStripState extends ConsumerState<AssistantAvatarStrip> {
       try {
         if (entry.key == currentId) {
           unawaited(controller.play());
+          _scheduleVideoAccentSample();
         } else {
           unawaited(controller.pause());
         }
@@ -380,7 +453,10 @@ class _AssistantAvatarStripState extends ConsumerState<AssistantAvatarStrip> {
                     border: Border.all(color: theme.cardBorder),
                   ),
                   child: ClipOval(
-                    child: content ?? _AvatarInitial(name: widget.modelName),
+                    child: RepaintBoundary(
+                      key: _mediaBoundaryKey,
+                      child: content ?? _AvatarInitial(name: widget.modelName),
+                    ),
                   ),
                 ),
               ),
