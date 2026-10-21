@@ -9,6 +9,7 @@ class MessageBadge extends StatelessWidget {
     super.key,
     required this.emoji,
     required this.semanticsLabel,
+    this.ringWidth = 1,
   });
 
   static const double size = 36;
@@ -21,6 +22,9 @@ class MessageBadge extends StatelessWidget {
 
   final String emoji;
   final String semanticsLabel;
+
+  /// Width of the page-colored ring that reads as a cut out of the bubble.
+  final double ringWidth;
 
   @override
   Widget build(BuildContext context) {
@@ -36,7 +40,7 @@ class MessageBadge extends StatelessWidget {
           color: theme.surfaceContainer,
           shape: BoxShape.circle,
           // The page color around the chip reads as a cut out of the bubble.
-          border: Border.all(color: theme.surfaceBackground),
+          border: Border.all(color: theme.surfaceBackground, width: ringWidth),
         ),
         child: Text(emoji, style: const TextStyle(fontSize: 20, height: 1)),
       ),
@@ -55,6 +59,12 @@ class MessageBadge extends StatelessWidget {
 /// already has there the overhang is not clipped. [cornerInset] moves the
 /// corner the badge hangs from in from [child]'s own bottom-trailing corner,
 /// for a [child] whose visible surface does not reach its edges.
+///
+/// With [inset] the badge sits just inside the trailing edge instead, its top
+/// reaching [insetOverlap] into the bubble and the rest hanging below, the
+/// way a filled chat bubble carries a reaction; [trailingRoom] is then
+/// unused. An [inset] badge can instead keep [fixedRoom] below [child]
+/// whether or not it shows, so a badge arriving never moves what follows.
 class MessageBadgeAnchor extends StatelessWidget {
   const MessageBadgeAnchor({
     super.key,
@@ -63,18 +73,53 @@ class MessageBadgeAnchor extends StatelessWidget {
     this.reserveSpace = true,
     this.trailingRoom = 0,
     this.cornerInset = EdgeInsetsDirectional.zero,
-  });
+    this.inset = false,
+    this.fixedRoom,
+  }) : assert(fixedRoom == null || inset, 'fixedRoom needs an inset badge');
+
+  /// How far an [inset] badge hangs below the bubble's bottom edge.
+  static const double insetHang = MessageBadge.size - insetOverlap;
+
+  /// How far an [inset] badge reaches up into the bubble.
+  static const double insetOverlap = 10;
+
+  /// How far an [inset] badge sits inside the bubble's trailing edge.
+  static const double insetEnd = 10;
 
   final Widget? badge;
   final Widget child;
   final bool reserveSpace;
   final double trailingRoom;
   final EdgeInsetsDirectional cornerInset;
+  final bool inset;
+
+  /// For an [inset] badge: room kept below [child] with or without a badge,
+  /// overriding [reserveSpace]. The badge hangs past it by the rest of
+  /// [insetHang], which the caller must already leave free.
+  final double? fixedRoom;
 
   @override
   Widget build(BuildContext context) {
     final badge = this.badge;
     final showing = badge != null;
+    if (inset) {
+      final room = fixedRoom ?? (showing && reserveSpace ? insetHang : 0.0);
+      return Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Padding(
+            padding: EdgeInsets.only(bottom: room),
+            child: child,
+          ),
+          if (badge != null)
+            PositionedDirectional(
+              bottom: room - insetHang + cornerInset.bottom,
+              end: insetEnd + cornerInset.end,
+              child: badge,
+            ),
+        ],
+      );
+    }
     return Stack(
       clipBehavior: Clip.none,
       children: [

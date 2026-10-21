@@ -291,6 +291,9 @@ class SettingsService {
       PreferenceKeys.quickReplyReactionsEnabled:
           settings.quickReplyReactionsEnabled,
       PreferenceKeys.assistantAvatarEnabled: settings.assistantAvatarEnabled,
+      PreferenceKeys.messageBubbles: settings.messageBubbles,
+      PreferenceKeys.assistantAvatarBubbleColor:
+          settings.assistantAvatarBubbleColor,
       PreferenceKeys.deliveryReceiptsEnabled: settings.deliveryReceiptsEnabled,
       _highContrastKey: settings.highContrast,
       _darkModeKey: settings.darkMode,
@@ -743,6 +746,10 @@ class SettingsService {
           get<bool>(PreferenceKeys.quickReplyReactionsEnabled) ?? false,
       assistantAvatarEnabled:
           get<bool>(PreferenceKeys.assistantAvatarEnabled) ?? false,
+      messageBubbles: get<bool>(PreferenceKeys.messageBubbles) ?? false,
+      assistantAvatarBubbleColor:
+          get<String>(PreferenceKeys.assistantAvatarBubbleColor) ??
+          assistantAvatarBubbleColorAuto,
       deliveryReceiptsEnabled:
           get<bool>(PreferenceKeys.deliveryReceiptsEnabled) ?? false,
       highContrast: get<bool>(_highContrastKey) ?? false,
@@ -859,6 +866,14 @@ class _DefaultValue {
   const _DefaultValue();
 }
 
+/// [AppSettings.assistantAvatarBubbleColor] value that derives the user
+/// bubble color from the assistant avatar.
+const String assistantAvatarBubbleColorAuto = 'auto';
+
+/// [AppSettings.assistantAvatarBubbleColor] value that keeps neutral gray
+/// bubbles.
+const String assistantAvatarBubbleColorGray = 'gray';
+
 /// Data class for app settings
 class AppSettings {
   final bool reduceMotion;
@@ -867,6 +882,15 @@ class AppSettings {
   final bool citationShowTitles;
   final bool quickReplyReactionsEnabled;
   final bool assistantAvatarEnabled;
+
+  /// Whether replies sit in leading gray bubbles and the user's own bubbles
+  /// take the assistant avatar's color, like a messaging app.
+  final bool messageBubbles;
+
+  /// The user bubble color with [messageBubbles] on: [assistantAvatarBubbleColorAuto]
+  /// derives it from the avatar, [assistantAvatarBubbleColorGray] keeps the
+  /// neutral look, and an `#RRGGBB` value is a chosen swatch.
+  final String assistantAvatarBubbleColor;
   final bool deliveryReceiptsEnabled;
   final bool highContrast;
   final bool darkMode;
@@ -923,6 +947,8 @@ class AppSettings {
     this.quickReplyReactionsEnabled = false,
     this.assistantAvatarEnabled = false,
     this.deliveryReceiptsEnabled = false,
+    this.messageBubbles = false,
+    this.assistantAvatarBubbleColor = assistantAvatarBubbleColorAuto,
     this.highContrast = false,
     this.darkMode = true,
     this.defaultModel,
@@ -972,6 +998,8 @@ class AppSettings {
     bool? citationShowTitles,
     bool? quickReplyReactionsEnabled,
     bool? assistantAvatarEnabled,
+    bool? messageBubbles,
+    String? assistantAvatarBubbleColor,
     bool? deliveryReceiptsEnabled,
     bool? highContrast,
     bool? darkMode,
@@ -1024,6 +1052,9 @@ class AppSettings {
           quickReplyReactionsEnabled ?? this.quickReplyReactionsEnabled,
       assistantAvatarEnabled:
           assistantAvatarEnabled ?? this.assistantAvatarEnabled,
+      messageBubbles: messageBubbles ?? this.messageBubbles,
+      assistantAvatarBubbleColor:
+          assistantAvatarBubbleColor ?? this.assistantAvatarBubbleColor,
       deliveryReceiptsEnabled:
           deliveryReceiptsEnabled ?? this.deliveryReceiptsEnabled,
       highContrast: highContrast ?? this.highContrast,
@@ -1106,6 +1137,8 @@ class AppSettings {
         other.citationShowTitles == citationShowTitles &&
         other.quickReplyReactionsEnabled == quickReplyReactionsEnabled &&
         other.assistantAvatarEnabled == assistantAvatarEnabled &&
+        other.messageBubbles == messageBubbles &&
+        other.assistantAvatarBubbleColor == assistantAvatarBubbleColor &&
         other.deliveryReceiptsEnabled == deliveryReceiptsEnabled &&
         other.highContrast == highContrast &&
         other.darkMode == darkMode &&
@@ -1159,6 +1192,8 @@ class AppSettings {
       citationShowTitles,
       quickReplyReactionsEnabled,
       assistantAvatarEnabled,
+      messageBubbles,
+      assistantAvatarBubbleColor,
       deliveryReceiptsEnabled,
       highContrast,
       darkMode,
@@ -1275,6 +1310,19 @@ class AppSettingsNotifier extends _$AppSettingsNotifier {
     state = state.copyWith(assistantAvatarEnabled: value);
     await SettingsService._putPreference(
       PreferenceKeys.assistantAvatarEnabled,
+      value,
+    );
+  }
+
+  Future<void> setMessageBubbles(bool value) async {
+    state = state.copyWith(messageBubbles: value);
+    await SettingsService._putPreference(PreferenceKeys.messageBubbles, value);
+  }
+
+  Future<void> setAssistantAvatarBubbleColor(String value) async {
+    state = state.copyWith(assistantAvatarBubbleColor: value);
+    await SettingsService._putPreference(
+      PreferenceKeys.assistantAvatarBubbleColor,
       value,
     );
   }

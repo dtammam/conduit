@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../shared/services/navigation_service.dart';
 
+import 'package:conduit_core/services/settings_service.dart';
 import 'package:conduit_core/utils/debug_logger.dart';
 
 import '../../../shared/theme/conduit_input_styles.dart';
@@ -25,6 +26,7 @@ import 'enhanced_attachment.dart';
 import 'enhanced_image_attachment.dart';
 import 'image_gallery_scope.dart';
 import 'message_badge.dart';
+import 'message_bubble_colors.dart';
 
 // Pre-compiled regex for extracting file IDs from URLs (performance optimization)
 // Handles both /api/v1/files/{id} and /api/v1/files/{id}/content formats
@@ -793,10 +795,18 @@ class _UserMessageBubbleState extends ConsumerState<UserMessageBubble> {
 
   @override
   Widget build(BuildContext context) {
-    return _withReceiptBadge(_buildUserMessage());
+    // With "Message bubbles" the bubble takes the avatar's color (or the
+    // lighter neutral gray) and the receipt sits inside its trailing corner.
+    final messageBubbles = ref.watch(
+      appSettingsProvider.select((settings) => settings.messageBubbles),
+    );
+    return _withReceiptBadge(
+      _buildUserMessage(messageBubbles: messageBubbles),
+      inset: messageBubbles,
+    );
   }
 
-  Widget _buildUserMessage() {
+  Widget _buildUserMessage({required bool messageBubbles}) {
     final theme = context.conduitTheme;
     final hasImages =
         widget.message.attachmentIds != null &&
@@ -815,8 +825,18 @@ class _UserMessageBubbleState extends ConsumerState<UserMessageBubble> {
     const bubbleBorderRadius = BorderRadius.all(
       Radius.circular(AppBorderRadius.chatBubble),
     );
+    final bubbleColors = messageBubbles
+        ? resolveMessageBubbleColors(
+            theme,
+            ref.watch(messageBubbleAccentProvider),
+          )
+        : null;
+    final bubbleFill = bubbleColors?.userFill ?? theme.chatBubbleUser;
+    final bubbleTextColor = bubbleColors?.userText ?? theme.chatBubbleUserText;
     final actions = _buildMessageActions(context);
-    final receiptRoom = _showsReceipt ? _receiptTrailingRoom : 0.0;
+    final receiptRoom = _showsReceipt && !messageBubbles
+        ? _receiptTrailingRoom
+        : 0.0;
     final attachmentContent = hasFilesFromArray
         ? _buildUserFileImages(filePartitions!)
         : hasImages
@@ -850,7 +870,7 @@ class _UserMessageBubbleState extends ConsumerState<UserMessageBubble> {
                       child: Container(
                         key: const Key('user-message-bubble-surface'),
                         // Text keeps clear of the receipt's overlapping corner.
-                        padding: _showsReceipt
+                        padding: _showsReceipt && !messageBubbles
                             ? const EdgeInsetsDirectional.only(
                                 start: Spacing.md,
                                 end: Spacing.md + MessageBadge.overlap + 4,
@@ -862,7 +882,7 @@ class _UserMessageBubbleState extends ConsumerState<UserMessageBubble> {
                                 vertical: Spacing.sm + Spacing.xxs,
                               ),
                         decoration: BoxDecoration(
-                          color: theme.chatBubbleUser,
+                          color: bubbleFill,
                           borderRadius: bubbleBorderRadius,
                         ),
                         child: _isEditing
@@ -908,7 +928,7 @@ class _UserMessageBubbleState extends ConsumerState<UserMessageBubble> {
                             : Text(
                                 widget.message.content,
                                 style: AppTypography.chatMessageStyle.copyWith(
-                                  color: theme.chatBubbleUserText,
+                                  color: bubbleTextColor,
                                 ),
                                 softWrap: true,
                                 textAlign: TextAlign.left,
@@ -951,14 +971,17 @@ class _UserMessageBubbleState extends ConsumerState<UserMessageBubble> {
   /// which sits [_receiptTrailingRoom] in from the message's trailing edge
   /// and the message's bottom margin ([Spacing.lg]) up from its bottom. That
   /// margin takes the overhang below. Wrapping the whole message keeps the
-  /// bubble's own subtree as it is.
-  Widget _withReceiptBadge(Widget message) {
+  /// bubble's own subtree as it is. With [inset] (message bubbles) the mark
+  /// sits just inside the bubble's trailing edge, which then has no room
+  /// past it.
+  Widget _withReceiptBadge(Widget message, {required bool inset}) {
     final l10n = AppLocalizations.of(context)!;
     final failed = widget.receipt == MessageReceipt.failed;
     return MessageBadgeAnchor(
       reserveSpace: false,
-      cornerInset: const EdgeInsetsDirectional.only(
-        end: _receiptTrailingRoom,
+      inset: inset,
+      cornerInset: EdgeInsetsDirectional.only(
+        end: inset ? 0 : _receiptTrailingRoom,
         bottom: Spacing.lg,
       ),
       badge: !_showsReceipt
@@ -969,6 +992,7 @@ class _UserMessageBubbleState extends ConsumerState<UserMessageBubble> {
               semanticsLabel: failed
                   ? l10n.messageReceiptFailed
                   : l10n.messageReceiptDelivered,
+              ringWidth: inset ? 3 : 1,
             ),
       child: message,
     );

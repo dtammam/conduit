@@ -1605,6 +1605,14 @@ class NativeSheetHydrationService {
         kind: NativeSheetItemKind.toggle,
         value: appSettings.assistantAvatarEnabled,
       ),
+      NativeSheetItemConfig(
+        id: nativeMessageBubblesId,
+        title: l10n.messageBubbles,
+        subtitle: l10n.messageBubblesDescription,
+        sfSymbol: 'bubble.left.and.bubble.right',
+        kind: NativeSheetItemKind.toggle,
+        value: appSettings.messageBubbles,
+      ),
     ];
   }
 
