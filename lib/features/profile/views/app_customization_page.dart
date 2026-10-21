@@ -685,6 +685,27 @@ class AppCustomizationPage extends ConsumerWidget {
               .read(appSettingsProvider.notifier)
               .setChatMultiSelect(!settings.chatMultiSelect),
         ),
+        const SizedBox(height: Spacing.sm),
+        CustomizationTile(
+          leading: _buildIconBadge(
+            context,
+            Icons.donut_large_rounded,
+            color: theme.buttonPrimary,
+          ),
+          title: l10n.showContextUsage,
+          subtitle: l10n.showContextUsageDescription,
+          toggled: settings.showContextUsage,
+          trailing: AdaptiveSwitch(
+            value: settings.showContextUsage,
+            onChanged: (value) => ref
+                .read(appSettingsProvider.notifier)
+                .setShowContextUsage(value),
+          ),
+          showChevron: false,
+          onTap: () => ref
+              .read(appSettingsProvider.notifier)
+              .setShowContextUsage(!settings.showContextUsage),
+        ),
         if (Platform.isAndroid) ...[
           const SizedBox(height: Spacing.sm),
           CustomizationTile(

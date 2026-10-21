@@ -20,6 +20,7 @@ final class PreferenceKeys {
   static const String chatDragToFolder = 'chat_drag_to_folder';
   static const String chatSwipeToDelete = 'chat_swipe_to_delete';
   static const String chatMultiSelect = 'chat_multi_select';
+  static const String showContextUsage = 'show_context_usage';
   static const String highContrast = 'high_contrast';
   static const String darkMode = 'dark_mode';
   static const String defaultModel = 'default_model';
@@ -179,6 +180,10 @@ final class PreferenceKeys {
   static const String directContextLengthOverrides =
       'direct_context_length_overrides_v1';
   static const String reasoningEffortByModel = 'reasoning_effort_by_model_v1';
+
+  /// Context windows set from the chat's context usage sheet for server
+  /// models whose metadata does not advertise one, keyed by model id.
+  static const String contextWindowOverrides = 'context_window_overrides_v1';
 
   /// Prefix for the per-server account owner marker that guards reopening an
   /// OpenWebUI database after process restart.

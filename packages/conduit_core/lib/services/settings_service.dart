@@ -300,6 +300,7 @@ class SettingsService {
       PreferenceKeys.chatDragToFolder: settings.chatDragToFolder,
       PreferenceKeys.chatSwipeToDelete: settings.chatSwipeToDelete,
       PreferenceKeys.chatMultiSelect: settings.chatMultiSelect,
+      PreferenceKeys.showContextUsage: settings.showContextUsage,
       _highContrastKey: settings.highContrast,
       _darkModeKey: settings.darkMode,
       _voiceHoldToTalkKey: settings.voiceHoldToTalk,
@@ -764,6 +765,7 @@ class SettingsService {
       chatDragToFolder: get<bool>(PreferenceKeys.chatDragToFolder) ?? false,
       chatSwipeToDelete: get<bool>(PreferenceKeys.chatSwipeToDelete) ?? false,
       chatMultiSelect: get<bool>(PreferenceKeys.chatMultiSelect) ?? false,
+      showContextUsage: get<bool>(PreferenceKeys.showContextUsage) ?? false,
       highContrast: get<bool>(_highContrastKey) ?? false,
       darkMode: get<bool>(_darkModeKey) ?? true,
       defaultModel: get<String>(_defaultModelKey),
@@ -924,6 +926,10 @@ class AppSettings {
   /// Whether a chat's menu in the sidebar offers Select, for moving or
   /// deleting several chats together.
   final bool chatMultiSelect;
+
+  /// Whether the chat app bar shows a ring for how much of the model's
+  /// context window the conversation uses.
+  final bool showContextUsage;
   final bool highContrast;
   final bool darkMode;
   final String? defaultModel;
@@ -986,6 +992,7 @@ class AppSettings {
     this.chatDragToFolder = false,
     this.chatSwipeToDelete = false,
     this.chatMultiSelect = false,
+    this.showContextUsage = false,
     this.highContrast = false,
     this.darkMode = true,
     this.defaultModel,
@@ -1043,6 +1050,7 @@ class AppSettings {
     bool? chatDragToFolder,
     bool? chatSwipeToDelete,
     bool? chatMultiSelect,
+    bool? showContextUsage,
     bool? highContrast,
     bool? darkMode,
     Object? defaultModel = const _DefaultValue(),
@@ -1104,6 +1112,7 @@ class AppSettings {
       chatDragToFolder: chatDragToFolder ?? this.chatDragToFolder,
       chatSwipeToDelete: chatSwipeToDelete ?? this.chatSwipeToDelete,
       chatMultiSelect: chatMultiSelect ?? this.chatMultiSelect,
+      showContextUsage: showContextUsage ?? this.showContextUsage,
       highContrast: highContrast ?? this.highContrast,
       darkMode: darkMode ?? this.darkMode,
       defaultModel: defaultModel is _DefaultValue
@@ -1192,6 +1201,7 @@ class AppSettings {
         other.chatDragToFolder == chatDragToFolder &&
         other.chatSwipeToDelete == chatSwipeToDelete &&
         other.chatMultiSelect == chatMultiSelect &&
+        other.showContextUsage == showContextUsage &&
         other.highContrast == highContrast &&
         other.darkMode == darkMode &&
         other.defaultModel == defaultModel &&
@@ -1252,6 +1262,7 @@ class AppSettings {
       chatDragToFolder,
       chatSwipeToDelete,
       chatMultiSelect,
+      showContextUsage,
       highContrast,
       darkMode,
       defaultModel,
@@ -1436,6 +1447,14 @@ class AppSettingsNotifier extends _$AppSettingsNotifier {
     state = state.copyWith(chatMultiSelect: value);
     await SettingsService._putPreference(
       PreferenceKeys.chatMultiSelect,
+      value,
+    );
+  }
+
+  Future<void> setShowContextUsage(bool value) async {
+    state = state.copyWith(showContextUsage: value);
+    await SettingsService._putPreference(
+      PreferenceKeys.showContextUsage,
       value,
     );
   }

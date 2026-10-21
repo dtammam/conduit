@@ -1158,6 +1158,50 @@
       }
     }
   },
+  "contextUsageTitle": "Kontext",
+  "contextUsageRingLabel": "Využití kontextu: {percent}",
+  "@contextUsageRingLabel": {
+    "placeholders": {
+      "percent": {
+        "type": "String",
+        "example": "42%"
+      }
+    }
+  },
+  "contextUsageRingUnknownLabel": "Využití kontextu. Kontextové okno není nastaveno",
+  "contextUsageUsed": "Využito",
+  "contextUsageWindow": "Kontextové okno",
+  "contextUsageFilled": "Zaplněno",
+  "contextUsageTokens": "{count, plural, one{{count} token} few{{count} tokeny} other{{count} tokenů}}",
+  "@contextUsageTokens": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern",
+        "example": "32768"
+      }
+    }
+  },
+  "contextUsageAboutTokens": "{count, plural, one{Asi {count} token} few{Asi {count} tokeny} other{Asi {count} tokenů}}",
+  "@contextUsageAboutTokens": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern",
+        "example": "12345"
+      }
+    }
+  },
+  "contextUsageLastPrompt": "Poslední prompt",
+  "contextUsageLastReply": "Poslední odpověď",
+  "contextUsageWindowNotSet": "Nenastaveno",
+  "contextUsageSourceModel": "Z nastavení modelu",
+  "contextUsageSourceUser": "Nastaveno vámi",
+  "contextUsageSourceDirectDefault": "Výchozí hodnota přímých připojení",
+  "contextUsageEstimateNote": "Odhad z textu zpráv, zhruba 4 znaky na token. Systémový prompt a definice nástrojů se nepočítají, skutečná hodnota je tedy vyšší.",
+  "contextUsageReportedNote": "Počet tokenů poslední odpovědi podle serveru.",
+  "contextUsagePickerDescription": "Kolik tokenů model přečte najednou. Zadejte délku kontextu, se kterou ho server načítá.",
+  "contextUsageSetWindow": "Nastavit",
   "usageSecondsFormat": "{seconds} s",
   "@usageSecondsFormat": {
     "description": "Seconds duration format",
@@ -5407,6 +5451,8 @@
   "markdownDetailsGroupCompactCompleteTitle": "{count, plural, =1{Použit nástroj} few{Použity {count} nástroje} other{Použito {count} nástrojů}}",
   "waveTypingIndicator": "Vlnitý indikátor psaní",
   "waveTypingIndicatorDescription": "Zobrazovat tři vlnící se tečky, zatímco se píše odpověď",
+  "showContextUsage": "Zobrazovat využití kontextu",
+  "showContextUsageDescription": "V horní liště chatu zobrazovat kroužek s tím, kolik kontextu modelu je využito",
   "directContextCompactionDescription": "Tyto modely neuvádějí velikost kontextového okna. Conduit použije zvolený limit ke zhuštění starších zpráv dříve, než budou požadavky příliš velké.",
   "directContextCompactionPickerDescription": "Vyberte kontextové okno, které má Conduit použít pro automatické zhuštění.",
   "directContextCompactionTitle": "Zhuštění kontextu",

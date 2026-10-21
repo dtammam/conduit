@@ -975,6 +975,50 @@
       }
     }
   },
+  "contextUsageTitle": "Context",
+  "contextUsageRingLabel": "Contextgebruik: {percent}",
+  "@contextUsageRingLabel": {
+    "placeholders": {
+      "percent": {
+        "type": "String",
+        "example": "42%"
+      }
+    }
+  },
+  "contextUsageRingUnknownLabel": "Contextgebruik. Contextvenster niet ingesteld",
+  "contextUsageUsed": "Gebruikt",
+  "contextUsageWindow": "Contextvenster",
+  "contextUsageFilled": "Gevuld",
+  "contextUsageTokens": "{count} tokens",
+  "@contextUsageTokens": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern",
+        "example": "32768"
+      }
+    }
+  },
+  "contextUsageAboutTokens": "Ongeveer {count} tokens",
+  "@contextUsageAboutTokens": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern",
+        "example": "12345"
+      }
+    }
+  },
+  "contextUsageLastPrompt": "Laatste prompt",
+  "contextUsageLastReply": "Laatste antwoord",
+  "contextUsageWindowNotSet": "Niet ingesteld",
+  "contextUsageSourceModel": "Uit de modelinstellingen",
+  "contextUsageSourceUser": "Door jou ingesteld",
+  "contextUsageSourceDirectDefault": "Standaard van directe verbindingen",
+  "contextUsageEstimateNote": "Geschat uit de berichttekst, ongeveer 4 tekens per token. De systeemprompt en tooldefinities tellen niet mee, dus het echte getal is hoger.",
+  "contextUsageReportedNote": "Het aantal tokens dat de server voor het laatste antwoord meldt.",
+  "contextUsagePickerDescription": "Hoeveel tokens het model in één keer kan lezen. Gebruik de contextlengte waarmee je server het laadt.",
+  "contextUsageSetWindow": "Instellen",
   "usageSecondsFormat": "{seconds}s",
   "@usageSecondsFormat": {
     "placeholders": {
@@ -3498,6 +3542,8 @@
   "markdownDetailsGroupCompactCompleteTitle": "{count, plural, =1{Eén tool gebruikt} other{{count} tools gebruikt}}",
   "waveTypingIndicator": "Golvende typindicator",
   "waveTypingIndicatorDescription": "Toon drie golvende stippen terwijl een antwoord wordt geschreven",
+  "showContextUsage": "Contextgebruik tonen",
+  "showContextUsageDescription": "Een ring in de chatbalk tonen met hoeveel van de context van het model in gebruik is",
   "directContextCompactionDescription": "Deze modellen geven geen contextvenster op. Conduit gebruikt de gekozen limiet om oudere berichten te comprimeren voordat verzoeken te groot worden.",
   "directContextCompactionPickerDescription": "Kies het contextvenster dat Conduit moet gebruiken voor automatisch comprimeren.",
   "directContextCompactionTitle": "Context comprimeren",

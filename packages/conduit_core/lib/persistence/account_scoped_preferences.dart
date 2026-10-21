@@ -68,6 +68,7 @@ const Set<String> accountScopedPreferenceKeys = <String>{
   PreferenceKeys.notificationSoundAlways,
   PreferenceKeys.sidebarActiveTab,
   PreferenceKeys.temporaryChatByDefault,
+  PreferenceKeys.contextWindowOverrides,
 };
 
 /// The Open WebUI account whose preferences apply: the stored active

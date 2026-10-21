@@ -977,6 +977,50 @@
       }
     }
   },
+  "contextUsageTitle": "Kontext",
+  "contextUsageRingLabel": "Kontextnutzung: {percent}",
+  "@contextUsageRingLabel": {
+    "placeholders": {
+      "percent": {
+        "type": "String",
+        "example": "42%"
+      }
+    }
+  },
+  "contextUsageRingUnknownLabel": "Kontextnutzung. Kontextfenster nicht festgelegt",
+  "contextUsageUsed": "Belegt",
+  "contextUsageWindow": "Kontextfenster",
+  "contextUsageFilled": "Gefüllt",
+  "contextUsageTokens": "{count} Tokens",
+  "@contextUsageTokens": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern",
+        "example": "32768"
+      }
+    }
+  },
+  "contextUsageAboutTokens": "Etwa {count} Tokens",
+  "@contextUsageAboutTokens": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern",
+        "example": "12345"
+      }
+    }
+  },
+  "contextUsageLastPrompt": "Letzter Prompt",
+  "contextUsageLastReply": "Letzte Antwort",
+  "contextUsageWindowNotSet": "Nicht festgelegt",
+  "contextUsageSourceModel": "Aus den Modelleinstellungen",
+  "contextUsageSourceUser": "Von dir festgelegt",
+  "contextUsageSourceDirectDefault": "Standard der Direktverbindungen",
+  "contextUsageEstimateNote": "Geschätzt aus dem Nachrichtentext mit etwa 4 Zeichen pro Token. Systemprompt und Werkzeugdefinitionen sind nicht mitgezählt, der echte Wert liegt also höher.",
+  "contextUsageReportedNote": "Die Tokenzahl des Servers für die letzte Antwort.",
+  "contextUsagePickerDescription": "Wie viele Tokens das Modell auf einmal lesen kann. Nimm die Kontextlänge, mit der dein Server es lädt.",
+  "contextUsageSetWindow": "Festlegen",
   "usageSecondsFormat": "{seconds}s",
   "@usageSecondsFormat": {
     "placeholders": {
@@ -3498,6 +3542,8 @@
   "markdownDetailsGroupCompactCompleteTitle": "{count, plural, =1{Ein Werkzeug verwendet} other{{count} Werkzeuge verwendet}}",
   "waveTypingIndicator": "Wellen-Tippindikator",
   "waveTypingIndicatorDescription": "Drei wogende Punkte anzeigen, während eine Antwort geschrieben wird",
+  "showContextUsage": "Kontextnutzung anzeigen",
+  "showContextUsageDescription": "In der Chat-Leiste einen Ring zeigen, wie viel vom Kontext des Modells belegt ist",
   "directContextCompactionDescription": "Diese Modelle geben kein Kontextfenster an. Conduit verwendet das gewählte Limit, um ältere Nachrichten zu komprimieren, bevor Anfragen zu groß werden.",
   "directContextCompactionPickerDescription": "Wähle das Kontextfenster, das Conduit für die automatische Komprimierung verwenden soll.",
   "directContextCompactionTitle": "Kontextkomprimierung",

@@ -1158,6 +1158,50 @@
       }
     }
   },
+  "contextUsageTitle": "Kontext",
+  "contextUsageRingLabel": "Využitie kontextu: {percent}",
+  "@contextUsageRingLabel": {
+    "placeholders": {
+      "percent": {
+        "type": "String",
+        "example": "42%"
+      }
+    }
+  },
+  "contextUsageRingUnknownLabel": "Využitie kontextu. Kontextové okno nie je nastavené",
+  "contextUsageUsed": "Využité",
+  "contextUsageWindow": "Kontextové okno",
+  "contextUsageFilled": "Zaplnené",
+  "contextUsageTokens": "{count, plural, one{{count} token} few{{count} tokeny} other{{count} tokenov}}",
+  "@contextUsageTokens": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern",
+        "example": "32768"
+      }
+    }
+  },
+  "contextUsageAboutTokens": "{count, plural, one{Asi {count} token} few{Asi {count} tokeny} other{Asi {count} tokenov}}",
+  "@contextUsageAboutTokens": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern",
+        "example": "12345"
+      }
+    }
+  },
+  "contextUsageLastPrompt": "Posledný prompt",
+  "contextUsageLastReply": "Posledná odpoveď",
+  "contextUsageWindowNotSet": "Nenastavené",
+  "contextUsageSourceModel": "Z nastavení modelu",
+  "contextUsageSourceUser": "Nastavené vami",
+  "contextUsageSourceDirectDefault": "Predvolená hodnota priamych pripojení",
+  "contextUsageEstimateNote": "Odhad z textu správ, približne 4 znaky na token. Systémový prompt a definície nástrojov sa nepočítajú, skutočná hodnota je preto vyššia.",
+  "contextUsageReportedNote": "Počet tokenov poslednej odpovede podľa servera.",
+  "contextUsagePickerDescription": "Koľko tokenov model prečíta naraz. Zadajte dĺžku kontextu, s ktorou ho server načítava.",
+  "contextUsageSetWindow": "Nastaviť",
   "usageSecondsFormat": "{seconds} s",
   "@usageSecondsFormat": {
     "description": "Seconds duration format",
@@ -5407,6 +5451,8 @@
   "markdownDetailsGroupCompactCompleteTitle": "{count, plural, =1{Použitý nástroj} few{Použité {count} nástroje} other{Použitých {count} nástrojov}}",
   "waveTypingIndicator": "Vlnitý indikátor písania",
   "waveTypingIndicatorDescription": "Zobrazovať tri vlniace sa bodky, kým sa píše odpoveď",
+  "showContextUsage": "Zobrazovať využitie kontextu",
+  "showContextUsageDescription": "V hornej lište chatu zobrazovať krúžok s tým, koľko kontextu modelu je využitého",
   "directContextCompactionDescription": "Tieto modely neuvádzajú veľkosť kontextového okna. Conduit použije zvolený limit na zhustenie starších správ skôr, než budú požiadavky príliš veľké.",
   "directContextCompactionPickerDescription": "Vyberte kontextové okno, ktoré má Conduit použiť na automatické zhustenie.",
   "directContextCompactionTitle": "Zhustenie kontextu",

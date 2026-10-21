@@ -753,6 +753,50 @@
       }
     }
   },
+  "contextUsageTitle": "컨텍스트",
+  "contextUsageRingLabel": "컨텍스트 사용량: {percent}",
+  "@contextUsageRingLabel": {
+    "placeholders": {
+      "percent": {
+        "type": "String",
+        "example": "42%"
+      }
+    }
+  },
+  "contextUsageRingUnknownLabel": "컨텍스트 사용량. 컨텍스트 창이 설정되지 않음",
+  "contextUsageUsed": "사용",
+  "contextUsageWindow": "컨텍스트 창",
+  "contextUsageFilled": "채움",
+  "contextUsageTokens": "{count}개 토큰",
+  "@contextUsageTokens": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern",
+        "example": "32768"
+      }
+    }
+  },
+  "contextUsageAboutTokens": "약 {count}개 토큰",
+  "@contextUsageAboutTokens": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern",
+        "example": "12345"
+      }
+    }
+  },
+  "contextUsageLastPrompt": "마지막 프롬프트",
+  "contextUsageLastReply": "마지막 답변",
+  "contextUsageWindowNotSet": "설정 안 됨",
+  "contextUsageSourceModel": "모델 설정 값",
+  "contextUsageSourceUser": "직접 설정함",
+  "contextUsageSourceDirectDefault": "직접 연결 기본값",
+  "contextUsageEstimateNote": "메시지 텍스트로 추정한 값이며 토큰당 약 4자로 계산합니다. 시스템 프롬프트와 도구 정의는 포함되지 않아 실제 값은 더 큽니다.",
+  "contextUsageReportedNote": "서버가 최신 답변에 대해 보고한 토큰 수입니다.",
+  "contextUsagePickerDescription": "모델이 한 번에 읽을 수 있는 토큰 수입니다. 서버가 모델을 불러올 때 쓰는 컨텍스트 길이를 입력하세요.",
+  "contextUsageSetWindow": "설정",
   "usageSecondsFormat": "{seconds}초",
   "@usageSecondsFormat": {
     "placeholders": {
@@ -3276,6 +3320,8 @@
   "markdownDetailsGroupCompactCompleteTitle": "{count, plural, =1{도구 1개 사용} other{도구 {count}개 사용}}",
   "waveTypingIndicator": "물결 입력 표시",
   "waveTypingIndicatorDescription": "답변을 작성하는 동안 물결치는 점 세 개를 표시합니다",
+  "showContextUsage": "컨텍스트 사용량 표시",
+  "showContextUsageDescription": "채팅 상단 바에 모델 컨텍스트 사용량을 링으로 표시",
   "directContextCompactionDescription": "이 모델은 컨텍스트 창을 알려주지 않습니다. Conduit은 요청이 너무 커지기 전에 선택한 한도를 사용해 오래된 메시지를 압축합니다.",
   "directContextCompactionPickerDescription": "Conduit이 자동 압축에 사용할 컨텍스트 창을 선택하세요.",
   "directContextCompactionTitle": "컨텍스트 압축",

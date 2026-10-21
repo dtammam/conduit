@@ -620,6 +620,9 @@ const nativeChatSwipeToDeleteId = 'chat-swipe-to-delete';
 /// page.
 const nativeChatMultiSelectId = 'chat-multi-select';
 
+/// Control id of the "Show context usage" toggle in the native Chats page.
+const nativeShowContextUsageId = 'show-context-usage';
+
 /// Control id the accountless "Connect to Open WebUI" root row sends.
 const nativeConnectOpenWebUiActionId = 'add-owui-server';
 

@@ -394,6 +394,7 @@ void main() {
         'chat-drag-to-folder',
         'chat-swipe-to-delete',
         'chat-multi-select',
+        'show-context-usage',
       ]);
     });
 

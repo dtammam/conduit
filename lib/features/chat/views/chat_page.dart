@@ -120,6 +120,8 @@ import '../../../shared/utils/adaptive_glass.dart';
 import '../../../shared/widgets/themed_dialogs.dart';
 import '../../../shared/widgets/themed_sheets.dart';
 import '../../../shared/widgets/measure_size.dart';
+import '../providers/context_usage_providers.dart';
+import '../widgets/context_usage_ring.dart';
 import '../../../shared/widgets/server_version_warning_card.dart';
 import '../../../shared/widgets/adaptive_toolbar_components.dart';
 import '../../../shared/widgets/chrome_gradient_fade.dart';
@@ -4494,7 +4496,13 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     final hasMessages = ref.watch(hasChatMessagesProvider);
     final showNewChatAction = activeConversation != null || hasMessages;
     final tintColor = context.conduitTheme.textPrimary;
-    final trailingActionCount = (showNewChatAction ? 1 : 0) + 1;
+    final showContextRing = ref.watch(
+      chatContextUsageProvider.select((usage) => usage != null),
+    );
+    // The ring leads, but it still takes one control's width and gap
+    // from the title's budget, so it counts here like a trailing action.
+    final trailingActionCount =
+        (showNewChatAction ? 1 : 0) + (showContextRing ? 1 : 0) + 1;
     final maxModelWidth = resolveConduitAdaptiveLeadingPillWidth(
       context,
       trailingActionCount: trailingActionCount,
@@ -4525,6 +4533,10 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       hasMessages: hasMessages,
       showNewChatAction: showNewChatAction,
     );
+    // The context ring sits on the leading side, right after the menu
+    // button, so nothing on the trailing side reaches toward a centered title.
+    // With a leading title (the model selector) the ring comes before it:
+    // menu, ring, title.
     final actionWidgets = buildConduitAdaptiveToolbarActionWidgets([
       for (final action in actionDescriptors) action.widget,
     ]);
@@ -4551,6 +4563,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
         onPressed: () => _toggleResponsiveDrawer(context),
         iconColor: tintColor,
       ),
+      leadingAccessory: showContextRing ? const ContextUsageRingButton() : null,
       title: title,
       actions: actionWidgets,
       cupertinoTrailing: cupertinoTrailing,

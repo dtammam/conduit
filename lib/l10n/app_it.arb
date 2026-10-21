@@ -975,6 +975,50 @@
       }
     }
   },
+  "contextUsageTitle": "Contesto",
+  "contextUsageRingLabel": "Uso del contesto: {percent}",
+  "@contextUsageRingLabel": {
+    "placeholders": {
+      "percent": {
+        "type": "String",
+        "example": "42%"
+      }
+    }
+  },
+  "contextUsageRingUnknownLabel": "Uso del contesto. Finestra di contesto non impostata",
+  "contextUsageUsed": "Usati",
+  "contextUsageWindow": "Finestra di contesto",
+  "contextUsageFilled": "Riempito",
+  "contextUsageTokens": "{count} token",
+  "@contextUsageTokens": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern",
+        "example": "32768"
+      }
+    }
+  },
+  "contextUsageAboutTokens": "Circa {count} token",
+  "@contextUsageAboutTokens": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern",
+        "example": "12345"
+      }
+    }
+  },
+  "contextUsageLastPrompt": "Ultimo prompt",
+  "contextUsageLastReply": "Ultima risposta",
+  "contextUsageWindowNotSet": "Non impostata",
+  "contextUsageSourceModel": "Dalle impostazioni del modello",
+  "contextUsageSourceUser": "Impostata da te",
+  "contextUsageSourceDirectDefault": "Predefinito delle connessioni dirette",
+  "contextUsageEstimateNote": "Stima dal testo dei messaggi, circa 4 caratteri per token. Il prompt di sistema e le definizioni degli strumenti non sono contati, quindi il valore reale è più alto.",
+  "contextUsageReportedNote": "Il conteggio dei token del server per l'ultima risposta.",
+  "contextUsagePickerDescription": "Quanti token il modello può leggere in una volta. Usa la lunghezza di contesto con cui il server lo carica.",
+  "contextUsageSetWindow": "Imposta",
   "usageSecondsFormat": "{seconds}s",
   "@usageSecondsFormat": {
     "placeholders": {
@@ -3498,6 +3542,8 @@
   "markdownDetailsGroupCompactCompleteTitle": "{count, plural, =1{Usato uno strumento} other{Usati {count} strumenti}}",
   "waveTypingIndicator": "Indicatore di scrittura a onda",
   "waveTypingIndicatorDescription": "Mostra tre puntini ondeggianti mentre viene scritta una risposta",
+  "showContextUsage": "Mostra l’uso del contesto",
+  "showContextUsageDescription": "Mostra nella barra della chat un anello con quanto contesto del modello è usato",
   "directContextCompactionDescription": "Questi modelli non indicano la finestra di contesto. Conduit usa il limite selezionato per compattare i messaggi meno recenti prima che le richieste diventino troppo grandi.",
   "directContextCompactionPickerDescription": "Scegli la finestra di contesto che Conduit deve usare per la compattazione automatica.",
   "directContextCompactionTitle": "Compattazione del contesto",
