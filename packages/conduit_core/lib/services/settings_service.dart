@@ -288,6 +288,8 @@ class SettingsService {
       _animationSpeedKey: settings.animationSpeed,
       _disableHapticsWhileStreamingKey: settings.disableHapticsWhileStreaming,
       PreferenceKeys.citationShowTitles: settings.citationShowTitles,
+      PreferenceKeys.quickReplyReactionsEnabled:
+          settings.quickReplyReactionsEnabled,
       PreferenceKeys.deliveryReceiptsEnabled: settings.deliveryReceiptsEnabled,
       _highContrastKey: settings.highContrast,
       _darkModeKey: settings.darkMode,
@@ -736,6 +738,8 @@ class SettingsService {
       citationShowTitles:
           get<bool>(PreferenceKeys.citationShowTitles) ??
           false,
+      quickReplyReactionsEnabled:
+          get<bool>(PreferenceKeys.quickReplyReactionsEnabled) ?? false,
       deliveryReceiptsEnabled:
           get<bool>(PreferenceKeys.deliveryReceiptsEnabled) ?? false,
       highContrast: get<bool>(_highContrastKey) ?? false,
@@ -858,6 +862,7 @@ class AppSettings {
   final double animationSpeed;
   final bool disableHapticsWhileStreaming;
   final bool citationShowTitles;
+  final bool quickReplyReactionsEnabled;
   final bool deliveryReceiptsEnabled;
   final bool highContrast;
   final bool darkMode;
@@ -911,6 +916,7 @@ class AppSettings {
     this.animationSpeed = 1.0,
     this.disableHapticsWhileStreaming = false,
     this.citationShowTitles = false,
+    this.quickReplyReactionsEnabled = false,
     this.deliveryReceiptsEnabled = false,
     this.highContrast = false,
     this.darkMode = true,
@@ -959,6 +965,7 @@ class AppSettings {
     double? animationSpeed,
     bool? disableHapticsWhileStreaming,
     bool? citationShowTitles,
+    bool? quickReplyReactionsEnabled,
     bool? deliveryReceiptsEnabled,
     bool? highContrast,
     bool? darkMode,
@@ -1007,6 +1014,8 @@ class AppSettings {
       disableHapticsWhileStreaming:
           disableHapticsWhileStreaming ?? this.disableHapticsWhileStreaming,
       citationShowTitles: citationShowTitles ?? this.citationShowTitles,
+      quickReplyReactionsEnabled:
+          quickReplyReactionsEnabled ?? this.quickReplyReactionsEnabled,
       deliveryReceiptsEnabled:
           deliveryReceiptsEnabled ?? this.deliveryReceiptsEnabled,
       highContrast: highContrast ?? this.highContrast,
@@ -1087,6 +1096,7 @@ class AppSettings {
         other.animationSpeed == animationSpeed &&
         other.disableHapticsWhileStreaming == disableHapticsWhileStreaming &&
         other.citationShowTitles == citationShowTitles &&
+        other.quickReplyReactionsEnabled == quickReplyReactionsEnabled &&
         other.deliveryReceiptsEnabled == deliveryReceiptsEnabled &&
         other.highContrast == highContrast &&
         other.darkMode == darkMode &&
@@ -1138,6 +1148,7 @@ class AppSettings {
       animationSpeed,
       disableHapticsWhileStreaming,
       citationShowTitles,
+      quickReplyReactionsEnabled,
       deliveryReceiptsEnabled,
       highContrast,
       darkMode,
@@ -1246,6 +1257,14 @@ class AppSettingsNotifier extends _$AppSettingsNotifier {
     state = state.copyWith(citationShowTitles: value);
     await SettingsService._putPreference(
       PreferenceKeys.citationShowTitles,
+      value,
+    );
+  }
+
+  Future<void> setQuickReplyReactionsEnabled(bool value) async {
+    state = state.copyWith(quickReplyReactionsEnabled: value);
+    await SettingsService._putPreference(
+      PreferenceKeys.quickReplyReactionsEnabled,
       value,
     );
   }

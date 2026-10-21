@@ -1776,6 +1776,50 @@
   "@messageReceiptFailed": {
     "description": "Screen reader label for the mark on the user's latest message when the send or the reply failed."
   },
+  "quickReplyReactions": "Quick-reply reactions",
+  "@quickReplyReactions": {
+    "description": "Toggle title for the reaction picker that opens on a long press of an assistant reply."
+  },
+  "quickReplyReactionsDescription": "Long-press a reply to answer it with a reaction",
+  "@quickReplyReactionsDescription": {
+    "description": "Subtitle for the quick-reply reactions toggle; the picker opens on a long press of an assistant reply."
+  },
+  "quickReplyReactionLabel": "Reply \"{text}\"",
+  "@quickReplyReactionLabel": {
+    "description": "Screen reader label for one quick-reply reaction button; text is the message it sends.",
+    "placeholders": {
+      "text": {
+        "type": "String",
+        "example": "Yes"
+      }
+    }
+  },
+  "quickReplyReactionBadge": "You reacted \"{text}\"",
+  "@quickReplyReactionBadge": {
+    "description": "Screen reader label for the reaction badge on an assistant reply; text is the message the reaction sent.",
+    "placeholders": {
+      "text": {
+        "type": "String",
+        "example": "Yes"
+      }
+    }
+  },
+  "quickReplyTextYes": "Yes",
+  "@quickReplyTextYes": {
+    "description": "Message sent when the user answers an assistant reply with the thumbs-up reaction."
+  },
+  "quickReplyTextNo": "No",
+  "@quickReplyTextNo": {
+    "description": "Message sent when the user answers an assistant reply with the thumbs-down reaction."
+  },
+  "quickReplyTextConfirm": "Yes, do it.",
+  "@quickReplyTextConfirm": {
+    "description": "Message sent when the user answers an assistant reply with the check mark reaction, confirming an action."
+  },
+  "quickReplyTextCancel": "Cancel.",
+  "@quickReplyTextCancel": {
+    "description": "Message sent when the user answers an assistant reply with the cross reaction, calling an action off."
+  },
   "androidAssistantTitle": "Android digital assistant",
   "@androidAssistantTitle": {
     "description": "Tile title for configuring the Android digital assistant trigger."

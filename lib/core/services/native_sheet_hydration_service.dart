@@ -1589,6 +1589,14 @@ class NativeSheetHydrationService {
         kind: NativeSheetItemKind.toggle,
         value: appSettings.deliveryReceiptsEnabled,
       ),
+      NativeSheetItemConfig(
+        id: nativeQuickReplyReactionsId,
+        title: l10n.quickReplyReactions,
+        subtitle: l10n.quickReplyReactionsDescription,
+        sfSymbol: 'face.smiling',
+        kind: NativeSheetItemKind.toggle,
+        value: appSettings.quickReplyReactionsEnabled,
+      ),
     ];
   }
 

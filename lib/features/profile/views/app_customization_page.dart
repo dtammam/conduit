@@ -504,6 +504,31 @@ class AppCustomizationPage extends ConsumerWidget {
               .read(appSettingsProvider.notifier)
               .setDeliveryReceiptsEnabled(!settings.deliveryReceiptsEnabled),
         ),
+        const SizedBox(height: Spacing.sm),
+        CustomizationTile(
+          leading: _buildIconBadge(
+            context,
+            Platform.isIOS
+                ? CupertinoIcons.smiley
+                : Icons.add_reaction_outlined,
+            color: theme.buttonPrimary,
+          ),
+          title: l10n.quickReplyReactions,
+          subtitle: l10n.quickReplyReactionsDescription,
+          toggled: settings.quickReplyReactionsEnabled,
+          trailing: AdaptiveSwitch(
+            value: settings.quickReplyReactionsEnabled,
+            onChanged: (value) => ref
+                .read(appSettingsProvider.notifier)
+                .setQuickReplyReactionsEnabled(value),
+          ),
+          showChevron: false,
+          onTap: () => ref
+              .read(appSettingsProvider.notifier)
+              .setQuickReplyReactionsEnabled(
+                !settings.quickReplyReactionsEnabled,
+              ),
+        ),
         if (Platform.isAndroid) ...[
           const SizedBox(height: Spacing.sm),
           CustomizationTile(

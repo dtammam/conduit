@@ -127,6 +127,10 @@ void main() {
       test('deliveryReceiptsEnabled defaults to false', () {
         check(settings.deliveryReceiptsEnabled).equals(false);
       });
+
+      test('quickReplyReactionsEnabled defaults to false', () {
+        check(settings.quickReplyReactionsEnabled).equals(false);
+      });
     });
 
     group('copyWith', () {

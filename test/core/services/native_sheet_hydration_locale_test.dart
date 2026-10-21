@@ -386,6 +386,7 @@ void main() {
         'temporary-chat-default',
         'citation-show-titles',
         'delivery-receipts',
+        'quick-reply-reactions',
       ]);
     });
 
