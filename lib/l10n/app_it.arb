@@ -3496,6 +3496,8 @@
   "compactToolSummariesDescription": "Mostra «Strumenti usati» sopra una risposta invece del nome di ogni strumento. Tocca la riga per vederli.",
   "markdownDetailsGroupCompactPendingTitle": "Uso degli strumenti…",
   "markdownDetailsGroupCompactCompleteTitle": "{count, plural, =1{Usato uno strumento} other{Usati {count} strumenti}}",
+  "waveTypingIndicator": "Indicatore di scrittura a onda",
+  "waveTypingIndicatorDescription": "Mostra tre puntini ondeggianti mentre viene scritta una risposta",
   "directContextCompactionDescription": "Questi modelli non indicano la finestra di contesto. Conduit usa il limite selezionato per compattare i messaggi meno recenti prima che le richieste diventino troppo grandi.",
   "directContextCompactionPickerDescription": "Scegli la finestra di contesto che Conduit deve usare per la compattazione automatica.",
   "directContextCompactionTitle": "Compattazione del contesto",

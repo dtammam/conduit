@@ -390,6 +390,7 @@ void main() {
         'assistant-avatar',
         'message-bubbles',
         'compact-tool-summaries',
+        'wave-typing-indicator',
       ]);
     });
 

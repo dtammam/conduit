@@ -1948,6 +1948,14 @@
       }
     }
   },
+  "waveTypingIndicator": "Falujący wskaźnik pisania",
+  "@waveTypingIndicator": {
+    "description": "Toggle title: a running reply shows three dots that rise in a wave instead of the orbit indicator."
+  },
+  "waveTypingIndicatorDescription": "Pokazuj trzy falujące kropki, gdy odpowiedź jest pisana",
+  "@waveTypingIndicatorDescription": {
+    "description": "Subtitle for the wave typing indicator toggle."
+  },
   "androidAssistantTitle": "Asystent systemu Android",
   "@androidAssistantTitle": {
     "description": "Tile title for configuring the Android digital assistant trigger."

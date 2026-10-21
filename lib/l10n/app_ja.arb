@@ -5099,6 +5099,8 @@
   "compactToolSummariesDescription": "各ツール名の代わりに返信の上に「ツールを使用」と表示します。行をタップすると確認できます。",
   "markdownDetailsGroupCompactPendingTitle": "ツールを使用中…",
   "markdownDetailsGroupCompactCompleteTitle": "{count, plural, =1{ツールを1つ使用} other{ツールを{count}つ使用}}",
+  "waveTypingIndicator": "ウェーブ入力インジケーター",
+  "waveTypingIndicatorDescription": "返信の作成中に波打つ3つの点を表示します",
   "directContextCompactionDescription": "これらのモデルはコンテキストウィンドウを報告しません。Conduit はリクエストが大きくなりすぎる前に、選択した上限を使って古いメッセージを圧縮します。",
   "directContextCompactionPickerDescription": "Conduit が自動圧縮に使用するコンテキストウィンドウを選択してください。",
   "directContextCompactionTitle": "コンテキストの圧縮",

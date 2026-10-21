@@ -14,6 +14,7 @@ import 'package:conduit_core/features/chat/views/chat_turn_render_state.dart';
 import '../../../shared/theme/theme_extensions.dart';
 import '../../../shared/widgets/markdown/renderer/markdown_style.dart';
 import 'conduit_streaming_orbit.dart';
+import 'conduit_wave_dots.dart';
 
 class StreamingTurnFooter extends ConsumerStatefulWidget {
   const StreamingTurnFooter({
@@ -32,6 +33,10 @@ class StreamingTurnFooter extends ConsumerStatefulWidget {
 
 class _StreamingTurnFooterState extends ConsumerState<StreamingTurnFooter> {
   static const Duration _switchDuration = Duration(milliseconds: 200);
+
+  /// Height of the running indicator; both styles share it so the footer's
+  /// extent does not depend on the chosen style.
+  static const double _indicatorExtent = 28;
 
   bool _disableAnimations = false;
   bool _didTriggerRunningHaptic = false;
@@ -95,6 +100,12 @@ class _StreamingTurnFooterState extends ConsumerState<StreamingTurnFooter> {
         !hasQueuedCompletion &&
         shouldShowStreamingTurnFooter(message: widget.message);
     _syncRunningHaptic(shouldShow);
+    final waveTypingIndicator = ref.watch(
+      appSettingsProvider.select((settings) => settings.waveTypingIndicator),
+    );
+    final indicatorColor = context.conduitTheme.textSecondary.withValues(
+      alpha: 0.75,
+    );
 
     return AnimatedSwitcher(
       duration: _disableAnimations ? Duration.zero : _switchDuration,
@@ -125,13 +136,21 @@ class _StreamingTurnFooterState extends ConsumerState<StreamingTurnFooter> {
                       bottom: Spacing.xs,
                     ),
                     child: RepaintBoundary(
-                      child: ConduitStreamingOrbit(
-                        size: 28,
-                        color: context.conduitTheme.textSecondary.withValues(
-                          alpha: 0.75,
-                        ),
-                        animate: !_disableAnimations,
-                      ),
+                      child: waveTypingIndicator
+                          ? ConduitWaveDots(
+                              height: _indicatorExtent,
+                              color: indicatorColor,
+                              animate: !_disableAnimations,
+                              // Once text arrives the transcript repaints as
+                              // it streams; pace the wave rather than add a
+                              // frame on every display refresh.
+                              paced: widget.message.content.isNotEmpty,
+                            )
+                          : ConduitStreamingOrbit(
+                              size: _indicatorExtent,
+                              color: indicatorColor,
+                              animate: !_disableAnimations,
+                            ),
                     ),
                   ),
                 ),

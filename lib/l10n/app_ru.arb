@@ -3542,6 +3542,8 @@
   "compactToolSummariesDescription": "Показывать над ответом «Инструменты использованы» вместо названия каждого инструмента. Нажмите на строку, чтобы увидеть их.",
   "markdownDetailsGroupCompactPendingTitle": "Использует инструменты…",
   "markdownDetailsGroupCompactCompleteTitle": "{count, plural, =1{Использован один инструмент} few{Использовано {count} инструмента} many{Использовано {count} инструментов} other{Использовано {count} инструмента}}",
+  "waveTypingIndicator": "Волновой индикатор набора",
+  "waveTypingIndicatorDescription": "Показывать три плавно качающиеся точки, пока пишется ответ",
   "notificationSystemSettingsDescription": "Измените разрешения, звук и параметры баннеров для Conduit.",
   "notificationSystemSettingsOpenFailed": "Не удалось открыть системные настройки уведомлений.",
   "notificationTargetsTitle": "Адреса webhook",

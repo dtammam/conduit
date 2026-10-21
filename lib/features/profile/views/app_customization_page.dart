@@ -595,6 +595,27 @@ class AppCustomizationPage extends ConsumerWidget {
               .read(appSettingsProvider.notifier)
               .setCompactToolSummaries(!settings.compactToolSummaries),
         ),
+        const SizedBox(height: Spacing.sm),
+        CustomizationTile(
+          leading: _buildIconBadge(
+            context,
+            Platform.isIOS ? CupertinoIcons.ellipsis : Icons.more_horiz,
+            color: theme.buttonPrimary,
+          ),
+          title: l10n.waveTypingIndicator,
+          subtitle: l10n.waveTypingIndicatorDescription,
+          toggled: settings.waveTypingIndicator,
+          trailing: AdaptiveSwitch(
+            value: settings.waveTypingIndicator,
+            onChanged: (value) => ref
+                .read(appSettingsProvider.notifier)
+                .setWaveTypingIndicator(value),
+          ),
+          showChevron: false,
+          onTap: () => ref
+              .read(appSettingsProvider.notifier)
+              .setWaveTypingIndicator(!settings.waveTypingIndicator),
+        ),
         if (Platform.isAndroid) ...[
           const SizedBox(height: Spacing.sm),
           CustomizationTile(

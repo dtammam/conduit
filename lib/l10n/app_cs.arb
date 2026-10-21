@@ -5405,6 +5405,8 @@
   "compactToolSummariesDescription": "Nad odpovědí zobrazit „Použité nástroje“ místo názvu každého nástroje. Klepnutím na řádek je zobrazíte.",
   "markdownDetailsGroupCompactPendingTitle": "Používá nástroje…",
   "markdownDetailsGroupCompactCompleteTitle": "{count, plural, =1{Použit nástroj} few{Použity {count} nástroje} other{Použito {count} nástrojů}}",
+  "waveTypingIndicator": "Vlnitý indikátor psaní",
+  "waveTypingIndicatorDescription": "Zobrazovat tři vlnící se tečky, zatímco se píše odpověď",
   "directContextCompactionDescription": "Tyto modely neuvádějí velikost kontextového okna. Conduit použije zvolený limit ke zhuštění starších zpráv dříve, než budou požadavky příliš velké.",
   "directContextCompactionPickerDescription": "Vyberte kontextové okno, které má Conduit použít pro automatické zhuštění.",
   "directContextCompactionTitle": "Zhuštění kontextu",

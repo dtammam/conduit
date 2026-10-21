@@ -1951,6 +1951,14 @@
       }
     }
   },
+  "waveTypingIndicator": "Wave typing indicator",
+  "@waveTypingIndicator": {
+    "description": "Toggle title: a running reply shows three dots that rise in a wave instead of the orbit indicator."
+  },
+  "waveTypingIndicatorDescription": "Show three dots that rise in a wave while a reply is being written",
+  "@waveTypingIndicatorDescription": {
+    "description": "Subtitle for the wave typing indicator toggle."
+  },
   "androidAssistantTitle": "Android digital assistant",
   "@androidAssistantTitle": {
     "description": "Tile title for configuring the Android digital assistant trigger."

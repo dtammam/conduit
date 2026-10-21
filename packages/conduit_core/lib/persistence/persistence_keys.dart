@@ -16,6 +16,7 @@ final class PreferenceKeys {
   static const String assistantAvatarAccentCache =
       'assistant_avatar_accent_cache';
   static const String compactToolSummaries = 'compact_tool_summaries';
+  static const String waveTypingIndicator = 'wave_typing_indicator';
   static const String highContrast = 'high_contrast';
   static const String darkMode = 'dark_mode';
   static const String defaultModel = 'default_model';

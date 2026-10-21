@@ -3496,6 +3496,8 @@
   "compactToolSummariesDescription": "Toon ‘Tools gebruikt’ boven een antwoord in plaats van elke tool te noemen. Tik op de rij om ze te zien.",
   "markdownDetailsGroupCompactPendingTitle": "Tools in gebruik…",
   "markdownDetailsGroupCompactCompleteTitle": "{count, plural, =1{Eén tool gebruikt} other{{count} tools gebruikt}}",
+  "waveTypingIndicator": "Golvende typindicator",
+  "waveTypingIndicatorDescription": "Toon drie golvende stippen terwijl een antwoord wordt geschreven",
   "directContextCompactionDescription": "Deze modellen geven geen contextvenster op. Conduit gebruikt de gekozen limiet om oudere berichten te comprimeren voordat verzoeken te groot worden.",
   "directContextCompactionPickerDescription": "Kies het contextvenster dat Conduit moet gebruiken voor automatisch comprimeren.",
   "directContextCompactionTitle": "Context comprimeren",

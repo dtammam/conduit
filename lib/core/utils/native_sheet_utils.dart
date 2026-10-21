@@ -605,6 +605,9 @@ const nativeMessageBubblesId = 'message-bubbles';
 /// Control id of the "Compact tool summaries" toggle in the native Chats page.
 const nativeCompactToolSummariesId = 'compact-tool-summaries';
 
+/// Control id of the "Wave typing indicator" toggle in the native Chats page.
+const nativeWaveTypingIndicatorId = 'wave-typing-indicator';
+
 /// Control id the accountless "Connect to Open WebUI" root row sends.
 const nativeConnectOpenWebUiActionId = 'add-owui-server';
 

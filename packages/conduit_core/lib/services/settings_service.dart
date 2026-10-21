@@ -296,6 +296,7 @@ class SettingsService {
           settings.assistantAvatarBubbleColor,
       PreferenceKeys.deliveryReceiptsEnabled: settings.deliveryReceiptsEnabled,
       PreferenceKeys.compactToolSummaries: settings.compactToolSummaries,
+      PreferenceKeys.waveTypingIndicator: settings.waveTypingIndicator,
       _highContrastKey: settings.highContrast,
       _darkModeKey: settings.darkMode,
       _voiceHoldToTalkKey: settings.voiceHoldToTalk,
@@ -755,6 +756,8 @@ class SettingsService {
           get<bool>(PreferenceKeys.deliveryReceiptsEnabled) ?? false,
       compactToolSummaries:
           get<bool>(PreferenceKeys.compactToolSummaries) ?? false,
+      waveTypingIndicator:
+          get<bool>(PreferenceKeys.waveTypingIndicator) ?? false,
       highContrast: get<bool>(_highContrastKey) ?? false,
       darkMode: get<bool>(_darkModeKey) ?? true,
       defaultModel: get<String>(_defaultModelKey),
@@ -899,6 +902,10 @@ class AppSettings {
   /// Whether the tool rows above a reply collapse to "Used tools" instead of
   /// naming each tool; the names stay one tap away.
   final bool compactToolSummaries;
+
+  /// Whether a running reply shows three dots that rise in a wave instead of
+  /// the stepped orbit under it.
+  final bool waveTypingIndicator;
   final bool highContrast;
   final bool darkMode;
   final String? defaultModel;
@@ -957,6 +964,7 @@ class AppSettings {
     this.messageBubbles = false,
     this.assistantAvatarBubbleColor = assistantAvatarBubbleColorAuto,
     this.compactToolSummaries = false,
+    this.waveTypingIndicator = false,
     this.highContrast = false,
     this.darkMode = true,
     this.defaultModel,
@@ -1010,6 +1018,7 @@ class AppSettings {
     String? assistantAvatarBubbleColor,
     bool? deliveryReceiptsEnabled,
     bool? compactToolSummaries,
+    bool? waveTypingIndicator,
     bool? highContrast,
     bool? darkMode,
     Object? defaultModel = const _DefaultValue(),
@@ -1067,6 +1076,7 @@ class AppSettings {
       deliveryReceiptsEnabled:
           deliveryReceiptsEnabled ?? this.deliveryReceiptsEnabled,
       compactToolSummaries: compactToolSummaries ?? this.compactToolSummaries,
+      waveTypingIndicator: waveTypingIndicator ?? this.waveTypingIndicator,
       highContrast: highContrast ?? this.highContrast,
       darkMode: darkMode ?? this.darkMode,
       defaultModel: defaultModel is _DefaultValue
@@ -1151,6 +1161,7 @@ class AppSettings {
         other.assistantAvatarBubbleColor == assistantAvatarBubbleColor &&
         other.deliveryReceiptsEnabled == deliveryReceiptsEnabled &&
         other.compactToolSummaries == compactToolSummaries &&
+        other.waveTypingIndicator == waveTypingIndicator &&
         other.highContrast == highContrast &&
         other.darkMode == darkMode &&
         other.defaultModel == defaultModel &&
@@ -1207,6 +1218,7 @@ class AppSettings {
       assistantAvatarBubbleColor,
       deliveryReceiptsEnabled,
       compactToolSummaries,
+      waveTypingIndicator,
       highContrast,
       darkMode,
       defaultModel,
@@ -1359,6 +1371,14 @@ class AppSettingsNotifier extends _$AppSettingsNotifier {
     state = state.copyWith(compactToolSummaries: value);
     await SettingsService._putPreference(
       PreferenceKeys.compactToolSummaries,
+      value,
+    );
+  }
+
+  Future<void> setWaveTypingIndicator(bool value) async {
+    state = state.copyWith(waveTypingIndicator: value);
+    await SettingsService._putPreference(
+      PreferenceKeys.waveTypingIndicator,
       value,
     );
   }

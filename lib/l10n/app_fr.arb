@@ -3496,6 +3496,8 @@
   "compactToolSummariesDescription": "Afficher « Outils utilisés » au-dessus d’une réponse au lieu de nommer chaque outil. Touchez la ligne pour les voir.",
   "markdownDetailsGroupCompactPendingTitle": "Utilisation d’outils…",
   "markdownDetailsGroupCompactCompleteTitle": "{count, plural, =1{Un outil utilisé} other{{count} outils utilisés}}",
+  "waveTypingIndicator": "Indicateur de saisie en vague",
+  "waveTypingIndicatorDescription": "Afficher trois points ondulants pendant la rédaction d’une réponse",
   "directContextCompactionDescription": "Ces modèles n'indiquent pas de fenêtre de contexte. Conduit utilise la limite sélectionnée pour compacter les anciens messages avant que les requêtes ne deviennent trop volumineuses.",
   "directContextCompactionPickerDescription": "Choisissez la fenêtre de contexte que Conduit doit utiliser pour le compactage automatique.",
   "directContextCompactionTitle": "Compactage du contexte",
