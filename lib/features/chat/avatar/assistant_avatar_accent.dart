@@ -126,6 +126,8 @@ Future<Color?> dominantVividColorOfEncoded(Uint8List bytes) async {
 /// Identity of [media]'s content: the path plus, for user files, size and
 /// modification time, so a replaced clip is sampled again.
 Future<String> assistantAvatarMediaCacheKey(AssistantAvatarMedia media) async {
+  // A bundled clip is an asset, not a file; its id already names it.
+  if (media.isBundled) return media.id;
   try {
     final stat = await File(media.path).stat();
     return '${media.id}|${stat.size}|${stat.modified.millisecondsSinceEpoch}';
