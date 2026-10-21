@@ -98,6 +98,7 @@ import 'core/utils/native_sheet_utils.dart'
         nativeHermesUseActionId,
         nativeAdvancedFeaturesId,
         nativeCitationShowTitlesId,
+        nativeChatDragToFolderId,
         nativeMemoryEditorActionPrefix,
         nativeMemoryEditorNewActionId,
         nativeNotificationTargetsActionId;
@@ -1156,6 +1157,12 @@ class _ConduitAppState extends ConsumerState<ConduitApp> {
             await ref
                 .read(appSettingsProvider.notifier)
                 .setCitationShowTitles(value);
+          }
+        case nativeChatDragToFolderId:
+          if (value is bool) {
+            await ref
+                .read(appSettingsProvider.notifier)
+                .setChatDragToFolder(value);
           }
         case 'disable-haptics-streaming':
           if (value is bool) {

@@ -4241,5 +4241,7 @@
   "accountsRemoveAddressMessage": "Conduit n'essaiera plus cette adresse. Vos comptes restent connectés.",
   "accountsAddressConfirmTitle": "Vérifier cette adresse ?",
   "accountsAddressConfirmMessage": "Pour s'assurer que {host} est bien ce serveur, Conduit lui envoie la session d'un compte enregistré ici. Ne continuez que si vous faites confiance à cette adresse.",
-  "accountsAddressConfirmAction": "Vérifier l'adresse"
+  "accountsAddressConfirmAction": "Vérifier l'adresse",
+  "chatDragToFolder": "Glisser les discussions dans des dossiers",
+  "chatDragToFolderDescription": "Maintenez une discussion dans la barre latérale, puis faites-la glisser sur un dossier"
 }

@@ -7901,5 +7901,13 @@
         "example": "gpt-realtime-2.1-mini"
       }
     }
+  },
+  "chatDragToFolder": "Przeciągaj czaty do folderów",
+  "@chatDragToFolder": {
+    "description": "Toggle title for dragging a held chat in the sidebar onto a folder."
+  },
+  "chatDragToFolderDescription": "Przytrzymaj czat na pasku bocznym, a potem przeciągnij go na folder",
+  "@chatDragToFolderDescription": {
+    "description": "Subtitle for the drag chats into folders toggle."
   }
 }

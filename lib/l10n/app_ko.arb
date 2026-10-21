@@ -4013,5 +4013,7 @@
   "accountsRemoveAddressMessage": "Conduit이 더 이상 이 주소를 시도하지 않습니다. 계정은 로그인 상태로 유지됩니다.",
   "accountsAddressConfirmTitle": "이 주소를 확인할까요?",
   "accountsAddressConfirmMessage": "{host}이(가) 이 서버인지 확인하기 위해 Conduit이 이 기기에 저장된 계정의 세션을 해당 주소로 보냅니다. 이 주소를 신뢰하는 경우에만 계속하세요.",
-  "accountsAddressConfirmAction": "주소 확인"
+  "accountsAddressConfirmAction": "주소 확인",
+  "chatDragToFolder": "채팅을 폴더로 끌어 놓기",
+  "chatDragToFolderDescription": "사이드바에서 채팅을 길게 누른 다음 폴더로 끌어 놓습니다"
 }

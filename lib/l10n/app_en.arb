@@ -8813,5 +8813,13 @@
   "accountsAddressConfirmAction": "Check address",
   "@accountsAddressConfirmAction": {
     "description": "Confirms sending a saved account's session to a new address of an Open WebUI server, to check that it reaches the same server."
+  },
+  "chatDragToFolder": "Drag chats into folders",
+  "@chatDragToFolder": {
+    "description": "Toggle title for dragging a held chat in the sidebar onto a folder."
+  },
+  "chatDragToFolderDescription": "Hold a chat in the sidebar, then drag it onto a folder",
+  "@chatDragToFolderDescription": {
+    "description": "Subtitle for the drag chats into folders toggle."
   }
 }

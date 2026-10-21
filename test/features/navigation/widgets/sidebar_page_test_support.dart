@@ -135,6 +135,7 @@ Widget sidebarTestBuildHarness({
   Map<String, Future<Conversation>> pendingLoadedConversations = const {},
   bool isAuthenticated = true,
   bool hasApiService = true,
+  SidebarTestSidebarApiService? apiService,
   String? openWebUiServerId,
   bool openWebUiStorageOpen = true,
   Conversation? activeConversation,
@@ -189,7 +190,7 @@ Widget sidebarTestBuildHarness({
       appSettingsProvider.overrideWithValue(settings),
       // ignore: scoped_providers_should_specify_dependencies
       apiServiceProvider.overrideWithValue(
-        hasApiService ? SidebarTestSidebarApiService() : null,
+        hasApiService ? (apiService ?? SidebarTestSidebarApiService()) : null,
       ),
       // The production auth provider is deliberately incomplete in this
       // narrow harness; keep its account-generation boundary deterministic.
@@ -312,6 +313,18 @@ Widget sidebarTestBuildHarness({
 }
 
 final class SidebarTestSidebarApiService extends Mock implements ApiService {
+  /// Chat moves requested through [moveConversationToFolder], as
+  /// (raw chat id, target folder id).
+  final List<(String, String?)> folderMoves = <(String, String?)>[];
+
+  @override
+  Future<void> moveConversationToFolder(
+    String conversationId,
+    String? folderId,
+  ) async {
+    folderMoves.add((conversationId, folderId));
+  }
+
   @override
   Future<List<Conversation>> searchConversations(String query) async =>
       const <Conversation>[];

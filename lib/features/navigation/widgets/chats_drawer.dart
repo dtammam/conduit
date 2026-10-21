@@ -8,6 +8,7 @@ import 'package:conduit/core/services/haptic_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:conduit_core/providers/app_providers.dart';
+import 'package:conduit_core/services/settings_service.dart';
 import 'package:conduit_core/features/auth/providers/unified_auth_providers.dart';
 
 import '../../../core/services/native_sheet_bridge.dart';
@@ -30,6 +31,7 @@ import '../../../shared/widgets/themed_sheets.dart';
 import 'package:conduit_core/models/conversation.dart';
 import 'package:conduit_core/models/folder.dart';
 
+import 'chat_folder_drag.dart';
 import 'conversation_tile.dart';
 import 'create_folder_dialog.dart';
 import 'folder_tree_guides.dart';
@@ -71,6 +73,14 @@ class _ChatsDrawerState extends ConsumerState<ChatsDrawer>
   bool get wantKeepAlive => true;
   late final TextEditingController _sidebarSearchController;
   final ScrollController _listController = ScrollController();
+  final GlobalKey _listViewportKey = GlobalKey();
+  late final ChatFolderDragController _chatDragController =
+      ChatFolderDragController(
+        scrollController: _listController,
+        viewportKey: _listViewportKey,
+        onDrop: _handleChatDrop,
+        onHoverExpand: (folderId) => _setFolderExpanded(folderId, true),
+      );
 
   @override
   SidebarTabId get sidebarTabId => SidebarTabId.chats;
@@ -203,6 +213,7 @@ class _ChatsDrawerState extends ConsumerState<ChatsDrawer>
     List<bool> ancestorHasMoreSiblings = const <bool>[],
     bool foldersEnabled = false,
     List<Folder> folders = const <Folder>[],
+    bool topLevelDropTarget = false,
   }) {
     return SliverList(
       delegate: SliverChildBuilderDelegate(
@@ -213,6 +224,7 @@ class _ChatsDrawerState extends ConsumerState<ChatsDrawer>
           hasMoreSiblings: index < items.length - 1,
           foldersEnabled: foldersEnabled,
           folders: folders,
+          topLevelDropTarget: topLevelDropTarget,
         ),
         childCount: items.length,
       ),
@@ -306,11 +318,14 @@ class _ChatsDrawerState extends ConsumerState<ChatsDrawer>
       ),
     ];
 
-    final scroll = CustomScrollView(
-      key: const PageStorageKey<String>('chats_drawer_scroll'),
-      controller: _listController,
-      physics: platformAlwaysScrollablePhysics(context),
-      slivers: paddedSlivers,
+    final scroll = KeyedSubtree(
+      key: _listViewportKey,
+      child: CustomScrollView(
+        key: const PageStorageKey<String>('chats_drawer_scroll'),
+        controller: _listController,
+        physics: platformAlwaysScrollablePhysics(context),
+        slivers: paddedSlivers,
+      ),
     );
 
     final refreshableScroll = PrimaryScrollController(
@@ -448,6 +463,7 @@ class _ChatsDrawerState extends ConsumerState<ChatsDrawer>
   void dispose() {
     _debounce?.cancel();
     _refreshDoneHideTimer?.cancel();
+    _chatDragController.dispose();
     _listController.removeListener(_onListScrolled);
     _sidebarSearchController.removeListener(_onSearchChanged);
     _listController.dispose();
@@ -761,6 +777,7 @@ class _ChatsDrawerState extends ConsumerState<ChatsDrawer>
             orElse: () => const <Folder>[],
           );
           final hasVisibleFolders = foldersEnabled && folders.isNotEmpty;
+          final dragToFolder = foldersEnabled && _dragToFolderEnabled;
           final providerArchivedCount = conversationsNotifier
               .archivedChatCount();
 
@@ -891,9 +908,12 @@ class _ChatsDrawerState extends ConsumerState<ChatsDrawer>
               SliverPadding(
                 padding: const EdgeInsets.symmetric(horizontal: Spacing.md),
                 sliver: SliverToBoxAdapter(
-                  child: _buildSectionHeader(
-                    AppLocalizations.of(context)!.recent,
-                    sectionType: _SectionType.recent,
+                  child: _wrapTopLevelDropTarget(
+                    enabled: dragToFolder,
+                    child: _buildSectionHeader(
+                      AppLocalizations.of(context)!.recent,
+                      sectionType: _SectionType.recent,
+                    ),
                   ),
                 ),
               ),
@@ -903,9 +923,11 @@ class _ChatsDrawerState extends ConsumerState<ChatsDrawer>
                   regular,
                   foldersEnabled: foldersEnabled,
                   folders: folders,
+                  topLevelDropTarget: dragToFolder,
                 ),
               ],
-            ],
+            ] else if (dragToFolder)
+              _buildDragOnlyTopLevelDropSliver(),
 
             if (archivedCount > 0) ...[
               const SliverToBoxAdapter(child: SizedBox(height: Spacing.md)),
@@ -968,6 +990,7 @@ class _ChatsDrawerState extends ConsumerState<ChatsDrawer>
           data: (folders) => folders,
           orElse: () => const <Folder>[],
         );
+        final dragToFolder = foldersEnabled && _dragToFolderEnabled;
         final availableFolderIds = folders.map((f) => f.id).toSet();
 
         final regular = list.where((c) {
@@ -1083,9 +1106,12 @@ class _ChatsDrawerState extends ConsumerState<ChatsDrawer>
             SliverPadding(
               padding: const EdgeInsets.symmetric(horizontal: Spacing.md),
               sliver: SliverToBoxAdapter(
-                child: _buildSectionHeader(
-                  AppLocalizations.of(context)!.recent,
-                  sectionType: _SectionType.recent,
+                child: _wrapTopLevelDropTarget(
+                  enabled: dragToFolder,
+                  child: _buildSectionHeader(
+                    AppLocalizations.of(context)!.recent,
+                    sectionType: _SectionType.recent,
+                  ),
                 ),
               ),
             ),
@@ -1097,9 +1123,12 @@ class _ChatsDrawerState extends ConsumerState<ChatsDrawer>
                 regular,
                 foldersEnabled: foldersEnabled,
                 folders: folders,
+                topLevelDropTarget: dragToFolder,
               ),
             ]);
           }
+        } else if (dragToFolder) {
+          slivers.add(_buildDragOnlyTopLevelDropSliver());
         }
 
         if (archived.isNotEmpty) {
@@ -1140,6 +1169,70 @@ class _ChatsDrawerState extends ConsumerState<ChatsDrawer>
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  /// Lets a chat dragged out of a folder be dropped on the top-level chats.
+  Widget _wrapTopLevelDropTarget({
+    required bool enabled,
+    required Widget child,
+  }) {
+    if (!enabled) return child;
+    return ChatFolderDropTarget(
+      controller: _chatDragController,
+      folderId: null,
+      highlightPadding: EdgeInsets.zero,
+      child: child,
+    );
+  }
+
+  /// Shows the Recent header as a drop target while a foldered chat is
+  /// dragged and no chat sits outside a folder, so it can still leave one.
+  Widget _buildDragOnlyTopLevelDropSliver() {
+    return SliverPadding(
+      padding: const EdgeInsets.symmetric(horizontal: Spacing.md),
+      sliver: SliverToBoxAdapter(
+        child: ListenableBuilder(
+          listenable: _chatDragController,
+          builder: (context, _) {
+            if (!_chatDragController.isDraggingFolderedChat) {
+              return const SizedBox.shrink();
+            }
+            return _wrapTopLevelDropTarget(
+              enabled: true,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: Spacing.sm),
+                child: _buildSectionHeader(
+                  AppLocalizations.of(context)!.recent,
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  /// Whether a held chat can be dragged onto a folder (a setting, off by
+  /// default, since it delays the row menu on platforms other than iOS).
+  bool get _dragToFolderEnabled => ref.watch(
+    appSettingsProvider.select((settings) => settings.chatDragToFolder),
+  );
+
+  void _handleChatDrop(
+    Conversation conversation,
+    String? currentFolderId,
+    String? targetFolderId,
+  ) {
+    if (!mounted) return;
+    unawaited(
+      moveConversationToFolder(
+        context,
+        ref,
+        conversationScopedId(conversation),
+        currentFolderId: currentFolderId,
+        targetFolderId: targetFolderId,
       ),
     );
   }
@@ -1379,7 +1472,16 @@ class _ChatsDrawerState extends ConsumerState<ChatsDrawer>
         final contextTile = ConduitContextMenu(
           actions: _buildFolderActions(folder, allFolders),
           previewBuilder: buildConversationTileContextPreview,
-          child: rowContent,
+          child: _dragToFolderEnabled
+              ? ChatFolderDropTarget(
+                  key: ValueKey<String>('folder-drop-target-$folderId'),
+                  controller: _chatDragController,
+                  folderId: folderId,
+                  enabled: folder.canWrite,
+                  expandOnHover: !isExpanded,
+                  child: rowContent,
+                )
+              : rowContent,
         );
 
         return depth == 0
@@ -1790,6 +1892,7 @@ class _ChatsDrawerState extends ConsumerState<ChatsDrawer>
     bool hasMoreSiblings = false,
     bool foldersEnabled = false,
     List<Folder> folders = const <Folder>[],
+    bool topLevelDropTarget = false,
   }) {
     final conversation = conv as Conversation;
     final scopedId = conversationScopedId(conversation);
@@ -1839,7 +1942,18 @@ class _ChatsDrawerState extends ConsumerState<ChatsDrawer>
       conversation,
       ref.watch(currentUserProvider2.select((user) => user?.id)),
     );
-    final contextTile = ConduitContextMenu(
+    final currentFolderId =
+        conversation.folderId == null || conversation.folderId!.isEmpty
+        ? null
+        : conversation.folderId;
+    // Mirrors when the menu offers Move; the drop reuses that move path.
+    final canDragToFolder =
+        !isReadOnly &&
+        foldersEnabled &&
+        _dragToFolderEnabled &&
+        !isDirectLocalConversation(conversation) &&
+        (currentFolderId != null || folders.any((folder) => folder.canWrite));
+    Widget contextTile = ConduitContextMenu(
       // Pin/rename/move/delete all fail server-side on another user's chat.
       actions: isReadOnly
           ? const <ConduitContextMenuAction>[]
@@ -1851,8 +1965,26 @@ class _ChatsDrawerState extends ConsumerState<ChatsDrawer>
               folders: folders,
             ),
       previewBuilder: buildConversationTileContextPreview,
+      holdDrag: canDragToFolder
+          ? ConduitContextMenuHoldDrag(
+              onStart: (details) => _chatDragController.start(
+                context: context,
+                details: details,
+                conversation: conversation,
+                title: title,
+              ),
+            )
+          : null,
       child: tileWidget,
     );
+    if (topLevelDropTarget) {
+      contextTile = ChatFolderDropTarget(
+        controller: _chatDragController,
+        folderId: null,
+        highlight: false,
+        child: contextTile,
+      );
+    }
 
     final tile = showHierarchyBranch
         ? FolderTreeHierarchyNode(

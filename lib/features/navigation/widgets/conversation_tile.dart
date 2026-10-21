@@ -136,7 +136,9 @@ class _ChatStyleSidebarTileState extends State<ChatStyleSidebarTile> {
   bool _focused = false;
 
   void _setPressed(bool pressed) {
-    if (_pressed == pressed) return;
+    // A row rebuilt mid-press (a held chat turning into a drag) still gets
+    // the lift from the pointer it saw go down.
+    if (!mounted || _pressed == pressed) return;
     setState(() => _pressed = pressed);
   }
 

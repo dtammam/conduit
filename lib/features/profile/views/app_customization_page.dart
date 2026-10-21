@@ -481,6 +481,29 @@ class AppCustomizationPage extends ConsumerWidget {
               .read(appSettingsProvider.notifier)
               .setCitationShowTitles(!settings.citationShowTitles),
         ),
+        const SizedBox(height: Spacing.sm),
+        CustomizationTile(
+          leading: _buildIconBadge(
+            context,
+            Platform.isIOS
+                ? CupertinoIcons.folder
+                : Icons.drive_file_move_outline,
+            color: theme.buttonPrimary,
+          ),
+          title: l10n.chatDragToFolder,
+          subtitle: l10n.chatDragToFolderDescription,
+          toggled: settings.chatDragToFolder,
+          trailing: AdaptiveSwitch(
+            value: settings.chatDragToFolder,
+            onChanged: (value) => ref
+                .read(appSettingsProvider.notifier)
+                .setChatDragToFolder(value),
+          ),
+          showChevron: false,
+          onTap: () => ref
+              .read(appSettingsProvider.notifier)
+              .setChatDragToFolder(!settings.chatDragToFolder),
+        ),
         if (Platform.isAndroid) ...[
           const SizedBox(height: Spacing.sm),
           CustomizationTile(

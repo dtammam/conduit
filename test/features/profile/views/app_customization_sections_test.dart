@@ -178,6 +178,9 @@ void main() {
 
     final toggle = find.byKey(const Key('chat-settings-advanced-toggle'));
     await tester.scrollUntilVisible(toggle, 300);
+    // The row can stop at the viewport's edge with its centre outside it.
+    await tester.ensureVisible(toggle);
+    await tester.pumpAndSettle();
     await tester.tap(toggle);
     await tester.pumpAndSettle();
 
