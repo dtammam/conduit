@@ -30,6 +30,7 @@ import 'package:conduit_core/services/socket_service.dart'
     show SocketBackgroundActivityLease, SocketService;
 
 import 'package:conduit_core/utils/debug_logger.dart';
+import 'package:conduit_core/voice/barge_in_onset.dart';
 
 import 'package:conduit_core/features/chat/providers/chat_providers.dart';
 import 'package:conduit_core/features/chat/realtime_call/bridge_call_engine.dart';
@@ -163,6 +164,11 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
   static const int _emptyTranscriptMaxDelayMs = 2000;
   static const Duration _backgroundKeepAliveInterval = Duration(minutes: 5);
 
+  /// On-device barge-in: how long after playback starts a partial transcript
+  /// may interrupt, and how many words it needs.
+  static const Duration _onDeviceOnsetGrace = BargeInOnsetDetector.defaultGrace;
+  static const int _onDeviceOnsetMinWords = 2;
+
   Future<void> _serial = Future<void>.value();
   int _token = 0;
   int _stopRequestGeneration = 0;
@@ -175,6 +181,12 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
   StreamSubscription<Object>? _responseCaptureFailureSub;
   StreamSubscription<Object>? _audioResponseCaptureFailureSub;
   StreamSubscription<TtsEvent>? _ttsSub;
+
+  /// Server barge-in: the held recorder's levels while the assistant speaks,
+  /// and the detector judging them.
+  StreamSubscription<VoiceCaptureLevel>? _bargeInLevelSub;
+  BargeInOnsetDetector? _bargeInDetector;
+  DateTime? _assistantSpeechStartedAt;
   StreamSubscription<VoiceCallKitEvent>? _callKitSub;
   StreamSubscription<bool>? _speakerphoneRouteSub;
   ProviderSubscription<SocketService?>? _socketServiceSub;
@@ -262,6 +274,10 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
       final speakerphoneRouteSub = _speakerphoneRouteSub;
       final socketServiceSub = _socketServiceSub;
       final selectedModelSub = _selectedModelSub;
+      final bargeInLevelSub = _bargeInLevelSub;
+      _bargeInLevelSub = null;
+      _bargeInDetector = null;
+      unawaited(_cancelSubscriptionAfterDispose(bargeInLevelSub));
       _speakerphoneRouteSub = null;
       _socketServiceSub = null;
       _selectedModelSub = null;
@@ -966,6 +982,9 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
           isMuted: false,
           clearErrorMessage: true,
         );
+        // Muting stopped listening for a barge-in; playback that went on
+        // meanwhile will not announce itself again.
+        _watchForServerBargeIn(_token, armNow: resumeSpeaking);
         return;
       }
 
@@ -1109,6 +1128,8 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
       switch (event) {
         case TtsStarted():
           if (_awaitingAssistant && state.phase != ChatVoiceModePhase.paused) {
+            _assistantSpeechStartedAt ??= DateTime.now();
+            _bargeInDetector?.arm();
             if (_activeAssistantSpeechChunkIndex < 0 &&
                 _assistantSpeechChunks.isNotEmpty) {
               _handleTtsChunkStarted(0);
@@ -1275,6 +1296,7 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
   Future<void> _startListening(
     int token, {
     void Function()? beforeAcceptingTranscripts,
+    Duration? heldAudioLookback,
   }) async {
     if (!_isCurrent(token) || state.isMuted) {
       return;
@@ -1355,9 +1377,16 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
     }
 
     if (_transcriptSub == null || !input.isListening) {
-      final stream = await input.beginListeningEvents(
-        iosAudioSessionManagedExternally: _iosAudioSessionManagedExternally,
-      );
+      final stream = heldAudioLookback == null
+          ? await input.beginListeningEvents(
+              iosAudioSessionManagedExternally:
+                  _iosAudioSessionManagedExternally,
+            )
+          : await input.beginBargeInListeningEvents(
+              lookback: heldAudioLookback,
+              iosAudioSessionManagedExternally:
+                  _iosAudioSessionManagedExternally,
+            );
       if (!_isCurrent(token)) {
         await _stopVoiceInputAfterDispose(input);
         return;
@@ -1419,7 +1448,139 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
 
     if (event.isFinal) {
       unawaited(_handleFinalTranscript(event.text, token));
+    } else if (_isOnDeviceVoiceOnset(event.text)) {
+      unawaited(_interruptOnDeviceOnset(token));
     }
+  }
+
+  /// Whether a partial transcript heard while the assistant speaks is the
+  /// user starting to talk (on-device recognition, barge-in on): a few words,
+  /// past the grace period after playback started, and not just words the
+  /// assistant is saying, which is what its own echo would produce.
+  bool _isOnDeviceVoiceOnset(String text) {
+    if (!_awaitingAssistant ||
+        state.phase != ChatVoiceModePhase.speaking ||
+        !(_voiceInput?.isUsingNativeLocalStt ?? false) ||
+        !ref.read(appSettingsProvider).voiceBargeInEnabled) {
+      return false;
+    }
+    final startedAt = _assistantSpeechStartedAt;
+    if (startedAt == null ||
+        DateTime.now().difference(startedAt) < _onDeviceOnsetGrace) {
+      return false;
+    }
+    final words = _wordsOf(text);
+    if (words.length < _onDeviceOnsetMinWords) return false;
+    final spoken = _wordsOf(state.assistantPreview).toSet();
+    return !words.every(spoken.contains);
+  }
+
+  /// Runs of letters, digits and apostrophes, except that each Han or kana
+  /// character counts as a word of its own: Chinese and Japanese are written
+  /// without spaces, so a short phrase would otherwise read as one word.
+  static final RegExp _wordPattern = RegExp(
+    r"[\p{sc=Han}\p{sc=Hiragana}\p{sc=Katakana}]"
+    r"|(?:(?![\p{sc=Han}\p{sc=Hiragana}\p{sc=Katakana}])[\p{L}\p{N}'])+",
+    unicode: true,
+  );
+
+  static List<String> _wordsOf(String text) => _wordPattern
+      .allMatches(text.toLowerCase())
+      .map((match) => match[0]!)
+      .toList();
+
+  /// Stops the assistant on the user's first words; the recognizer keeps
+  /// listening and its final transcript is sent as the next turn.
+  Future<void> _interruptOnDeviceOnset(int token) {
+    return _enqueue(() async {
+      if (!_isCurrent(token) ||
+          !_awaitingAssistant ||
+          state.isMuted ||
+          state.phase != ChatVoiceModePhase.speaking) {
+        return;
+      }
+      DebugLogger.info('barge-in-onset', scope: 'chat/voice_mode');
+      await _interruptAssistantForBargeIn(token);
+      if (!_isCurrent(token)) return;
+      state = state.copyWith(
+        phase: ChatVoiceModePhase.listening,
+        assistantPreview: '',
+        intensity: 0,
+      );
+    });
+  }
+
+  /// Listens for the user starting to talk over the assistant through the
+  /// server recorder held for its turn (server recognition, barge-in on).
+  /// Playback starting arms it, or [armNow] when playback is already going.
+  void _watchForServerBargeIn(int token, {bool armNow = false}) {
+    final input = _voiceInput;
+    if (!_isCurrent(token) ||
+        input == null ||
+        !_awaitingAssistant ||
+        !input.isHoldingServerRecorderForResponse ||
+        !ref.read(appSettingsProvider).voiceBargeInEnabled) {
+      return;
+    }
+    unawaited(_bargeInLevelSub?.cancel());
+    final detector = BargeInOnsetDetector();
+    if (armNow) detector.arm();
+    _bargeInDetector = detector;
+    _bargeInLevelSub = input.heldCaptureLevels.listen((level) {
+      if (!_isCurrent(token) ||
+          !identical(_bargeInDetector, detector) ||
+          state.isMuted ||
+          state.phase == ChatVoiceModePhase.paused) {
+        return;
+      }
+      final lookback = detector.add(level);
+      if (lookback != null) {
+        unawaited(_handleServerBargeInOnset(token, lookback));
+      }
+    });
+  }
+
+  Future<void> _stopWatchingForServerBargeIn() async {
+    final sub = _bargeInLevelSub;
+    _bargeInLevelSub = null;
+    _bargeInDetector = null;
+    await sub?.cancel();
+  }
+
+  /// The user started talking over the assistant: stop it, and record what
+  /// they say from just before they started until they stop, through the
+  /// same voice activity detection and server transcription as any turn.
+  Future<void> _handleServerBargeInOnset(int token, Duration lookback) {
+    return _enqueue(() async {
+      if (!_isCurrent(token) ||
+          !_awaitingAssistant ||
+          state.isMuted ||
+          state.phase == ChatVoiceModePhase.paused) {
+        return;
+      }
+      await _stopWatchingForServerBargeIn();
+      DebugLogger.info(
+        'barge-in-onset',
+        scope: 'chat/voice_mode',
+        data: {'lookbackMs': lookback.inMilliseconds},
+      );
+      try {
+        await _interruptAssistantForBargeIn(token);
+        if (!_isCurrent(token)) return;
+        _pendingFinalTranscripts.clear();
+        _lastSubmittedTranscript = null;
+        await _startListening(token, heldAudioLookback: lookback);
+      } catch (error, stackTrace) {
+        if (!_isCurrent(token)) return;
+        DebugLogger.error(
+          'barge-in-listen-failed',
+          scope: 'chat/voice_mode',
+          error: error,
+          stackTrace: stackTrace,
+        );
+        await _fail(error.toString(), token, _errorKindOf(error));
+      }
+    });
   }
 
   Future<void> _handleFinalTranscript(String text, int token) async {
@@ -1564,9 +1725,9 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
       final keepListening =
           ref.read(appSettingsProvider).voiceBargeInEnabled &&
           input.isUsingNativeLocalStt;
+      var inputOwnsResponseCapture = false;
       await _serviceLifecycleGate.runExclusive(() async {
         if (!_isCurrent(token)) return;
-        var inputOwnsResponseCapture = false;
         if (!keepListening) {
           await _detachListeningSubscriptions();
           if (!_isCurrent(token)) return;
@@ -1602,6 +1763,8 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
       _activeAssistantMessageId = null;
       _assistantSpeechChunks = const <String>[];
       _activeAssistantSpeechChunkIndex = -1;
+      _assistantSpeechStartedAt = null;
+      if (inputOwnsResponseCapture) _watchForServerBargeIn(token);
 
       state = state.copyWith(
         phase: ChatVoiceModePhase.sending,
@@ -1666,6 +1829,7 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
     _assistantSpeechChunks = const <String>[];
     _activeAssistantSpeechChunkIndex = -1;
     _assistantMessageIdsBeforeTurn = <String>{};
+    _assistantSpeechStartedAt = null;
     state = state.copyWith(clearSpokenResponse: true);
   }
 
@@ -1841,6 +2005,8 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
 
     _awaitingAssistant = false;
     _streamingTtsStarted = false;
+    await _stopWatchingForServerBargeIn();
+    if (!_isCurrent(token)) return;
     _pendingFinalTranscripts.clear();
     _lastSubmittedTranscript = null;
     _activeAssistantMessageId = null;
@@ -1927,6 +2093,7 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
   }
 
   Future<void> _detachListeningSubscriptions() async {
+    await _stopWatchingForServerBargeIn();
     await _transcriptSub?.cancel();
     _transcriptSub = null;
     await _intensitySub?.cancel();
@@ -2014,6 +2181,7 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
     final speakerphoneRouteSub = _speakerphoneRouteSub;
     final socketServiceSub = _socketServiceSub;
     final selectedModelSub = _selectedModelSub;
+    final bargeInLevelSub = _bargeInLevelSub;
     final elapsedTimer = _elapsedTimer;
     final backgroundKeepAliveTimer = _backgroundKeepAliveTimer;
     final backgroundLeaseId = _backgroundLeaseId;
@@ -2040,6 +2208,8 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
     _speakerphoneRouteSub = null;
     _socketServiceSub = null;
     _selectedModelSub = null;
+    _bargeInLevelSub = null;
+    _bargeInDetector = null;
     _backgroundKeepAliveTimer = null;
     _backgroundLeaseId = null;
     _socketBackgroundLease = null;
@@ -2090,6 +2260,9 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
         });
         await _runTeardownStep('intensity-subscription-cancel', () async {
           await intensitySub?.cancel();
+        });
+        await _runTeardownStep('barge-in-level-cancel', () async {
+          await bargeInLevelSub?.cancel();
         });
         await _runTeardownStep('input-capture-failure-cancel', () async {
           await responseCaptureFailureSub?.cancel();
@@ -2214,6 +2387,7 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
     _sendingTranscript = false;
     _assistantSpeechChunks = const <String>[];
     _activeAssistantSpeechChunkIndex = -1;
+    _assistantSpeechStartedAt = null;
   }
 
   void _replaceSocketBackgroundLease(SocketService? socket) {

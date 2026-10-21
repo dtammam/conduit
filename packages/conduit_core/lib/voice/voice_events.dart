@@ -16,6 +16,17 @@ class VoiceTranscriptEvent {
   final bool isFinal;
 }
 
+/// The loudness of one short frame of microphone audio, in dB relative to
+/// full scale (0 is the loudest a sample can be, silence is far below -60).
+class VoiceCaptureLevel {
+  const VoiceCaptureLevel({required this.dbfs, required this.duration});
+
+  final double dbfs;
+
+  /// How much audio the frame covers.
+  final Duration duration;
+}
+
 /// Base class for all text-to-speech events.
 sealed class TtsEvent {
   const TtsEvent();

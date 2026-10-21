@@ -463,6 +463,56 @@ void main() {
       await recorder.close();
     });
 
+    test('hands held audio to a listener and resumes with its tail', () async {
+      final recorder = _FakeServerVadRecorder();
+      final session = ServerVadRecorderSession(recorder)
+        ..heldAudioRetentionBytes = 6;
+      final heard = <int>[];
+      session.onHeldAudio = heard.addAll;
+
+      await session.start(
+        config: const AudioCaptureConfig(
+          profile: AudioCaptureProfile.dictation,
+        ),
+        iosAudioSessionManagedExternally: true,
+        connectVad: (audioStream) async => audioStream.listen((_) {}),
+        onRecorderError: (_, _) {},
+      );
+      // Forwarded audio is the VAD's, not the held listener's.
+      recorder.audio.add(Uint8List.fromList([9, 9]));
+      await Future<void>.delayed(Duration.zero);
+      check(heard).isEmpty();
+
+      check(await session.holdForResponse()).isTrue();
+      for (final chunk in [
+        [1, 1],
+        [2, 2, 3, 3],
+        [4, 4],
+        [5, 5],
+      ]) {
+        recorder.audio.add(Uint8List.fromList(chunk));
+      }
+      await Future<void>.delayed(Duration.zero);
+      check(heard).deepEquals([1, 1, 2, 2, 3, 3, 4, 4, 5, 5]);
+
+      final resumed = <int>[];
+      check(
+        await session.resumeForwarding(
+          // An odd request still starts on a whole sample.
+          lookbackBytes: 5,
+          connectVad: (audioStream) async => audioStream.listen(resumed.addAll),
+        ),
+      ).isTrue();
+      recorder.audio.add(Uint8List.fromList([6, 6]));
+      await Future<void>.delayed(Duration.zero);
+      // Retention kept the last 6 bytes; the lookback took the last 4.
+      check(resumed).deepEquals([4, 4, 5, 5, 6, 6]);
+      check(heard.length).equals(10);
+
+      await session.dispose();
+      await recorder.close();
+    });
+
     test(
       'reports a recorder error while response audio is discarded',
       () async {

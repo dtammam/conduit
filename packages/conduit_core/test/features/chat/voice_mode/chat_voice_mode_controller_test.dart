@@ -1868,6 +1868,322 @@ void main() {
     check(input.stopCalls).isGreaterThan(0);
   });
 
+  group('barge-in on voice onset', () {
+    ({
+      ProviderContainer container,
+      ChatVoiceModeController controller,
+      int Function() stopGenerationCalls,
+    })
+    setUpCall(
+      _FakeVoiceInputService input,
+      _FakeTextToSpeechService tts, {
+      required AppSettings settings,
+      _FakeChatVoiceAudioSessionCoordinator? audioSession,
+    }) {
+      var stopGenerationCalls = 0;
+      final container = ProviderContainer(
+        overrides: [
+          ...openWebUiStorageOpenOverrides(),
+          authNavigationStateProvider.overrideWithValue(
+            AuthNavigationState.authenticated,
+          ),
+          selectedModelProvider.overrideWithValue(_model),
+          appSettingsProvider.overrideWithValue(settings),
+          reviewerModeProvider.overrideWithValue(true),
+          voiceModeInputProvider.overrideWithValue(input),
+          voiceModeSpeechProvider.overrideWithValue(tts),
+          stopGenerationProvider.overrideWithValue(() {
+            stopGenerationCalls += 1;
+          }),
+          voiceCallKitProvider.overrideWithValue(_UnavailableCallKitService()),
+          chatVoiceModeBackgroundCoordinatorProvider.overrideWithValue(
+            _FakeChatVoiceBackgroundCoordinator(),
+          ),
+          voiceAudioSessionProvider.overrideWithValue(
+            audioSession ?? _FakeChatVoiceAudioSessionCoordinator(),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      return (
+        container: container,
+        controller: container.read(chatVoiceModeControllerProvider.notifier),
+        stopGenerationCalls: () => stopGenerationCalls,
+      );
+    }
+
+    _FakeVoiceInputService serverInput() => _FakeVoiceInputService()
+      ..localSttAvailable = false
+      ..serverSttAvailable = true
+      ..sttPreference = SttPreference.serverOnly
+      ..holdServerRecorderOnComplete = true;
+
+    const serverBargeIn = AppSettings(
+      sttPreference: SttPreference.serverOnly,
+      voiceBargeInEnabled: true,
+    );
+
+    List<String> userTurns(ProviderContainer container) => container
+        .read(chatMessagesProvider)
+        .where((message) => message.role == 'user')
+        .map((message) => message.content)
+        .toList();
+
+    test(
+      'server recognition keeps the recorder open and interrupts on onset',
+      () async {
+        final input = serverInput();
+        final tts = _FakeTextToSpeechService()..holdCompletion = true;
+        final audioSession = _FakeChatVoiceAudioSessionCoordinator();
+        final call = setUpCall(
+          input,
+          tts,
+          settings: serverBargeIn,
+          audioSession: audioSession,
+        );
+
+        await call.controller.start(startNewConversation: false);
+        final stopsBeforeTurn = input.stopCalls;
+        await input.completeCurrent('tell me a long story');
+        await _until(
+          () =>
+              call.container.read(chatVoiceModeControllerProvider).phase ==
+              ChatVoiceModePhase.speaking,
+        );
+
+        // The held server recorder is the microphone during playback: no
+        // stop, no native capture, and the call is listening to it.
+        check(input.isHoldingServerRecorderForResponse).isTrue();
+        check(input.stopCalls).equals(stopsBeforeTurn);
+        check(audioSession.responseWaitCallIds).isEmpty();
+        check(input.heldLevels.hasListener).isTrue();
+
+        // Room tone and echo residue, then the user talks for 320 ms.
+        await input.emitLevels(-60, 20);
+        check(tts.stopCalls).equals(0);
+        await input.emitLevels(-25, 10);
+        await _until(() => input.beginCalls == 2);
+
+        check(tts.stopStreamingCalls).equals(1);
+        check(tts.stopCalls).equals(1);
+        check(call.stopGenerationCalls()).equals(1);
+        check(input.heldLevels.hasListener).isFalse();
+        // Onset after 8 frames above the floor (256 ms) plus 500 ms pre-roll.
+        check(input.bargeInLookbacks).deepEquals(<Duration>[
+          const Duration(milliseconds: 756),
+        ]);
+        check(call.container.read(chatVoiceModeControllerProvider).phase)
+            .equals(ChatVoiceModePhase.listening);
+
+        // The take ends on the server path's own end of speech and is sent.
+        await input.completeCurrent('actually, stop there');
+        await _until(() => userTurns(call.container).length == 2);
+        check(userTurns(call.container)).deepEquals(<String>[
+          'tell me a long story',
+          'actually, stop there',
+        ]);
+        await call.controller.stop();
+      },
+    );
+
+    test('the grace period and short blips do not interrupt', () async {
+      final input = serverInput();
+      final tts = _FakeTextToSpeechService()..holdCompletion = true;
+      final call = setUpCall(input, tts, settings: serverBargeIn);
+
+      await call.controller.start(startNewConversation: false);
+      await input.completeCurrent('tell me a long story');
+      await _until(
+        () =>
+            call.container.read(chatVoiceModeControllerProvider).phase ==
+            ChatVoiceModePhase.speaking,
+      );
+
+      // Loud for the first 320 ms of playback: the echo canceller is still
+      // settling, so none of it counts.
+      await input.emitLevels(-60, 1);
+      await input.emitLevels(-20, 9);
+      await input.emitLevels(-60, 20);
+      // Coughs and clicks: 128 ms loud, then quiet longer than a syllable gap.
+      for (var i = 0; i < 4; i++) {
+        await input.emitLevels(-25, 4);
+        await input.emitLevels(-60, 5);
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      check(tts.stopCalls).equals(0);
+      check(call.stopGenerationCalls()).equals(0);
+      check(input.beginCalls).equals(1);
+      check(call.container.read(chatVoiceModeControllerProvider).phase)
+          .equals(ChatVoiceModePhase.speaking);
+
+      // Still listening: sustained speech interrupts.
+      await input.emitLevels(-25, 10);
+      await _until(() => input.beginCalls == 2);
+      check(tts.stopCalls).equals(1);
+      await call.controller.stop();
+    });
+
+    test('muting stops listening for a barge-in until unmuted', () async {
+      final input = serverInput();
+      final tts = _FakeTextToSpeechService()..holdCompletion = true;
+      final call = setUpCall(input, tts, settings: serverBargeIn);
+
+      await call.controller.start(startNewConversation: false);
+      await input.completeCurrent('tell me a long story');
+      await _until(
+        () =>
+            call.container.read(chatVoiceModeControllerProvider).phase ==
+            ChatVoiceModePhase.speaking,
+      );
+
+      await call.controller.toggleMute();
+      check(input.heldLevels.hasListener).isFalse();
+      await call.controller.toggleMute();
+      check(input.heldLevels.hasListener).isTrue();
+      check(call.container.read(chatVoiceModeControllerProvider).phase)
+          .equals(ChatVoiceModePhase.speaking);
+
+      await input.emitLevels(-60, 20);
+      await input.emitLevels(-25, 10);
+      await _until(() => input.beginCalls == 2);
+      check(tts.stopCalls).equals(1);
+      await call.controller.stop();
+    });
+
+    test('with barge-in off the server recorder only holds the call', () async {
+      final input = serverInput();
+      final tts = _FakeTextToSpeechService()..holdCompletion = true;
+      final call = setUpCall(
+        input,
+        tts,
+        settings: const AppSettings(sttPreference: SttPreference.serverOnly),
+      );
+
+      await call.controller.start(startNewConversation: false);
+      await input.completeCurrent('tell me a long story');
+      await _until(
+        () =>
+            call.container.read(chatVoiceModeControllerProvider).phase ==
+            ChatVoiceModePhase.speaking,
+      );
+
+      check(input.isHoldingServerRecorderForResponse).isTrue();
+      check(input.heldLevels.hasListener).isFalse();
+      await input.emitLevels(-60, 20);
+      await input.emitLevels(-20, 30);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      check(tts.stopCalls).equals(0);
+      check(call.stopGenerationCalls()).equals(0);
+      check(input.beginCalls).equals(1);
+
+      await _until(() => tts.finishedTexts.isNotEmpty);
+      tts.emitCompleted();
+      await _until(() => input.beginCalls == 2);
+      check(input.bargeInLookbacks).isEmpty();
+      await call.controller.stop();
+    });
+
+    test(
+      'on-device recognition stops playback on the first words heard',
+      () async {
+        final input = _FakeVoiceInputService()..nativeLocalStt = true;
+        final tts = _FakeTextToSpeechService()..holdCompletion = true;
+        final call = setUpCall(
+          input,
+          tts,
+          settings: const AppSettings(voiceBargeInEnabled: true),
+        );
+
+        await call.controller.start(startNewConversation: false);
+        await input.completeCurrent('first assistant turn', close: false);
+        await _until(
+          () =>
+              call.container.read(chatVoiceModeControllerProvider).phase ==
+              ChatVoiceModePhase.speaking,
+        );
+
+        // Inside the grace period nothing interrupts.
+        await input.completeCurrent(
+          'purple elephants',
+          finalResult: false,
+          close: false,
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        check(tts.stopCalls).equals(0);
+
+        await Future<void>.delayed(const Duration(milliseconds: 350));
+        // One word, or only words the assistant is saying (its own echo),
+        // does not interrupt either.
+        final spoken = call.container
+            .read(chatVoiceModeControllerProvider)
+            .assistantPreview
+            .split(RegExp(r'\s+'))
+            .where((word) => word.isNotEmpty)
+            .take(3)
+            .join(' ');
+        await input.completeCurrent('wait', finalResult: false, close: false);
+        await input.completeCurrent(spoken, finalResult: false, close: false);
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        check(tts.stopCalls).equals(0);
+
+        await input.completeCurrent(
+          'purple elephants',
+          finalResult: false,
+          close: false,
+        );
+        await _until(() => tts.stopCalls == 1);
+        check(call.stopGenerationCalls()).equals(1);
+        check(call.container.read(chatVoiceModeControllerProvider).phase)
+            .equals(ChatVoiceModePhase.listening);
+        check(userTurns(call.container).length).equals(1);
+
+        await input.completeCurrent(
+          'purple elephants dancing',
+          close: false,
+        );
+        await _until(() => userTurns(call.container).length == 2);
+        check(userTurns(call.container).last)
+            .equals('purple elephants dancing');
+        // The recognizer kept running throughout.
+        check(input.beginCalls).equals(1);
+        await call.controller.stop();
+      },
+    );
+
+    test('on-device recognition counts unspaced Chinese and Japanese by '
+        'character', () async {
+      final input = _FakeVoiceInputService()..nativeLocalStt = true;
+      final tts = _FakeTextToSpeechService()..holdCompletion = true;
+      final call = setUpCall(
+        input,
+        tts,
+        settings: const AppSettings(voiceBargeInEnabled: true),
+      );
+
+      await call.controller.start(startNewConversation: false);
+      await input.completeCurrent('first assistant turn', close: false);
+      await _until(
+        () =>
+            call.container.read(chatVoiceModeControllerProvider).phase ==
+            ChatVoiceModePhase.speaking,
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 350));
+
+      // One character is one word: not enough.
+      await input.completeCurrent('等', finalResult: false, close: false);
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      check(tts.stopCalls).equals(0);
+
+      // Three characters, with no space between them, interrupt.
+      await input.completeCurrent('等一下', finalResult: false, close: false);
+      await _until(() => tts.stopCalls == 1);
+      check(call.container.read(chatVoiceModeControllerProvider).phase)
+          .equals(ChatVoiceModePhase.listening);
+      await call.controller.stop();
+    });
+  });
+
   test('pausing during sending defers assistant TTS until resume', () async {
     final input = _FakeVoiceInputService();
     final tts = _FakeTextToSpeechService();
@@ -3095,6 +3411,8 @@ class _FakeVoiceInputService implements VoiceModeInput {
   bool _emittedBufferedTranscriptSignal = false;
   final managedAudioFlags = <bool>[];
   final _responseCaptureFailures = StreamController<Object>.broadcast();
+  final heldLevels = StreamController<VoiceCaptureLevel>.broadcast();
+  final bargeInLookbacks = <Duration>[];
   StreamController<VoiceTranscriptEvent>? _transcriptController;
   StreamController<int>? _intensityController;
 
@@ -3217,6 +3535,33 @@ class _FakeVoiceInputService implements VoiceModeInput {
 
   Future<void> closeResponseCaptureFailures() =>
       _responseCaptureFailures.close();
+
+  @override
+  Stream<VoiceCaptureLevel> get heldCaptureLevels => heldLevels.stream;
+
+  @override
+  Future<Stream<VoiceTranscriptEvent>> beginBargeInListeningEvents({
+    required Duration lookback,
+    bool iosAudioSessionManagedExternally = false,
+  }) {
+    bargeInLookbacks.add(lookback);
+    return beginListeningEvents(
+      iosAudioSessionManagedExternally: iosAudioSessionManagedExternally,
+    );
+  }
+
+  /// Feeds [frames] 32 ms frames at [dbfs] to whoever listens for a barge-in.
+  Future<void> emitLevels(double dbfs, int frames) async {
+    for (var i = 0; i < frames; i++) {
+      heldLevels.add(
+        VoiceCaptureLevel(
+          dbfs: dbfs,
+          duration: const Duration(milliseconds: 32),
+        ),
+      );
+    }
+    await Future<void>.delayed(Duration.zero);
+  }
 
   @override
   Future<bool> prepareResponseWaitHandoff() async {
