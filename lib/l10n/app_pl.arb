@@ -1927,6 +1927,27 @@
   "@assistantAvatarPickFailed": {
     "description": "Error shown when a picked video or image could not be copied for the assistant avatar."
   },
+  "compactToolSummaries": "Zwięzłe podsumowania narzędzi",
+  "@compactToolSummaries": {
+    "description": "Toggle title: the tool rows above a reply read \"Used tools\" instead of naming each tool."
+  },
+  "compactToolSummariesDescription": "Nad odpowiedzią pokazuj „Użyto narzędzi” zamiast nazw poszczególnych narzędzi. Stuknij wiersz, aby je zobaczyć.",
+  "@compactToolSummariesDescription": {
+    "description": "Subtitle for the compact tool summaries toggle."
+  },
+  "markdownDetailsGroupCompactPendingTitle": "Używa narzędzi…",
+  "@markdownDetailsGroupCompactPendingTitle": {
+    "description": "Title of a tool-call group above a reply while a tool still runs, with compact tool summaries on."
+  },
+  "markdownDetailsGroupCompactCompleteTitle": "{count, plural, =1{Użyto narzędzia} few{Użyto {count} narzędzi} many{Użyto {count} narzędzi} other{Użyto {count} narzędzi}}",
+  "@markdownDetailsGroupCompactCompleteTitle": {
+    "description": "Title of a finished tool-call group above a reply with compact tool summaries on; count is the number of tool calls.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "androidAssistantTitle": "Asystent systemu Android",
   "@androidAssistantTitle": {
     "description": "Tile title for configuring the Android digital assistant trigger."

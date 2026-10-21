@@ -29,6 +29,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 
 class _RecordedPlatformCall {
@@ -1015,8 +1016,10 @@ void main() {
     MarkdownLinkTapCallback? onTapLink,
     Widget Function(Uri uri, String? title, String? alt)? imageBuilderOverride,
     bool enableStreamingTextFade = false,
+    List<Override> overrides = const [],
   }) {
     return ProviderScope(
+      overrides: overrides,
       child: MaterialApp(
         locale: locale,
         theme: theme ?? defaultHarnessTheme,
@@ -2353,6 +2356,93 @@ After
 
     expect(find.text('View Result from search'), findsOneWidget);
     expect(find.text('View Result from browser'), findsOneWidget);
+  });
+
+  group('compact tool summaries', () {
+    final compact = [
+      appSettingsProvider.overrideWith(_CompactToolSummariesSettings.new),
+    ];
+
+    testWidgets('a group reads "Used N tools" and names the tools on tap', (
+      tester,
+    ) async {
+      const content = '''
+<details type="tool_calls" done="true" name="search" result="&quot;one&quot;">
+<summary>Tool Executed</summary>
+</details>
+<details type="tool_calls" done="true" name="browser" result="&quot;two&quot;">
+<summary>Tool Executed</summary>
+</details>
+''';
+
+      await tester.pumpWidget(buildHarness(content, overrides: compact));
+
+      check(find.text('Used 2 tools').evaluate()).length.equals(1);
+      check(find.textContaining('Explored').evaluate()).isEmpty();
+      check(find.text('View Result from search').evaluate()).isEmpty();
+
+      await tester.tap(find.text('Used 2 tools'));
+      await tester.pumpAndSettle();
+
+      check(find.text('View Result from search').evaluate()).length.equals(1);
+      check(find.text('View Result from browser').evaluate()).length.equals(1);
+    });
+
+    testWidgets('a lone tool call reads "Used a tool" with its row inside', (
+      tester,
+    ) async {
+      const content = '''
+<details type="tool_calls" done="true" name="search" arguments="{&quot;q&quot;: &quot;cats&quot;}" result="&quot;done&quot;">
+<summary>Tool Executed</summary>
+</details>
+After
+''';
+
+      await tester.pumpWidget(buildHarness(content, overrides: compact));
+
+      check(find.text('Used a tool').evaluate()).length.equals(1);
+      check(find.text('View Result from search').evaluate()).isEmpty();
+      check(find.text('After').evaluate()).length.equals(1);
+
+      await tester.tap(find.text('Used a tool'));
+      await tester.pumpAndSettle();
+      check(find.text('View Result from search').evaluate()).length.equals(1);
+
+      await tester.tap(find.text('View Result from search'));
+      await tester.pumpAndSettle();
+      check(find.text('cats').evaluate()).length.equals(1);
+      check(find.text('done').evaluate()).length.equals(1);
+    });
+
+    testWidgets('a running tool call reads "Using tools…"', (tester) async {
+      _reduceMotion(tester);
+      const content = '''
+<details type="tool_calls" done="false" name="search">
+<summary>Executing...</summary>
+</details>
+''';
+
+      await tester.pumpWidget(buildHarness(content, overrides: compact));
+
+      check(find.text('Using tools…').evaluate()).length.equals(1);
+      check(find.textContaining('search').evaluate()).isEmpty();
+    });
+
+    testWidgets('off, the group keeps naming the tools', (tester) async {
+      const content = '''
+<details type="tool_calls" done="true" name="search" result="&quot;one&quot;">
+<summary>Tool Executed</summary>
+</details>
+<details type="tool_calls" done="true" name="browser" result="&quot;two&quot;">
+<summary>Tool Executed</summary>
+</details>
+''';
+
+      await tester.pumpWidget(buildHarness(content));
+
+      check(find.text('Explored search, browser').evaluate()).length.equals(1);
+      check(find.text('Used 2 tools').evaluate()).isEmpty();
+    });
   });
 
   testWidgets(
@@ -4641,4 +4731,10 @@ TextSpan? _findTextSpan(InlineSpan span, String text) {
     if (match != null) return match;
   }
   return null;
+}
+
+/// App settings with "Compact tool summaries" on.
+class _CompactToolSummariesSettings extends AppSettingsNotifier {
+  @override
+  AppSettings build() => const AppSettings(compactToolSummaries: true);
 }

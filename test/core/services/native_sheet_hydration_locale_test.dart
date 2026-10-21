@@ -389,6 +389,7 @@ void main() {
         'quick-reply-reactions',
         'assistant-avatar',
         'message-bubbles',
+        'compact-tool-summaries',
       ]);
     });
 

@@ -574,6 +574,27 @@ class AppCustomizationPage extends ConsumerWidget {
               .read(appSettingsProvider.notifier)
               .setMessageBubbles(!settings.messageBubbles),
         ),
+        const SizedBox(height: Spacing.sm),
+        CustomizationTile(
+          leading: _buildIconBadge(
+            context,
+            Platform.isIOS ? CupertinoIcons.wrench : Icons.handyman_outlined,
+            color: theme.buttonPrimary,
+          ),
+          title: l10n.compactToolSummaries,
+          subtitle: l10n.compactToolSummariesDescription,
+          toggled: settings.compactToolSummaries,
+          trailing: AdaptiveSwitch(
+            value: settings.compactToolSummaries,
+            onChanged: (value) => ref
+                .read(appSettingsProvider.notifier)
+                .setCompactToolSummaries(value),
+          ),
+          showChevron: false,
+          onTap: () => ref
+              .read(appSettingsProvider.notifier)
+              .setCompactToolSummaries(!settings.compactToolSummaries),
+        ),
         if (Platform.isAndroid) ...[
           const SizedBox(height: Spacing.sm),
           CustomizationTile(

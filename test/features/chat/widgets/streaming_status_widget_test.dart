@@ -1,3 +1,4 @@
+import 'package:checks/checks.dart';
 import 'package:conduit_core/models/chat_message.dart';
 import 'package:conduit/features/chat/widgets/assistant_detail_header.dart';
 import 'package:conduit/features/chat/widgets/streaming_status_widget.dart';
@@ -15,6 +16,7 @@ void main() {
     List<ChatStatusUpdate> updates, {
     bool isStreaming = true,
     bool disableAnimations = false,
+    bool compactToolSummaries = false,
   }) {
     return MaterialApp(
       theme: AppTheme.light(TweakcnThemes.t3Chat),
@@ -30,6 +32,7 @@ void main() {
           child: StreamingStatusWidget(
             updates: updates,
             isStreaming: isStreaming,
+            compactToolSummaries: compactToolSummaries,
           ),
         ),
       ),
@@ -153,6 +156,42 @@ void main() {
 
     expect(find.text('Explored web_search (2), terminal'), findsOneWidget);
     expect(find.text('terminal'), findsNothing);
+  });
+
+  testWidgets('compact tool summaries count the Hermes tools instead', (
+    tester,
+  ) async {
+    const updates = [
+      ChatStatusUpdate(
+        action: 'hermes_tool_web_search',
+        description: 'web_search',
+        done: true,
+      ),
+      ChatStatusUpdate(
+        action: 'hermes_tool_web_search',
+        description: 'web_search',
+        done: true,
+      ),
+      ChatStatusUpdate(
+        action: 'hermes_tool_terminal',
+        description: 'terminal',
+        done: true,
+      ),
+    ];
+    await tester.pumpWidget(
+      buildHarness(updates, isStreaming: false, compactToolSummaries: true),
+    );
+    check(find.text('Used 3 tools').evaluate()).length.equals(1);
+    check(find.textContaining('web_search').evaluate()).isEmpty();
+
+    await tester.pumpWidget(
+      buildHarness(
+        [updates.first, updates.last.copyWith(done: false)],
+        disableAnimations: true,
+        compactToolSummaries: true,
+      ),
+    );
+    check(find.text('Using tools…').evaluate()).length.equals(1);
   });
 
   testWidgets('keeps a grouped Hermes title pending while any tool runs', (

@@ -102,6 +102,7 @@ import 'core/utils/native_sheet_utils.dart'
         nativeQuickReplyReactionsId,
         nativeAssistantAvatarId,
         nativeMessageBubblesId,
+        nativeCompactToolSummariesId,
         nativeMemoryEditorActionPrefix,
         nativeMemoryEditorNewActionId,
         nativeNotificationTargetsActionId;
@@ -1184,6 +1185,12 @@ class _ConduitAppState extends ConsumerState<ConduitApp> {
             await ref
                 .read(appSettingsProvider.notifier)
                 .setMessageBubbles(value);
+          }
+        case nativeCompactToolSummariesId:
+          if (value is bool) {
+            await ref
+                .read(appSettingsProvider.notifier)
+                .setCompactToolSummaries(value);
           }
         case 'disable-haptics-streaming':
           if (value is bool) {
