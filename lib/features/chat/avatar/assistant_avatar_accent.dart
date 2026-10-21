@@ -188,14 +188,21 @@ class AssistantAvatarAutoAccent extends Notifier<Color?> {
   }
 
   /// Stores [color] as the color of the media identified by [mediaKey].
-  Future<void> record(String mediaKey, Color? color) async {
+  /// With [persist] false it holds for this session only (a failed video
+  /// sample is retried on the next launch).
+  Future<void> record(
+    String mediaKey,
+    Color? color, {
+    bool persist = true,
+  }) async {
     _cachedKey = mediaKey;
     state = color;
     DebugLogger.log(
       'accent-derived',
       scope: _logScope,
-      data: {'color': color == null ? 'none' : _hex(color)},
+      data: {'color': color == null ? 'none' : _hex(color), 'persist': persist},
     );
+    if (!persist) return;
     try {
       await PreferencesStore.put(
         PreferenceKeys.assistantAvatarAccentCache,
