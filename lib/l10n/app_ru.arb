@@ -4328,5 +4328,49 @@
   "chatDragToFolderDescription": "Удерживайте чат на боковой панели, затем перетащите его в папку",
   "chatSwipeToDelete": "Удалять чаты свайпом",
   "chatSwipeToDeleteDescription": "Смахните чат вправо на боковой панели, чтобы удалить его; отменить можно в течение нескольких секунд",
-  "chatDeletedNotice": "Чат удалён"
+  "chatDeletedNotice": "Чат удалён",
+  "chatMultiSelect": "Выбор нескольких чатов",
+  "chatMultiSelectDescription": "Добавляет «Выбрать» в меню чата, чтобы перемещать или удалять несколько чатов сразу",
+  "selectChats": "Выбрать",
+  "chatsSelectedCount": "{count, plural, one{Выбран {count}} few{Выбрано {count}} many{Выбрано {count}} other{Выбрано {count}}}",
+  "@chatsSelectedCount": {
+    "description": "How many chats are selected, shown in the bar for acting on them together.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "deleteChatsTitle": "{count, plural, one{Удалить {count} чат?} few{Удалить {count} чата?} many{Удалить {count} чатов?} other{Удалить {count} чата?}}",
+  "@deleteChatsTitle": {
+    "description": "Dialog title asking to confirm deleting the selected chats.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "deleteChatsMessage": "Эти чаты будут удалены навсегда.",
+  "failedToMoveChats": "{count, plural, one{Не удалось переместить {count} чат} few{Не удалось переместить {count} чата} many{Не удалось переместить {count} чатов} other{Не удалось переместить {count} чата}}",
+  "@failedToMoveChats": {
+    "description": "Error shown once after moving several selected chats, with how many failed.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "failedToDeleteChats": "{count, plural, one{Не удалось удалить {count} чат} few{Не удалось удалить {count} чата} many{Не удалось удалить {count} чатов} other{Не удалось удалить {count} чата}}",
+  "@failedToDeleteChats": {
+    "description": "Error shown once after deleting several selected chats, with how many failed.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  }
 }

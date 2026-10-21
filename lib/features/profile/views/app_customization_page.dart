@@ -662,6 +662,29 @@ class AppCustomizationPage extends ConsumerWidget {
               .read(appSettingsProvider.notifier)
               .setChatSwipeToDelete(!settings.chatSwipeToDelete),
         ),
+        const SizedBox(height: Spacing.sm),
+        CustomizationTile(
+          leading: _buildIconBadge(
+            context,
+            Platform.isIOS
+                ? CupertinoIcons.check_mark_circled
+                : Icons.check_circle_outline_rounded,
+            color: theme.buttonPrimary,
+          ),
+          title: l10n.chatMultiSelect,
+          subtitle: l10n.chatMultiSelectDescription,
+          toggled: settings.chatMultiSelect,
+          trailing: AdaptiveSwitch(
+            value: settings.chatMultiSelect,
+            onChanged: (value) => ref
+                .read(appSettingsProvider.notifier)
+                .setChatMultiSelect(value),
+          ),
+          showChevron: false,
+          onTap: () => ref
+              .read(appSettingsProvider.notifier)
+              .setChatMultiSelect(!settings.chatMultiSelect),
+        ),
         if (Platform.isAndroid) ...[
           const SizedBox(height: Spacing.sm),
           CustomizationTile(

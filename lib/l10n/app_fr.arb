@@ -4290,5 +4290,49 @@
   "chatDragToFolderDescription": "Maintenez une discussion dans la barre latérale, puis faites-la glisser sur un dossier",
   "chatSwipeToDelete": "Balayer pour supprimer les discussions",
   "chatSwipeToDeleteDescription": "Balayez une discussion vers la droite dans la barre latérale pour la supprimer, avec quelques secondes pour annuler",
-  "chatDeletedNotice": "Discussion supprimée"
+  "chatDeletedNotice": "Discussion supprimée",
+  "chatMultiSelect": "Sélectionner plusieurs discussions",
+  "chatMultiSelectDescription": "Ajoute Sélectionner au menu des discussions pour en déplacer ou supprimer plusieurs à la fois",
+  "selectChats": "Sélectionner",
+  "chatsSelectedCount": "{count, plural, one{1 sélectionné} other{{count} sélectionnés}}",
+  "@chatsSelectedCount": {
+    "description": "How many chats are selected, shown in the bar for acting on them together.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "deleteChatsTitle": "{count, plural, one{Supprimer 1 chat ?} other{Supprimer {count} chats ?}}",
+  "@deleteChatsTitle": {
+    "description": "Dialog title asking to confirm deleting the selected chats.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "deleteChatsMessage": "Ces chats seront définitivement supprimés.",
+  "failedToMoveChats": "{count, plural, one{Impossible de déplacer 1 discussion} other{Impossible de déplacer {count} discussions}}",
+  "@failedToMoveChats": {
+    "description": "Error shown once after moving several selected chats, with how many failed.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "failedToDeleteChats": "{count, plural, one{Impossible de supprimer 1 discussion} other{Impossible de supprimer {count} discussions}}",
+  "@failedToDeleteChats": {
+    "description": "Error shown once after deleting several selected chats, with how many failed.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  }
 }

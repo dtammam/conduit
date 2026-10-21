@@ -45,6 +45,7 @@ import '../providers/sidebar_search_providers.dart';
 import '../providers/sidebar_tab_scroll_registry.dart';
 
 import 'package:conduit_core/features/navigation/models/sidebar_navigation_model.dart';
+import 'package:conduit_core/features/navigation/providers/sidebar_active_tab_provider.dart';
 
 /// Chevron / expand icon for section headers — matches folder row disclosure.
 IconData sidebarSectionDisclosureIcon(bool isExpanded) {
@@ -82,6 +83,11 @@ class _ChatsDrawerState extends ConsumerState<ChatsDrawer>
   static const Duration _swipeDeleteGrace = Duration(milliseconds: 500);
   final Map<String, _PendingSwipeDelete> _pendingSwipeDeletes =
       <String, _PendingSwipeDelete>{};
+
+  static const double _kSelectionBarClearance = 72;
+  bool _selecting = false;
+  // Selected chats by scoped id, in the order they were picked.
+  final Map<String, Conversation> _selectedChats = <String, Conversation>{};
   late final ChatFolderDragController _chatDragController =
       ChatFolderDragController(
         scrollController: _listController,
@@ -323,7 +329,11 @@ class _ChatsDrawerState extends ConsumerState<ChatsDrawer>
       ...slivers,
       // Bottom padding for the tab bar and a little breathing room.
       SliverToBoxAdapter(
-        child: SizedBox(height: sidebarTabContentBottomPadding(context)),
+        child: SizedBox(
+          height:
+              sidebarTabContentBottomPadding(context) +
+              (_selecting ? _kSelectionBarClearance : 0),
+        ),
       ),
     ];
 
@@ -756,7 +766,28 @@ class _ChatsDrawerState extends ConsumerState<ChatsDrawer>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    return _buildConversationList(context);
+    // Leaving the drawer (closing it or switching tabs) ends a selection.
+    final drawerShown = DrawerChromeCompositionScope.shouldCompose(context);
+    ref.listen(sidebarActiveTabProvider, (previous, next) {
+      if (next != SidebarTabId.chats) _endChatSelection();
+    });
+    if (!drawerShown && _selecting) {
+      _selecting = false;
+      _selectedChats.clear();
+    }
+    final list = _buildConversationList(context);
+    if (!_selecting) return list;
+    return Stack(
+      children: [
+        list,
+        Positioned(
+          left: Spacing.sm,
+          right: Spacing.sm,
+          bottom: sidebarTabContentBottomPadding(context),
+          child: _buildSelectionBar(),
+        ),
+      ],
+    );
   }
 
   Widget _buildConversationList(BuildContext context) {
@@ -1238,6 +1269,231 @@ class _ChatsDrawerState extends ConsumerState<ChatsDrawer>
   bool get _swipeToDeleteEnabled => ref.watch(
     appSettingsProvider.select((settings) => settings.chatSwipeToDelete),
   );
+
+  /// Whether a chat's menu offers Select, for acting on several chats.
+  bool get _multiSelectEnabled => ref.watch(
+    appSettingsProvider.select((settings) => settings.chatMultiSelect),
+  );
+
+  void _startChatSelection(Conversation conversation) {
+    if (!mounted) return;
+    setState(() {
+      _selecting = true;
+      _selectedChats
+        ..clear()
+        ..[conversationScopedId(conversation)] = conversation;
+    });
+  }
+
+  void _toggleChatSelection(
+    Conversation conversation, {
+    required bool readOnly,
+  }) {
+    if (readOnly) return;
+    ConduitHaptics.selectionClick();
+    final scopedId = conversationScopedId(conversation);
+    setState(() {
+      if (_selectedChats.remove(scopedId) == null) {
+        _selectedChats[scopedId] = conversation;
+      }
+    });
+  }
+
+  void _endChatSelection() {
+    if (!_selecting || !mounted) return;
+    setState(() {
+      _selecting = false;
+      _selectedChats.clear();
+    });
+  }
+
+  static String? _folderIdOf(Conversation conversation) {
+    final folderId = conversation.folderId;
+    return folderId == null || folderId.isEmpty ? null : folderId;
+  }
+
+  Future<void> _moveSelectedChats() async {
+    final movable = _selectedChats.values
+        .where((conversation) => !isDirectLocalConversation(conversation))
+        .toList(growable: false);
+    if (movable.isEmpty) return;
+    final folderIds = movable.map(_folderIdOf).toSet();
+    final folders = ref.read(foldersProvider).value ?? const <Folder>[];
+    final target = await showConversationMoveTargetPicker(
+      context,
+      folders: folders,
+      currentFolderId: folderIds.length == 1 ? folderIds.first : null,
+      offerNoFolder: folderIds.any((folderId) => folderId != null),
+    );
+    if (!mounted || target == null) return;
+    _endChatSelection();
+    var failed = 0;
+    for (final conversation in movable) {
+      if (!mounted) return;
+      final moved = await moveConversationToFolder(
+        context,
+        ref,
+        conversationScopedId(conversation),
+        currentFolderId: _folderIdOf(conversation),
+        targetFolderId: target.folderId,
+        reportErrors: false,
+      );
+      if (!moved) failed++;
+    }
+    // One dialog for every chat that failed, not one per chat.
+    if (failed > 0 && mounted) {
+      await showConversationErrorDialog(
+        context,
+        AppLocalizations.of(context)!.failedToMoveChats(failed),
+      );
+    }
+  }
+
+  Future<void> _deleteSelectedChats() async {
+    final chosen = _selectedChats.values.toList(growable: false);
+    if (chosen.isEmpty) return;
+    final l10n = AppLocalizations.of(context)!;
+    final confirmed = await ThemedDialogs.confirm(
+      context,
+      title: l10n.deleteChatsTitle(chosen.length),
+      message: l10n.deleteChatsMessage,
+      confirmText: l10n.delete,
+      isDestructive: true,
+    );
+    if (!mounted || !confirmed) return;
+    _endChatSelection();
+    var failed = 0;
+    for (final conversation in chosen) {
+      if (!mounted) return;
+      final deleted = await deleteConversationNow(
+        context,
+        ref,
+        conversation,
+        reportErrors: false,
+      );
+      if (!deleted) failed++;
+    }
+    // One dialog for every chat that failed, not one per chat.
+    if (failed > 0 && mounted) {
+      await showConversationErrorDialog(
+        context,
+        AppLocalizations.of(context)!.failedToDeleteChats(failed),
+      );
+    }
+  }
+
+  Widget _buildSelectableRow({
+    required String scopedId,
+    required bool chosen,
+    required bool selectable,
+    required Widget child,
+  }) {
+    final theme = context.conduitTheme;
+    final icon = Platform.isIOS
+        ? (chosen
+              ? CupertinoIcons.check_mark_circled_solid
+              : CupertinoIcons.circle)
+        : (chosen
+              ? Icons.check_circle_rounded
+              : Icons.radio_button_unchecked_rounded);
+    return Semantics(
+      selected: chosen,
+      child: Row(
+        children: [
+          Padding(
+            padding: const EdgeInsetsDirectional.only(start: Spacing.md),
+            child: Opacity(
+              opacity: selectable ? 1 : 0.3,
+              child: Icon(
+                icon,
+                key: ValueKey<String>(
+                  chosen
+                      ? 'drawer-chat-chosen-$scopedId'
+                      : 'drawer-chat-unchosen-$scopedId',
+                ),
+                size: IconSize.listItem,
+                color: chosen ? theme.buttonPrimary : theme.iconSecondary,
+              ),
+            ),
+          ),
+          Expanded(child: child),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSelectionBar() {
+    final theme = context.conduitTheme;
+    final l10n = AppLocalizations.of(context)!;
+    final count = _selectedChats.length;
+    final canMove =
+        ref.watch(foldersAvailableProvider) &&
+        _selectedChats.values.any(
+          (conversation) => !isDirectLocalConversation(conversation),
+        );
+    return DecoratedBox(
+      key: const ValueKey<String>('chats-selection-bar'),
+      decoration: BoxDecoration(
+        color: theme.surfaceContainer,
+        borderRadius: BorderRadius.circular(AppBorderRadius.lg),
+        boxShadow: theme.popoverShadows,
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: Spacing.md,
+          vertical: Spacing.xs,
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                l10n.chatsSelectedCount(count),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.sidebarTitleStyle.copyWith(
+                  color: theme.textPrimary,
+                  fontWeight: FontWeight.w600,
+                  decoration: TextDecoration.none,
+                ),
+              ),
+            ),
+            ConduitIconButton(
+              key: const ValueKey<String>('chats-selection-move'),
+              icon: Platform.isIOS
+                  ? CupertinoIcons.folder
+                  : Icons.drive_file_move_outline,
+              tooltip: l10n.moveToFolder,
+              iconColor: theme.iconPrimary,
+              isCompact: true,
+              onPressed: count > 0 && canMove
+                  ? () => unawaited(_moveSelectedChats())
+                  : null,
+            ),
+            ConduitIconButton(
+              key: const ValueKey<String>('chats-selection-delete'),
+              icon: Platform.isIOS
+                  ? CupertinoIcons.delete
+                  : Icons.delete_rounded,
+              tooltip: l10n.delete,
+              iconColor: theme.error,
+              isCompact: true,
+              onPressed: count > 0
+                  ? () => unawaited(_deleteSelectedChats())
+                  : null,
+            ),
+            const SizedBox(width: Spacing.xs),
+            ConduitButton(
+              key: const ValueKey<String>('chats-selection-cancel'),
+              text: l10n.cancel,
+              isSecondary: true,
+              isCompact: true,
+              onPressed: _endChatSelection,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
@@ -2016,7 +2272,14 @@ class _ChatsDrawerState extends ConsumerState<ChatsDrawer>
       isGenerating: isGenerating,
     );
 
-    final tileWidget = ConversationTile(
+    final isReadOnly = isReadOnlySharedConversation(
+      conversation,
+      ref.watch(currentUserProvider2.select((user) => user?.id)),
+    );
+    final selecting = _selecting;
+    final isChosen = _selectedChats.containsKey(scopedId);
+
+    final Widget tileWidget = ConversationTile(
       key: ValueKey<String>('drawer-chat-$scopedId'),
       title: title,
       pinned: isPinned,
@@ -2027,12 +2290,9 @@ class _ChatsDrawerState extends ConsumerState<ChatsDrawer>
       badge: isDirectLocalConversation(conversation)
           ? AppLocalizations.of(context)!.onDevice
           : null,
-      onTap: () => _selectConversation(conversation),
-    );
-
-    final isReadOnly = isReadOnlySharedConversation(
-      conversation,
-      ref.watch(currentUserProvider2.select((user) => user?.id)),
+      onTap: selecting
+          ? () => _toggleChatSelection(conversation, readOnly: isReadOnly)
+          : () => _selectConversation(conversation),
     );
     final currentFolderId =
         conversation.folderId == null || conversation.folderId!.isEmpty
@@ -2040,6 +2300,7 @@ class _ChatsDrawerState extends ConsumerState<ChatsDrawer>
         : conversation.folderId;
     // Mirrors when the menu offers Move; the drop reuses that move path.
     final canDragToFolder =
+        !selecting &&
         !isReadOnly &&
         foldersEnabled &&
         _dragToFolderEnabled &&
@@ -2047,7 +2308,8 @@ class _ChatsDrawerState extends ConsumerState<ChatsDrawer>
         (currentFolderId != null || folders.any((folder) => folder.canWrite));
     Widget contextTile = ConduitContextMenu(
       // Pin/rename/move/delete all fail server-side on another user's chat.
-      actions: isReadOnly
+      // While selecting, a tap toggles the row and nothing else listens.
+      actions: isReadOnly || selecting
           ? const <ConduitContextMenuAction>[]
           : buildConversationActionsWithFolders(
               context: context,
@@ -2055,6 +2317,9 @@ class _ChatsDrawerState extends ConsumerState<ChatsDrawer>
               conversation: conversation,
               foldersEnabled: foldersEnabled,
               folders: folders,
+              onSelect: _multiSelectEnabled
+                  ? () => _startChatSelection(conversation)
+                  : null,
             ),
       previewBuilder: buildConversationTileContextPreview,
       holdDrag: canDragToFolder
@@ -2070,9 +2335,16 @@ class _ChatsDrawerState extends ConsumerState<ChatsDrawer>
       child: ChatSwipeToDelete(
         key: ValueKey<String>('drawer-chat-swipe-$scopedId'),
         // Delete is offered by the menu for every chat this account owns.
-        enabled: !isReadOnly && _swipeToDeleteEnabled,
+        enabled: !isReadOnly && !selecting && _swipeToDeleteEnabled,
         onDelete: () => _handleSwipeDelete(conversation),
-        child: tileWidget,
+        child: selecting
+            ? _buildSelectableRow(
+                scopedId: scopedId,
+                chosen: isChosen,
+                selectable: !isReadOnly,
+                child: tileWidget,
+              )
+            : tileWidget,
       ),
     );
     if (topLevelDropTarget) {

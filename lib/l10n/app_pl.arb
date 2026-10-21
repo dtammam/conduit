@@ -8124,5 +8124,61 @@
   "chatDeletedNotice": "Czat usunięty",
   "@chatDeletedNotice": {
     "description": "Notice after a chat is swiped away; it is deleted when the notice ends unless undone."
+  },
+  "chatMultiSelect": "Zaznaczanie wielu czatów",
+  "@chatMultiSelect": {
+    "description": "Toggle title for selecting several chats in the sidebar to act on them together."
+  },
+  "chatMultiSelectDescription": "Dodaje Zaznacz do menu czatu, aby przenosić lub usuwać kilka czatów naraz",
+  "@chatMultiSelectDescription": {
+    "description": "Subtitle for the select multiple chats toggle."
+  },
+  "selectChats": "Zaznacz",
+  "@selectChats": {
+    "description": "Context menu action on a chat that starts selecting several chats, with this one selected."
+  },
+  "chatsSelectedCount": "{count, plural, one{Zaznaczono 1} few{Zaznaczono {count}} many{Zaznaczono {count}} other{Zaznaczono {count}}}",
+  "@chatsSelectedCount": {
+    "description": "How many chats are selected, shown in the bar for acting on them together.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "deleteChatsTitle": "{count, plural, one{Usunąć 1 czat?} few{Usunąć {count} czaty?} many{Usunąć {count} czatów?} other{Usunąć {count} czatu?}}",
+  "@deleteChatsTitle": {
+    "description": "Dialog title asking to confirm deleting the selected chats.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "deleteChatsMessage": "Te czaty zostaną trwale usunięte.",
+  "@deleteChatsMessage": {
+    "description": "Warning that deleting the selected chats cannot be undone."
+  },
+  "failedToMoveChats": "{count, plural, one{Nie udało się przenieść 1 czatu} few{Nie udało się przenieść {count} czatów} many{Nie udało się przenieść {count} czatów} other{Nie udało się przenieść {count} czatu}}",
+  "@failedToMoveChats": {
+    "description": "Error shown once after moving several selected chats, with how many failed.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "failedToDeleteChats": "{count, plural, one{Nie udało się usunąć 1 czatu} few{Nie udało się usunąć {count} czatów} many{Nie udało się usunąć {count} czatów} other{Nie udało się usunąć {count} czatu}}",
+  "@failedToDeleteChats": {
+    "description": "Error shown once after deleting several selected chats, with how many failed.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
   }
 }

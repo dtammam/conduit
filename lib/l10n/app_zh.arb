@@ -4290,5 +4290,49 @@
   "chatDragToFolderDescription": "在侧边栏中按住聊天，然后将其拖到文件夹上",
   "chatSwipeToDelete": "滑动删除聊天",
   "chatSwipeToDeleteDescription": "在侧边栏中向右滑动聊天即可删除，几秒内可撤销",
-  "chatDeletedNotice": "聊天已删除"
+  "chatDeletedNotice": "聊天已删除",
+  "chatMultiSelect": "选择多个聊天",
+  "chatMultiSelectDescription": "在聊天菜单中添加“选择”，以便一次移动或删除多个聊天",
+  "selectChats": "选择",
+  "chatsSelectedCount": "{count, plural, other{已选择 {count} 个}}",
+  "@chatsSelectedCount": {
+    "description": "How many chats are selected, shown in the bar for acting on them together.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "deleteChatsTitle": "{count, plural, other{删除 {count} 个对话？}}",
+  "@deleteChatsTitle": {
+    "description": "Dialog title asking to confirm deleting the selected chats.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "deleteChatsMessage": "这些对话将被永久删除。",
+  "failedToMoveChats": "{count, plural, other{有 {count} 个聊天移动失败}}",
+  "@failedToMoveChats": {
+    "description": "Error shown once after moving several selected chats, with how many failed.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "failedToDeleteChats": "{count, plural, other{有 {count} 个聊天删除失败}}",
+  "@failedToDeleteChats": {
+    "description": "Error shown once after deleting several selected chats, with how many failed.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  }
 }

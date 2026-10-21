@@ -299,6 +299,7 @@ class SettingsService {
       PreferenceKeys.waveTypingIndicator: settings.waveTypingIndicator,
       PreferenceKeys.chatDragToFolder: settings.chatDragToFolder,
       PreferenceKeys.chatSwipeToDelete: settings.chatSwipeToDelete,
+      PreferenceKeys.chatMultiSelect: settings.chatMultiSelect,
       _highContrastKey: settings.highContrast,
       _darkModeKey: settings.darkMode,
       _voiceHoldToTalkKey: settings.voiceHoldToTalk,
@@ -762,6 +763,7 @@ class SettingsService {
           get<bool>(PreferenceKeys.waveTypingIndicator) ?? false,
       chatDragToFolder: get<bool>(PreferenceKeys.chatDragToFolder) ?? false,
       chatSwipeToDelete: get<bool>(PreferenceKeys.chatSwipeToDelete) ?? false,
+      chatMultiSelect: get<bool>(PreferenceKeys.chatMultiSelect) ?? false,
       highContrast: get<bool>(_highContrastKey) ?? false,
       darkMode: get<bool>(_darkModeKey) ?? true,
       defaultModel: get<String>(_defaultModelKey),
@@ -918,6 +920,10 @@ class AppSettings {
   /// Whether a right swipe on a chat in the sidebar deletes it, without the
   /// confirmation and with a short Undo window.
   final bool chatSwipeToDelete;
+
+  /// Whether a chat's menu in the sidebar offers Select, for moving or
+  /// deleting several chats together.
+  final bool chatMultiSelect;
   final bool highContrast;
   final bool darkMode;
   final String? defaultModel;
@@ -979,6 +985,7 @@ class AppSettings {
     this.waveTypingIndicator = false,
     this.chatDragToFolder = false,
     this.chatSwipeToDelete = false,
+    this.chatMultiSelect = false,
     this.highContrast = false,
     this.darkMode = true,
     this.defaultModel,
@@ -1035,6 +1042,7 @@ class AppSettings {
     bool? waveTypingIndicator,
     bool? chatDragToFolder,
     bool? chatSwipeToDelete,
+    bool? chatMultiSelect,
     bool? highContrast,
     bool? darkMode,
     Object? defaultModel = const _DefaultValue(),
@@ -1095,6 +1103,7 @@ class AppSettings {
       waveTypingIndicator: waveTypingIndicator ?? this.waveTypingIndicator,
       chatDragToFolder: chatDragToFolder ?? this.chatDragToFolder,
       chatSwipeToDelete: chatSwipeToDelete ?? this.chatSwipeToDelete,
+      chatMultiSelect: chatMultiSelect ?? this.chatMultiSelect,
       highContrast: highContrast ?? this.highContrast,
       darkMode: darkMode ?? this.darkMode,
       defaultModel: defaultModel is _DefaultValue
@@ -1182,6 +1191,7 @@ class AppSettings {
         other.waveTypingIndicator == waveTypingIndicator &&
         other.chatDragToFolder == chatDragToFolder &&
         other.chatSwipeToDelete == chatSwipeToDelete &&
+        other.chatMultiSelect == chatMultiSelect &&
         other.highContrast == highContrast &&
         other.darkMode == darkMode &&
         other.defaultModel == defaultModel &&
@@ -1241,6 +1251,7 @@ class AppSettings {
       waveTypingIndicator,
       chatDragToFolder,
       chatSwipeToDelete,
+      chatMultiSelect,
       highContrast,
       darkMode,
       defaultModel,
@@ -1417,6 +1428,14 @@ class AppSettingsNotifier extends _$AppSettingsNotifier {
     state = state.copyWith(chatSwipeToDelete: value);
     await SettingsService._putPreference(
       PreferenceKeys.chatSwipeToDelete,
+      value,
+    );
+  }
+
+  Future<void> setChatMultiSelect(bool value) async {
+    state = state.copyWith(chatMultiSelect: value);
+    await SettingsService._putPreference(
+      PreferenceKeys.chatMultiSelect,
       value,
     );
   }

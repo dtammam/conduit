@@ -419,6 +419,7 @@ List<ConduitContextMenuAction> buildConversationActionsWithFolders({
   required dynamic conversation,
   required bool foldersEnabled,
   required List<Folder> folders,
+  VoidCallback? onSelect,
 }) {
   if (conversation == null) {
     return [];
@@ -539,6 +540,15 @@ List<ConduitContextMenuAction> buildConversationActionsWithFolders({
         onBeforeClose: () => ConduitHaptics.selectionClick(),
         onSelected: moveConversation,
       ),
+    if (onSelect != null)
+      ConduitContextMenuAction(
+        cupertinoIcon: CupertinoIcons.check_mark_circled,
+        sfSymbol: 'checkmark.circle',
+        materialIcon: Icons.check_circle_outline_rounded,
+        label: l10n.selectChats,
+        onBeforeClose: () => ConduitHaptics.selectionClick(),
+        onSelected: () async => onSelect(),
+      ),
     ConduitContextMenuAction(
       cupertinoIcon: CupertinoIcons.delete,
       sfSymbol: 'trash',
@@ -561,8 +571,9 @@ String? _conversationFolderId(dynamic conversation) {
   return null;
 }
 
-class _ConversationMoveTarget {
-  const _ConversationMoveTarget({required this.folderId});
+/// A folder picked to move chats into; [folderId] is null for no folder.
+class ConversationMoveTarget {
+  const ConversationMoveTarget({required this.folderId});
 
   final String? folderId;
 }
@@ -593,14 +604,18 @@ Future<void> _moveConversation(
 /// out of any folder when it is null, and updates the cached chats.
 ///
 /// The "Move" menu action and dragging a chat onto a folder both land here.
-Future<void> moveConversationToFolder(
+/// Returns false when the move failed; the failure is shown in a dialog
+/// unless [reportErrors] is false, so a caller moving several chats can
+/// report them together.
+Future<bool> moveConversationToFolder(
   BuildContext context,
   WidgetRef ref,
   String conversationId, {
   required String? currentFolderId,
   required String? targetFolderId,
+  bool reportErrors = true,
 }) async {
-  if (targetFolderId == currentFolderId) return;
+  if (targetFolderId == currentFolderId) return true;
   final rawConversationId = ChatStorageIdentity.parse(conversationId).rawId;
 
   final l10n = AppLocalizations.of(context)!;
@@ -608,7 +623,7 @@ Future<void> moveConversationToFolder(
     final api = ref.read(apiServiceProvider);
     if (api == null) throw Exception('No API service');
     await api.moveConversationToFolder(rawConversationId, targetFolderId);
-    if (!context.mounted) return;
+    if (!context.mounted) return true;
 
     ConduitHaptics.selectionClick();
     ref
@@ -636,17 +651,38 @@ Future<void> moveConversationToFolder(
           );
     }
     refreshConversationsCache(ref, includeFolders: true);
+    return true;
   } catch (_) {
-    if (!context.mounted) return;
-    await _showConversationError(context, l10n.failedToMoveChat);
+    if (reportErrors && context.mounted) {
+      await _showConversationError(context, l10n.failedToMoveChat);
+    }
+    return false;
   }
 }
 
-Future<_ConversationMoveTarget?> _showConversationMoveSheet(
+/// Shows the "Move to folder" picker the Move action uses, for moving one or
+/// more chats. [currentFolderId] is left out of the list; "No folder" is
+/// offered when [offerNoFolder] is true, by default when the chats are in a
+/// folder. Returns null when the picker is dismissed.
+Future<ConversationMoveTarget?> showConversationMoveTargetPicker(
   BuildContext context, {
   required List<Folder> folders,
   required String? currentFolderId,
+  bool? offerNoFolder,
+}) => _showConversationMoveSheet(
+  context,
+  folders: folders,
+  currentFolderId: currentFolderId,
+  offerNoFolder: offerNoFolder ?? currentFolderId != null,
+);
+
+Future<ConversationMoveTarget?> _showConversationMoveSheet(
+  BuildContext context, {
+  required List<Folder> folders,
+  required String? currentFolderId,
+  bool? offerNoFolder,
 }) async {
+  final showNoFolder = offerNoFolder ?? currentFolderId != null;
   final l10n = AppLocalizations.of(context)!;
   // A shared folder is a valid destination only with a write grant.
   final treeEntries = folderTreeEntriesForTargets(
@@ -661,7 +697,7 @@ Future<_ConversationMoveTarget?> _showConversationMoveSheet(
           .presentOptionsSelector(
             title: l10n.moveToFolder,
             options: [
-              if (currentFolderId != null)
+              if (showNoFolder)
                 NativeSheetOptionConfig(
                   id: noFolderId,
                   label: l10n.noFolder,
@@ -683,9 +719,9 @@ Future<_ConversationMoveTarget?> _showConversationMoveSheet(
         return null;
       }
       if (selectedId == noFolderId) {
-        return const _ConversationMoveTarget(folderId: null);
+        return const ConversationMoveTarget(folderId: null);
       }
-      return _ConversationMoveTarget(folderId: selectedId);
+      return ConversationMoveTarget(folderId: selectedId);
     } catch (_) {
       if (!context.mounted) {
         return null;
@@ -697,7 +733,7 @@ Future<_ConversationMoveTarget?> _showConversationMoveSheet(
     return null;
   }
 
-  return ThemedSheets.showSurface<_ConversationMoveTarget>(
+  return ThemedSheets.showSurface<ConversationMoveTarget>(
     context: context,
     isScrollControlled: true,
     builder: (sheetContext) {
@@ -723,7 +759,7 @@ Future<_ConversationMoveTarget?> _showConversationMoveSheet(
               physics: const ClampingScrollPhysics(),
               padding: EdgeInsets.zero,
               children: [
-                if (currentFolderId != null)
+                if (showNoFolder)
                   _MoveTargetTile(
                     icon: PlatformInfo.isIOS
                         ? CupertinoIcons.folder_badge_minus
@@ -731,7 +767,7 @@ Future<_ConversationMoveTarget?> _showConversationMoveSheet(
                     label: l10n.noFolder,
                     onTap: () =>
                         Navigator.of(sheetContext)
-                            .pop(const _ConversationMoveTarget(folderId: null)),
+                            .pop(const ConversationMoveTarget(folderId: null)),
                   ),
                 for (final entry in treeEntries)
                   FolderTreeHierarchyNode(
@@ -746,7 +782,7 @@ Future<_ConversationMoveTarget?> _showConversationMoveSheet(
                       label: entry.folder.name,
                       onTap: () => Navigator.of(
                         sheetContext,
-                      ).pop(_ConversationMoveTarget(folderId: entry.folder.id)),
+                      ).pop(ConversationMoveTarget(folderId: entry.folder.id)),
                     ),
                   ),
               ],
@@ -895,12 +931,15 @@ Future<void> _confirmAndDeleteConversation(
 /// and clears it from the open chat and the cached list.
 ///
 /// The menu's Delete action lands here after its confirmation; a swipe lands
-/// here once its Undo window has passed.
-Future<void> deleteConversationNow(
+/// here once its Undo window has passed. Returns false when the delete
+/// failed; the failure is shown in a dialog unless [reportErrors] is false,
+/// so a caller deleting several chats can report them together.
+Future<bool> deleteConversationNow(
   BuildContext context,
   WidgetRef ref,
   Conversation conversation, {
   bool? isOnDevice,
+  bool reportErrors = true,
 }) async {
   final conversationId = conversationScopedId(conversation);
   final rawConversationId = ChatStorageIdentity.parse(conversationId).rawId;
@@ -939,11 +978,20 @@ Future<void> deleteConversationNow(
       chat.restoreDefaultModel(ref);
     }
     refreshConversationsCache(ref);
+    return true;
   } catch (_) {
-    if (!context.mounted) return;
-    await _showConversationError(context, deleteError);
+    if (reportErrors && context.mounted) {
+      await _showConversationError(context, deleteError);
+    }
+    return false;
   }
 }
+
+/// Shows [message] in the error dialog the chat actions use.
+Future<void> showConversationErrorDialog(
+  BuildContext context,
+  String message,
+) => _showConversationError(context, message);
 
 Future<void> _showConversationError(
   BuildContext context,

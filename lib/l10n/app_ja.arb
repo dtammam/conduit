@@ -5893,5 +5893,49 @@
   "chatDragToFolderDescription": "サイドバーのチャットを長押ししてフォルダにドラッグします",
   "chatSwipeToDelete": "スワイプでチャットを削除",
   "chatSwipeToDeleteDescription": "サイドバーでチャットを右にスワイプすると削除されます。数秒間は元に戻せます",
-  "chatDeletedNotice": "チャットを削除しました"
+  "chatDeletedNotice": "チャットを削除しました",
+  "chatMultiSelect": "複数のチャットを選択",
+  "chatMultiSelectDescription": "チャットメニューに「選択」を追加し、複数のチャットをまとめて移動または削除します",
+  "selectChats": "選択",
+  "chatsSelectedCount": "{count, plural, other{{count}件を選択中}}",
+  "@chatsSelectedCount": {
+    "description": "How many chats are selected, shown in the bar for acting on them together.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "deleteChatsTitle": "{count, plural, other{{count}件のチャットを削除しますか？}}",
+  "@deleteChatsTitle": {
+    "description": "Dialog title asking to confirm deleting the selected chats.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "deleteChatsMessage": "これらのチャットは完全に削除されます。",
+  "failedToMoveChats": "{count, plural, other{{count}件のチャットを移動できませんでした}}",
+  "@failedToMoveChats": {
+    "description": "Error shown once after moving several selected chats, with how many failed.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "failedToDeleteChats": "{count, plural, other{{count}件のチャットを削除できませんでした}}",
+  "@failedToDeleteChats": {
+    "description": "Error shown once after deleting several selected chats, with how many failed.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  }
 }
