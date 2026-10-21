@@ -975,6 +975,50 @@
       }
     }
   },
+  "contextUsageTitle": "Contexte",
+  "contextUsageRingLabel": "Utilisation du contexte : {percent}",
+  "@contextUsageRingLabel": {
+    "placeholders": {
+      "percent": {
+        "type": "String",
+        "example": "42%"
+      }
+    }
+  },
+  "contextUsageRingUnknownLabel": "Utilisation du contexte. Fenêtre de contexte non définie",
+  "contextUsageUsed": "Utilisé",
+  "contextUsageWindow": "Fenêtre de contexte",
+  "contextUsageFilled": "Rempli",
+  "contextUsageTokens": "{count} tokens",
+  "@contextUsageTokens": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern",
+        "example": "32768"
+      }
+    }
+  },
+  "contextUsageAboutTokens": "Environ {count} tokens",
+  "@contextUsageAboutTokens": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern",
+        "example": "12345"
+      }
+    }
+  },
+  "contextUsageLastPrompt": "Dernier prompt",
+  "contextUsageLastReply": "Dernière réponse",
+  "contextUsageWindowNotSet": "Non définie",
+  "contextUsageSourceModel": "Selon les réglages du modèle",
+  "contextUsageSourceUser": "Définie par vous",
+  "contextUsageSourceDirectDefault": "Valeur par défaut des connexions directes",
+  "contextUsageEstimateNote": "Estimation à partir du texte des messages, environ 4 caractères par token. Le prompt système et les définitions d'outils ne sont pas comptés, le chiffre réel est donc plus élevé.",
+  "contextUsageReportedNote": "Le nombre de tokens indiqué par le serveur pour la dernière réponse.",
+  "contextUsagePickerDescription": "Le nombre de tokens que le modèle peut lire en une fois. Utilisez la longueur de contexte avec laquelle votre serveur le charge.",
+  "contextUsageSetWindow": "Définir",
   "usageSecondsFormat": "{seconds}s",
   "@usageSecondsFormat": {
     "placeholders": {
@@ -3455,6 +3499,8 @@
   "backendChooserSelfHostedSectionTitle": "Services auto-hébergés",
   "citationShowTitles": "Afficher les titres des pages citées",
   "citationShowTitlesDescription": "Utiliser les titres de page plutôt que les domaines dans les badges de citation",
+  "showContextUsage": "Afficher l’utilisation du contexte",
+  "showContextUsageDescription": "Afficher dans la barre du chat un anneau indiquant la part du contexte du modèle utilisée",
   "directContextCompactionDescription": "Ces modèles n'indiquent pas de fenêtre de contexte. Conduit utilise la limite sélectionnée pour compacter les anciens messages avant que les requêtes ne deviennent trop volumineuses.",
   "directContextCompactionPickerDescription": "Choisissez la fenêtre de contexte que Conduit doit utiliser pour le compactage automatique.",
   "directContextCompactionTitle": "Compactage du contexte",

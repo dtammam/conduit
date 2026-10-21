@@ -981,6 +981,50 @@
       }
     }
   },
+  "contextUsageTitle": "Контекст",
+  "contextUsageRingLabel": "Заполнение контекста: {percent}",
+  "@contextUsageRingLabel": {
+    "placeholders": {
+      "percent": {
+        "type": "String",
+        "example": "42%"
+      }
+    }
+  },
+  "contextUsageRingUnknownLabel": "Заполнение контекста. Окно контекста не задано",
+  "contextUsageUsed": "Занято",
+  "contextUsageWindow": "Окно контекста",
+  "contextUsageFilled": "Заполнено",
+  "contextUsageTokens": "{count, plural, one{{count} токен} few{{count} токена} many{{count} токенов} other{{count} токена}}",
+  "@contextUsageTokens": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern",
+        "example": "32768"
+      }
+    }
+  },
+  "contextUsageAboutTokens": "{count, plural, one{Около {count} токена} other{Около {count} токенов}}",
+  "@contextUsageAboutTokens": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern",
+        "example": "12345"
+      }
+    }
+  },
+  "contextUsageLastPrompt": "Последний промпт",
+  "contextUsageLastReply": "Последний ответ",
+  "contextUsageWindowNotSet": "Не задано",
+  "contextUsageSourceModel": "Из настроек модели",
+  "contextUsageSourceUser": "Задано вами",
+  "contextUsageSourceDirectDefault": "Значение прямых подключений по умолчанию",
+  "contextUsageEstimateNote": "Оценка по тексту сообщений, примерно 4 символа на токен. Системный промпт и описания инструментов не учтены, поэтому реальное значение выше.",
+  "contextUsageReportedNote": "Число токенов последнего ответа по данным сервера.",
+  "contextUsagePickerDescription": "Сколько токенов модель может прочитать за раз. Укажите длину контекста, с которой её загружает ваш сервер.",
+  "contextUsageSetWindow": "Задать",
   "usageSecondsFormat": "{seconds}с",
   "@usageSecondsFormat": {
     "placeholders": {
@@ -3501,6 +3545,8 @@
   "directApiKeyHeaderAzureOnlyDescription": "Отправляет учётные данные в заголовке api-key. Используйте только для Azure OpenAI; другие OpenAI-совместимые серверы ожидают токен Bearer.",
   "citationShowTitles": "Показывать заголовки страниц в источниках",
   "citationShowTitlesDescription": "Использовать заголовки страниц вместо доменов сайтов в значках источников",
+  "showContextUsage": "Показывать заполнение контекста",
+  "showContextUsageDescription": "Показывать в панели чата кольцо с долей занятого контекста модели",
   "notificationSystemSettingsDescription": "Измените разрешения, звук и параметры баннеров для Conduit.",
   "notificationSystemSettingsOpenFailed": "Не удалось открыть системные настройки уведомлений.",
   "notificationTargetsTitle": "Адреса webhook",

@@ -224,6 +224,7 @@ AdaptiveAppBar buildConduitCenteredAdaptiveAppBar({
   required Widget title,
   required List<Widget> actions,
   Widget? cupertinoTrailing,
+  Widget? leadingAccessory,
   bool centerTitle = true,
 }) {
   final textScaler = MediaQuery.textScalerOf(context);
@@ -234,12 +235,28 @@ AdaptiveAppBar buildConduitCenteredAdaptiveAppBar({
   Widget scaled(Widget child) =>
       ConduitSystemTextScaling(textScaler: textScaler, child: child);
 
+  // An optional control-sized accessory follows the leading button with the
+  // trailing buttons' gap, centered on the same line.
+  final leadingGroup = leadingAccessory == null
+      ? leading
+      : Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            leading,
+            const SizedBox(width: Spacing.sm),
+            leadingAccessory,
+          ],
+        );
+  final leadingGroupWidth = leadingAccessory == null
+      ? controlExtent
+      : controlExtent * 2 + Spacing.sm;
+
   return AdaptiveAppBar(
     useNativeToolbar: false,
     tintColor: tintColor,
     cupertinoNavigationBar: ConduitAdaptiveCupertinoNavigationBar(
       textScaler: textScaler,
-      leading: leading,
+      leading: leadingGroup,
       middle: title,
       centerMiddle: centerTitle,
       trailing:
@@ -260,12 +277,12 @@ AdaptiveAppBar buildConduitCenteredAdaptiveAppBar({
       systemOverlayStyle: overlayStyle,
       centerTitle: centerTitle,
       titleSpacing: Spacing.sm,
-      leadingWidth: controlExtent + Spacing.inputPadding,
+      leadingWidth: leadingGroupWidth + Spacing.inputPadding,
       leading: Padding(
         padding: const EdgeInsetsDirectional.only(start: Spacing.inputPadding),
         child: Align(
           alignment: AlignmentDirectional.centerStart,
-          child: scaled(leading),
+          child: scaled(leadingGroup),
         ),
       ),
       title: scaled(title),

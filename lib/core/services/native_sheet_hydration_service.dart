@@ -1581,6 +1581,14 @@ class NativeSheetHydrationService {
         kind: NativeSheetItemKind.toggle,
         value: appSettings.citationShowTitles,
       ),
+      NativeSheetItemConfig(
+        id: nativeShowContextUsageId,
+        title: l10n.showContextUsage,
+        subtitle: l10n.showContextUsageDescription,
+        sfSymbol: 'chart.pie',
+        kind: NativeSheetItemKind.toggle,
+        value: appSettings.showContextUsage,
+      ),
     ];
   }
 

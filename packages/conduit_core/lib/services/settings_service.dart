@@ -288,6 +288,7 @@ class SettingsService {
       _animationSpeedKey: settings.animationSpeed,
       _disableHapticsWhileStreamingKey: settings.disableHapticsWhileStreaming,
       PreferenceKeys.citationShowTitles: settings.citationShowTitles,
+      PreferenceKeys.showContextUsage: settings.showContextUsage,
       _highContrastKey: settings.highContrast,
       _darkModeKey: settings.darkMode,
       _voiceHoldToTalkKey: settings.voiceHoldToTalk,
@@ -735,6 +736,7 @@ class SettingsService {
       citationShowTitles:
           get<bool>(PreferenceKeys.citationShowTitles) ??
           false,
+      showContextUsage: get<bool>(PreferenceKeys.showContextUsage) ?? false,
       highContrast: get<bool>(_highContrastKey) ?? false,
       darkMode: get<bool>(_darkModeKey) ?? true,
       defaultModel: get<String>(_defaultModelKey),
@@ -855,6 +857,10 @@ class AppSettings {
   final double animationSpeed;
   final bool disableHapticsWhileStreaming;
   final bool citationShowTitles;
+
+  /// Whether the chat app bar shows a ring for how much of the model's
+  /// context window the conversation uses.
+  final bool showContextUsage;
   final bool highContrast;
   final bool darkMode;
   final String? defaultModel;
@@ -907,6 +913,7 @@ class AppSettings {
     this.animationSpeed = 1.0,
     this.disableHapticsWhileStreaming = false,
     this.citationShowTitles = false,
+    this.showContextUsage = false,
     this.highContrast = false,
     this.darkMode = true,
     this.defaultModel,
@@ -954,6 +961,7 @@ class AppSettings {
     double? animationSpeed,
     bool? disableHapticsWhileStreaming,
     bool? citationShowTitles,
+    bool? showContextUsage,
     bool? highContrast,
     bool? darkMode,
     Object? defaultModel = const _DefaultValue(),
@@ -1001,6 +1009,7 @@ class AppSettings {
       disableHapticsWhileStreaming:
           disableHapticsWhileStreaming ?? this.disableHapticsWhileStreaming,
       citationShowTitles: citationShowTitles ?? this.citationShowTitles,
+      showContextUsage: showContextUsage ?? this.showContextUsage,
       highContrast: highContrast ?? this.highContrast,
       darkMode: darkMode ?? this.darkMode,
       defaultModel: defaultModel is _DefaultValue
@@ -1079,6 +1088,7 @@ class AppSettings {
         other.animationSpeed == animationSpeed &&
         other.disableHapticsWhileStreaming == disableHapticsWhileStreaming &&
         other.citationShowTitles == citationShowTitles &&
+        other.showContextUsage == showContextUsage &&
         other.highContrast == highContrast &&
         other.darkMode == darkMode &&
         other.defaultModel == defaultModel &&
@@ -1129,6 +1139,7 @@ class AppSettings {
       animationSpeed,
       disableHapticsWhileStreaming,
       citationShowTitles,
+      showContextUsage,
       highContrast,
       darkMode,
       defaultModel,
@@ -1236,6 +1247,14 @@ class AppSettingsNotifier extends _$AppSettingsNotifier {
     state = state.copyWith(citationShowTitles: value);
     await SettingsService._putPreference(
       PreferenceKeys.citationShowTitles,
+      value,
+    );
+  }
+
+  Future<void> setShowContextUsage(bool value) async {
+    state = state.copyWith(showContextUsage: value);
+    await SettingsService._putPreference(
+      PreferenceKeys.showContextUsage,
       value,
     );
   }

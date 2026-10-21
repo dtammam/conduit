@@ -590,6 +590,9 @@ const nativeAdvancedFeaturesId = 'advanced-features';
 /// page.
 const nativeCitationShowTitlesId = 'citation-show-titles';
 
+/// Control id of the "Show context usage" toggle in the native Chats page.
+const nativeShowContextUsageId = 'show-context-usage';
+
 /// Control id the accountless "Connect to Open WebUI" root row sends.
 const nativeConnectOpenWebUiActionId = 'add-owui-server';
 

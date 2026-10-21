@@ -1391,6 +1391,98 @@
       }
     }
   },
+  "contextUsageTitle": "Kontekst",
+  "@contextUsageTitle": {
+    "description": "Title of the sheet opened from the chat app bar's context usage ring."
+  },
+  "contextUsageRingLabel": "Wykorzystanie kontekstu: {percent}",
+  "@contextUsageRingLabel": {
+    "description": "Screen reader label of the context usage ring; percent is the share of the model's context window in use, already formatted.",
+    "placeholders": {
+      "percent": {
+        "type": "String",
+        "example": "42%"
+      }
+    }
+  },
+  "contextUsageRingUnknownLabel": "Wykorzystanie kontekstu. Okno kontekstu nie jest ustawione",
+  "@contextUsageRingUnknownLabel": {
+    "description": "Screen reader label of the context usage ring when the model's context window is not known."
+  },
+  "contextUsageUsed": "Zajęte",
+  "@contextUsageUsed": {
+    "description": "Row label: tokens the conversation uses."
+  },
+  "contextUsageWindow": "Okno kontekstu",
+  "@contextUsageWindow": {
+    "description": "Row label and picker title: the model's context window size."
+  },
+  "contextUsageFilled": "Wypełnienie",
+  "@contextUsageFilled": {
+    "description": "Row label: share of the context window in use, as a percentage."
+  },
+  "contextUsageTokens": "{count, plural, one{{count} token} few{{count} tokeny} many{{count} tokenów} other{{count} tokena}}",
+  "@contextUsageTokens": {
+    "description": "A token count, already grouped by locale.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern",
+        "example": "32768"
+      }
+    }
+  },
+  "contextUsageAboutTokens": "{count, plural, one{Około {count} tokenu} other{Około {count} tokenów}}",
+  "@contextUsageAboutTokens": {
+    "description": "An estimated token count, already grouped by locale.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern",
+        "example": "12345"
+      }
+    }
+  },
+  "contextUsageLastPrompt": "Ostatni prompt",
+  "@contextUsageLastPrompt": {
+    "description": "Row label: prompt tokens of the latest reply."
+  },
+  "contextUsageLastReply": "Ostatnia odpowiedź",
+  "@contextUsageLastReply": {
+    "description": "Row label: completion tokens of the latest reply."
+  },
+  "contextUsageWindowNotSet": "Nie ustawiono",
+  "@contextUsageWindowNotSet": {
+    "description": "Shown when no context window is known for the model."
+  },
+  "contextUsageSourceModel": "Z ustawień modelu",
+  "@contextUsageSourceModel": {
+    "description": "Under the context window: the figure comes from the model's metadata on the server."
+  },
+  "contextUsageSourceUser": "Ustawione przez Ciebie",
+  "@contextUsageSourceUser": {
+    "description": "Under the context window: the person set the figure in this app."
+  },
+  "contextUsageSourceDirectDefault": "Domyślna wartość połączeń bezpośrednich",
+  "@contextUsageSourceDirectDefault": {
+    "description": "Under the context window: the default Direct Connections compaction uses when nothing is set."
+  },
+  "contextUsageEstimateNote": "Szacunek na podstawie tekstu wiadomości, około 4 znaki na token. Prompt systemowy i definicje narzędzi nie są liczone, więc rzeczywista wartość jest wyższa.",
+  "@contextUsageEstimateNote": {
+    "description": "Footnote when the token count is estimated from the message text."
+  },
+  "contextUsageReportedNote": "Liczba tokenów ostatniej odpowiedzi według serwera.",
+  "@contextUsageReportedNote": {
+    "description": "Footnote when the token count comes from the server's usage report."
+  },
+  "contextUsagePickerDescription": "Ile tokenów model może przeczytać naraz. Podaj długość kontekstu, z jaką serwer go wczytuje.",
+  "@contextUsagePickerDescription": {
+    "description": "Description at the top of the context window picker."
+  },
+  "contextUsageSetWindow": "Ustaw",
+  "@contextUsageSetWindow": {
+    "description": "Button that sets a context window when none is known."
+  },
   "usageSecondsFormat": "{seconds}s",
   "@usageSecondsFormat": {
     "description": "Seconds duration format",
@@ -1756,6 +1848,14 @@
   "citationShowTitlesDescription": "Używaj tytułów stron zamiast domen w odznakach cytowań",
   "@citationShowTitlesDescription": {
     "description": "Subtitle for the citation page titles toggle."
+  },
+  "showContextUsage": "Pokazuj użycie kontekstu",
+  "@showContextUsage": {
+    "description": "Toggle title for showing the context usage ring in the chat app bar."
+  },
+  "showContextUsageDescription": "Pokazuj na pasku czatu pierścień z tym, ile kontekstu modelu jest zajęte",
+  "@showContextUsageDescription": {
+    "description": "Subtitle for the context usage ring toggle."
   },
   "androidAssistantTitle": "Asystent systemu Android",
   "@androidAssistantTitle": {

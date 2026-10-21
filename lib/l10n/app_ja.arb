@@ -1158,6 +1158,50 @@
       }
     }
   },
+  "contextUsageTitle": "コンテキスト",
+  "contextUsageRingLabel": "コンテキスト使用量: {percent}",
+  "@contextUsageRingLabel": {
+    "placeholders": {
+      "percent": {
+        "type": "String",
+        "example": "42%"
+      }
+    }
+  },
+  "contextUsageRingUnknownLabel": "コンテキスト使用量。コンテキストウィンドウ未設定",
+  "contextUsageUsed": "使用中",
+  "contextUsageWindow": "コンテキストウィンドウ",
+  "contextUsageFilled": "使用率",
+  "contextUsageTokens": "{count} トークン",
+  "@contextUsageTokens": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern",
+        "example": "32768"
+      }
+    }
+  },
+  "contextUsageAboutTokens": "約 {count} トークン",
+  "@contextUsageAboutTokens": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern",
+        "example": "12345"
+      }
+    }
+  },
+  "contextUsageLastPrompt": "直近のプロンプト",
+  "contextUsageLastReply": "直近の返答",
+  "contextUsageWindowNotSet": "未設定",
+  "contextUsageSourceModel": "モデルの設定から",
+  "contextUsageSourceUser": "自分で設定",
+  "contextUsageSourceDirectDefault": "ダイレクト接続の既定値",
+  "contextUsageEstimateNote": "メッセージ本文から 1 トークンあたり約 4 文字で推定しています。システムプロンプトとツール定義は含まれないため、実際の値はこれより大きくなります。",
+  "contextUsageReportedNote": "最新の返答についてサーバーが報告したトークン数です。",
+  "contextUsagePickerDescription": "モデルが一度に読めるトークン数です。サーバーがモデルを読み込むときのコンテキスト長を指定してください。",
+  "contextUsageSetWindow": "設定",
   "usageSecondsFormat": "{seconds}秒",
   "@usageSecondsFormat": {
     "description": "Seconds duration format",
@@ -5058,6 +5102,8 @@
   "backendChooserSelfHostedSectionTitle": "セルフホストのサービス",
   "citationShowTitles": "引用にページタイトルを表示",
   "citationShowTitlesDescription": "引用バッジにサイトのドメインではなくページタイトルを使用します",
+  "showContextUsage": "コンテキスト使用量を表示",
+  "showContextUsageDescription": "チャットのバーに、モデルのコンテキストの使用量を示すリングを表示します",
   "directContextCompactionDescription": "これらのモデルはコンテキストウィンドウを報告しません。Conduit はリクエストが大きくなりすぎる前に、選択した上限を使って古いメッセージを圧縮します。",
   "directContextCompactionPickerDescription": "Conduit が自動圧縮に使用するコンテキストウィンドウを選択してください。",
   "directContextCompactionTitle": "コンテキストの圧縮",

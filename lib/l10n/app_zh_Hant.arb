@@ -975,6 +975,50 @@
       }
     }
   },
+  "contextUsageTitle": "上下文",
+  "contextUsageRingLabel": "上下文用量：{percent}",
+  "@contextUsageRingLabel": {
+    "placeholders": {
+      "percent": {
+        "type": "String",
+        "example": "42%"
+      }
+    }
+  },
+  "contextUsageRingUnknownLabel": "上下文用量。未設定上下文視窗",
+  "contextUsageUsed": "已用",
+  "contextUsageWindow": "上下文視窗",
+  "contextUsageFilled": "已填滿",
+  "contextUsageTokens": "{count} 個 token",
+  "@contextUsageTokens": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern",
+        "example": "32768"
+      }
+    }
+  },
+  "contextUsageAboutTokens": "約 {count} 個 token",
+  "@contextUsageAboutTokens": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern",
+        "example": "12345"
+      }
+    }
+  },
+  "contextUsageLastPrompt": "上次提示",
+  "contextUsageLastReply": "上次回覆",
+  "contextUsageWindowNotSet": "未設定",
+  "contextUsageSourceModel": "來自模型設定",
+  "contextUsageSourceUser": "由你設定",
+  "contextUsageSourceDirectDefault": "直接連線的預設值",
+  "contextUsageEstimateNote": "依訊息文字估算，約每 4 個字元一個 token。系統提示與工具定義未計入，實際數值更高。",
+  "contextUsageReportedNote": "伺服器為最新回覆回報的 token 數。",
+  "contextUsagePickerDescription": "模型一次能讀取的 token 數。請使用伺服器載入該模型時的上下文長度。",
+  "contextUsageSetWindow": "設定",
   "usageSecondsFormat": "{seconds}秒",
   "@usageSecondsFormat": {
     "placeholders": {
@@ -3455,6 +3499,8 @@
   "backendChooserSelfHostedSectionTitle": "自行架設的服務",
   "citationShowTitles": "顯示引用頁面標題",
   "citationShowTitlesDescription": "在引用標記中使用頁面標題，而非網站網域",
+  "showContextUsage": "顯示上下文用量",
+  "showContextUsageDescription": "在聊天列中以圓環顯示模型上下文的使用量",
   "directContextCompactionDescription": "這些模型不會回報上下文視窗。Conduit 會在請求過大之前，使用所選上限壓縮較早的訊息。",
   "directContextCompactionPickerDescription": "選擇 Conduit 用於自動壓縮的上下文視窗。",
   "directContextCompactionTitle": "上下文壓縮",
