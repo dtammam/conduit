@@ -46,6 +46,7 @@ final _operations = <String, _Operation>{
   'remove': (tasks, owner) => tasks.remove('a', owner: owner),
   'runs': (tasks, owner) => tasks.runs('a', owner: owner),
   'channel': (tasks, owner) => tasks.channelWritable('c', owner: owner),
+  'upcoming': (tasks, owner) => tasks.activeTasksWithUpcomingRuns(owner: owner),
 };
 
 void main() {
@@ -305,6 +306,63 @@ void main() {
       check(tasks.isCurrentOwner(owner)).isFalse();
       check(session.server.requests.where((r) => r.method == 'POST')).length
           .equals(1);
+    });
+  });
+
+  group('active tasks with upcoming runs', () {
+    test('reads every active page, then each task once, soonest first, up to '
+        'the limit', () async {
+      final session = await _Session.start(
+        configure: (s) {
+          s.server.tasks = [
+            _task('late')
+              ..['next_run_at'] = 1791400000000000000
+              // The list route leaves next_runs out.
+              ..remove('next_runs'),
+            _task('soon')
+              ..['next_run_at'] = 1791300000000000000
+              // The list route leaves next_runs out.
+              ..remove('next_runs'),
+            _task('middle')
+              ..['next_run_at'] = 1791350000000000000
+              // The list route leaves next_runs out.
+              ..remove('next_runs'),
+          ];
+          s.server.pageSize = 2;
+          s.server.total = 3;
+        },
+      );
+      addTearDown(session.dispose);
+      final shown = await session.container.read(automationsProvider.future);
+      final tasks = session.container.read(automationsProvider.notifier);
+      final owner = tasks.captureOwner()!;
+      session.server.requests.clear();
+
+      final upcoming = await tasks.activeTasksWithUpcomingRuns(
+        owner: owner,
+        maxTasks: 2,
+      );
+
+      check(upcoming.map((t) => t.id)).deepEquals(['soon', 'middle']);
+      final lists = session.server.requests.where(
+        (r) => r.uri.path.endsWith('/list'),
+      );
+      check(lists.map((r) => r.uri.queryParameters['page']))
+          .deepEquals(['1', '2']);
+      check(lists.map((r) => r.uri.queryParameters['status']).toSet())
+          .deepEquals({'active'});
+      check(
+        session.server.requests
+            .where((r) => !r.uri.path.endsWith('/list'))
+            .map((r) => r.uri.path.split('/').last),
+      ).deepEquals(['soon', 'middle']);
+      // The list the Scheduled tasks screen shows is left alone.
+      check(
+        identical(
+          session.container.read(automationsProvider).requireValue,
+          shown,
+        ),
+      ).isTrue();
     });
   });
 

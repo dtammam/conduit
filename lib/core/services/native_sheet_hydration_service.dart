@@ -9,6 +9,8 @@ import 'package:uuid/uuid.dart';
 import 'package:conduit_core/features/tools/providers/tools_providers.dart';
 
 import '../../features/chat/providers/text_to_speech_provider.dart';
+import '../../features/notifications/providers/scheduled_task_reminders_provider.dart'
+    show scheduledTaskRemindersSupportedProvider;
 
 import 'package:conduit_core/features/chat/models/model_selector_layout.dart';
 import 'package:conduit_core/features/chat/providers/chat_providers.dart'
@@ -31,7 +33,7 @@ import 'package:conduit_core/providers/app_providers.dart';
 import 'package:conduit_core/features/hermes/providers/hermes_providers.dart';
 import 'package:conduit_core/features/hermes/models/hermes_model.dart';
 import 'package:conduit_core/features/automations/providers/automation_providers.dart'
-    show scheduledTasksEntryVisibleProvider;
+    show automationsAvailableProvider, scheduledTasksEntryVisibleProvider;
 import 'package:conduit_core/features/auth/providers/unified_auth_providers.dart'
     show currentUserProvider2;
 import 'package:conduit_core/features/calendar/providers/calendar_providers.dart'
@@ -1132,6 +1134,18 @@ class NativeSheetHydrationService {
             : NativeSheetItemKind.info,
         value: s.notificationChannelEnabled,
       ),
+      if (_ref.read(scheduledTaskRemindersSupportedProvider) &&
+          _ref.read(automationsAvailableProvider))
+        NativeSheetItemConfig(
+          id: 'notification-scheduled-task-reminders',
+          title: l10n.notificationScheduledTaskRemindersTitle,
+          subtitle: l10n.notificationScheduledTaskRemindersDescription,
+          sfSymbol: 'clock.badge',
+          kind: s.notificationsEnabled
+              ? NativeSheetItemKind.toggle
+              : NativeSheetItemKind.info,
+          value: s.notificationScheduledTaskReminders,
+        ),
     ];
     return [
       NativeSheetSectionConfig(items: [masterItem]),

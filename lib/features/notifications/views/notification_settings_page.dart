@@ -4,6 +4,7 @@ import 'package:conduit/shared/widgets/platform_ui/platform_ui.dart';
 import 'package:cupertino_ui/cupertino_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:conduit_core/features/automations/providers/automation_providers.dart';
 import 'package:conduit_core/providers/app_providers.dart';
 
 import 'package:conduit_core/services/settings_service.dart';
@@ -13,6 +14,7 @@ import 'package:conduit_core/utils/debug_logger.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../profile/widgets/settings_page_scaffold.dart';
 import '../../../shared/widgets/utility_components.dart';
+import '../providers/scheduled_task_reminders_provider.dart';
 import '../services/local_notification_service.dart';
 import '../widgets/notification_targets_section.dart';
 
@@ -30,6 +32,11 @@ class NotificationSettingsPage extends ConsumerWidget {
     final settings = ref.watch(appSettingsProvider);
     final notifier = ref.read(appSettingsProvider.notifier);
     final enabled = settings.notificationsEnabled;
+    // Reminders are offered where the device can schedule them and the
+    // account can use scheduled tasks.
+    final remindersOffered =
+        ref.watch(scheduledTaskRemindersSupportedProvider) &&
+        ref.watch(automationsAvailableProvider);
 
     Widget tile({
       required String title,
@@ -117,6 +124,13 @@ class NotificationSettingsPage extends ConsumerWidget {
               value: settings.notificationChannelEnabled,
               onChanged: notifier.setNotificationChannelEnabled,
             ),
+            if (remindersOffered)
+              tile(
+                title: l10n.notificationScheduledTaskRemindersTitle,
+                subtitle: l10n.notificationScheduledTaskRemindersDescription,
+                value: settings.notificationScheduledTaskReminders,
+                onChanged: (value) => _setReminders(context, ref, value),
+              ),
           ],
         ),
         const NotificationTargetsSection(),
@@ -158,6 +172,35 @@ class NotificationSettingsPage extends ConsumerWidget {
         );
       }
     }
+  }
+
+  /// Turning reminders on asks for notification permission if it is not
+  /// granted yet, then schedules them; turning them off cancels them all.
+  Future<void> _setReminders(
+    BuildContext context,
+    WidgetRef ref,
+    bool value,
+  ) async {
+    await ref
+        .read(appSettingsProvider.notifier)
+        .setNotificationScheduledTaskReminders(value);
+    if (value) {
+      final granted = await ref
+          .read(localNotificationServiceProvider)
+          .requestPermissions();
+      if (!granted) {
+        if (context.mounted) {
+          AdaptiveSnackBar.show(
+            context,
+            message: AppLocalizations.of(context)!
+                .notificationsPermissionDenied,
+            type: AdaptiveSnackBarType.warning,
+          );
+        }
+        return;
+      }
+    }
+    await ref.read(scheduledTaskRemindersProvider).syncNow();
   }
 
   Future<void> _setSound(WidgetRef ref, bool value) async {

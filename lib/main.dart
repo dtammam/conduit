@@ -157,6 +157,8 @@ import 'package:conduit/l10n/app_localizations.dart';
 
 import 'platform/quick_actions_service.dart';
 import 'core/providers/app_startup_providers.dart';
+import 'features/notifications/providers/scheduled_task_reminders_provider.dart'
+    show scheduledTaskRemindersProvider;
 import 'features/notifications/services/local_notification_service.dart';
 import 'shared/widgets/sign_out_options_dialog.dart';
 import 'shared/theme/theme_extensions.dart';
@@ -1283,6 +1285,21 @@ class _ConduitAppState extends ConsumerState<ConduitApp> {
             await ref
                 .read(appSettingsProvider.notifier)
                 .setNotificationChannelEnabled(value);
+          }
+        case 'notification-scheduled-task-reminders':
+          if (value is bool) {
+            await ref
+                .read(appSettingsProvider.notifier)
+                .setNotificationScheduledTaskReminders(value);
+            // Ask for permission on opt-in, then schedule; off cancels them.
+            final granted =
+                !value ||
+                await ref
+                    .read(localNotificationServiceProvider)
+                    .requestPermissions();
+            if (granted) {
+              await ref.read(scheduledTaskRemindersProvider).syncNow();
+            }
           }
         case 'transport-auto':
           await ref

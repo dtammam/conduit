@@ -24,6 +24,8 @@ import 'package:conduit_core/features/notifications/models/app_notification.dart
 import 'package:conduit_core/features/notifications/services/active_view_tracker.dart';
 
 import '../services/local_notification_service.dart';
+import '../services/scheduled_task_reminders.dart';
+import 'scheduled_task_reminders_provider.dart';
 
 import 'package:conduit_core/features/notifications/services/notification_event_classifier.dart';
 
@@ -128,6 +130,38 @@ Future<void> _handleTap(Ref ref, NotificationTap tap) async {
   }
 }
 
+/// Opens what a scheduled task reminder points at: the chat or channel of the
+/// task's run when the server has recorded it, otherwise the task itself.
+Future<void> _handleReminderTap(Ref ref, ScheduledTaskReminderTap tap) async {
+  try {
+    await routeScheduledTaskReminderTap(
+      tap,
+      fetchTask: (id) => fetchScheduledTaskForReminder(ref, id),
+      openChat: (chatId) => _handleTap(
+        ref,
+        NotificationTap(
+          kind: NotificationKind.chatCompletion,
+          sourceId: chatId,
+        ),
+      ),
+      openChannel: NavigationService.navigateToChannel,
+      openTask: (id) => unawaited(
+        NavigationService.router.pushNamed<void>(
+          RouteNames.scheduledTaskDetail,
+          pathParameters: {'id': id},
+        ),
+      ),
+    );
+  } catch (e, st) {
+    DebugLogger.error(
+      'reminder deep-link failed',
+      error: e,
+      stackTrace: st,
+      scope: 'notifications/reminders',
+    );
+  }
+}
+
 /// Single global subscriber that turns socket events into notifications.
 ///
 /// Mirrors `ActiveChatsSync._bindSocket`: one chat handler + one channel
@@ -141,6 +175,7 @@ class NotificationSocketListener extends _$NotificationSocketListener {
   SocketEventSubscription? _channelSub;
   StreamSubscription<void>? _reconnectSub;
   StreamSubscription<NotificationTap>? _tapSub;
+  StreamSubscription<ScheduledTaskReminderTap>? _reminderTapSub;
   SocketService? _boundSocket;
 
   @override
@@ -150,6 +185,7 @@ class NotificationSocketListener extends _$NotificationSocketListener {
       _channelSub?.dispose();
       _reconnectSub?.cancel();
       _tapSub?.cancel();
+      _reminderTapSub?.cancel();
     });
 
     final local = ref.read(localNotificationServiceProvider);
@@ -160,6 +196,9 @@ class NotificationSocketListener extends _$NotificationSocketListener {
     // System-notification taps (foreground) route to the target.
     _tapSub = local.taps.listen((tap) {
       unawaited(_handleTap(ref, tap));
+    });
+    _reminderTapSub = local.reminderTaps.listen((tap) {
+      unawaited(_handleReminderTap(ref, tap));
     });
 
     _bindSocket(ref.read(socketServiceProvider));
@@ -180,6 +219,11 @@ class NotificationSocketListener extends _$NotificationSocketListener {
     final tap = await local.launchTap();
     if (tap != null) {
       await _handleTap(ref, tap);
+      return;
+    }
+    final reminder = await local.launchReminderTap();
+    if (reminder != null) {
+      await _handleReminderTap(ref, reminder);
     }
   }
 
@@ -286,11 +330,43 @@ class NotificationSocketListener extends _$NotificationSocketListener {
     }
   }
 
+  /// A reply the socket just alerted for may be a scheduled task's, whose
+  /// reminder is still pending; the reminders cancel it so one run alerts
+  /// once.
+  void _noteReminderAlert(AppNotification notification) {
+    if (!ref.read(appSettingsProvider).notificationScheduledTaskReminders) {
+      return;
+    }
+    unawaited(
+      ref
+          .read(scheduledTaskRemindersProvider)
+          .onSocketAlert(
+            notification,
+            fetchTask: (id) => fetchScheduledTaskForReminder(ref, id),
+          )
+          .catchError((Object e, StackTrace st) {
+            DebugLogger.error(
+              'reminder alert match failed',
+              error: e,
+              stackTrace: st,
+              scope: 'notifications/reminders',
+            );
+          }),
+    );
+  }
+
   void _route(AppNotification notification, {bool alert = true}) {
     unawaited(
       ref
           .read(notificationRouterProvider)
           .route(notification, alert: alert)
+          .then((surface) {
+            if (surface == NotificationSurface.banner ||
+                surface == NotificationSurface.system) {
+              _noteReminderAlert(notification);
+            }
+            return surface;
+          })
           .catchError((Object e, StackTrace st) {
             DebugLogger.error(
               'notification routing failed',
