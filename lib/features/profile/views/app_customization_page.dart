@@ -529,6 +529,29 @@ class AppCustomizationPage extends ConsumerWidget {
                 !settings.quickReplyReactionsEnabled,
               ),
         ),
+        const SizedBox(height: Spacing.sm),
+        CustomizationTile(
+          leading: _buildIconBadge(
+            context,
+            Platform.isIOS
+                ? CupertinoIcons.person_crop_circle
+                : Icons.account_circle_outlined,
+            color: theme.buttonPrimary,
+          ),
+          title: l10n.assistantAvatar,
+          subtitle: l10n.assistantAvatarDescription,
+          toggled: settings.assistantAvatarEnabled,
+          trailing: AdaptiveSwitch(
+            value: settings.assistantAvatarEnabled,
+            onChanged: (value) => ref
+                .read(appSettingsProvider.notifier)
+                .setAssistantAvatarEnabled(value),
+          ),
+          showChevron: false,
+          onTap: () => ref
+              .read(appSettingsProvider.notifier)
+              .setAssistantAvatarEnabled(!settings.assistantAvatarEnabled),
+        ),
         if (Platform.isAndroid) ...[
           const SizedBox(height: Spacing.sm),
           CustomizationTile(

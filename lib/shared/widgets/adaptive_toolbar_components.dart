@@ -1,4 +1,5 @@
 import 'dart:io' show Platform;
+import 'dart:math' as math;
 
 import 'package:conduit/shared/widgets/platform_ui/platform_ui.dart';
 import 'package:cupertino_ui/cupertino_ui.dart';
@@ -271,6 +272,112 @@ AdaptiveAppBar buildConduitCenteredAdaptiveAppBar({
       title: scaled(title),
       actions: [for (final action in actions) scaled(action)],
     ),
+  );
+}
+
+/// Lays [overlay] over [base]'s toolbar, stacked above it and allowed to
+/// hang below it, and advertises [height] so the scaffold reserves the room.
+///
+/// A route uses this when something richer than a title belongs in the
+/// centre of the bar, such as the chat's assistant avatar: the base bar keeps
+/// its leading and trailing controls on the normal line and an empty title
+/// slot, the overlay's controls receive taps where the two overlap, and
+/// taps elsewhere fall through to the base bar. Material surfaces absorb
+/// hits, so an overlay placed in the body behind the bar would never see a
+/// tap inside the toolbar's band.
+AdaptiveAppBar wrapConduitAdaptiveAppBarWithOverlay({
+  required AdaptiveAppBar base,
+  required double height,
+  required Widget overlay,
+}) {
+  final appBar = base.appBar;
+  final cupertinoBar = base.cupertinoNavigationBar;
+  return base.copyWith(
+    appBar: appBar == null
+        ? null
+        : _ConduitOverlayAppBar(
+            base: appBar,
+            height: math.max(height, appBar.preferredSize.height),
+            overlay: overlay,
+          ),
+    cupertinoNavigationBar: cupertinoBar == null
+        ? null
+        : _ConduitOverlayCupertinoNavigationBar(
+            base: cupertinoBar,
+            height: math.max(height, cupertinoBar.preferredSize.height),
+            overlay: overlay,
+          ),
+  );
+}
+
+Widget _buildConduitOverlayBar(
+  BuildContext context, {
+  required Widget base,
+  required double height,
+  required Widget overlay,
+}) {
+  final topPadding = MediaQuery.paddingOf(context).top;
+  return SizedBox(
+    height: topPadding + height,
+    child: Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Positioned(top: 0, left: 0, right: 0, child: base),
+        Positioned(top: topPadding, left: 0, right: 0, child: overlay),
+      ],
+    ),
+  );
+}
+
+class _ConduitOverlayAppBar extends StatelessWidget
+    implements PreferredSizeWidget {
+  const _ConduitOverlayAppBar({
+    required this.base,
+    required this.height,
+    required this.overlay,
+  });
+
+  final PreferredSizeWidget base;
+  final double height;
+  final Widget overlay;
+
+  @override
+  Size get preferredSize => Size.fromHeight(height);
+
+  @override
+  Widget build(BuildContext context) => _buildConduitOverlayBar(
+    context,
+    base: base,
+    height: height,
+    overlay: overlay,
+  );
+}
+
+class _ConduitOverlayCupertinoNavigationBar extends StatelessWidget
+    implements ObstructingPreferredSizeWidget {
+  const _ConduitOverlayCupertinoNavigationBar({
+    required this.base,
+    required this.height,
+    required this.overlay,
+  });
+
+  final ObstructingPreferredSizeWidget base;
+  final double height;
+  final Widget overlay;
+
+  @override
+  Size get preferredSize => Size.fromHeight(height);
+
+  @override
+  bool shouldFullyObstruct(BuildContext context) =>
+      base.shouldFullyObstruct(context);
+
+  @override
+  Widget build(BuildContext context) => _buildConduitOverlayBar(
+    context,
+    base: base,
+    height: height,
+    overlay: overlay,
   );
 }
 

@@ -9,6 +9,7 @@ final class PreferenceKeys {
   static const String quickReplyReactionsEnabled =
       'quick_reply_reactions_enabled';
   static const String deliveryReceiptsEnabled = 'delivery_receipts_enabled';
+  static const String assistantAvatarEnabled = 'assistant_avatar_enabled';
   static const String highContrast = 'high_contrast';
   static const String darkMode = 'dark_mode';
   static const String defaultModel = 'default_model';

@@ -387,6 +387,7 @@ void main() {
         'citation-show-titles',
         'delivery-receipts',
         'quick-reply-reactions',
+        'assistant-avatar',
       ]);
     });
 

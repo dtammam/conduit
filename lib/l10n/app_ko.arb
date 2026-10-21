@@ -3245,6 +3245,19 @@
   "quickReplyTextNo": "아니요",
   "quickReplyTextConfirm": "네, 진행해 주세요.",
   "quickReplyTextCancel": "취소.",
+  "assistantAvatar": "어시스턴트 아바타",
+  "assistantAvatarDescription": "어시스턴트가 하는 일에 반응하는 아바타를 채팅 위에 표시합니다",
+  "assistantActivityIdle": "대기 중",
+  "assistantActivityWorking": "작업 중",
+  "assistantActivityMaking": "생성 중",
+  "assistantActivityDone": "완료",
+  "assistantAvatarMediaVideo": "동영상",
+  "assistantAvatarMediaImage": "이미지",
+  "assistantAvatarMediaNone": "없음",
+  "assistantAvatarChoose": "선택",
+  "assistantAvatarRemove": "제거",
+  "assistantAvatarEditLabel": "{name}, {state}",
+  "assistantAvatarPickFailed": "이 파일을 사용할 수 없습니다",
   "directContextCompactionDescription": "이 모델은 컨텍스트 창을 알려주지 않습니다. Conduit은 요청이 너무 커지기 전에 선택한 한도를 사용해 오래된 메시지를 압축합니다.",
   "directContextCompactionPickerDescription": "Conduit이 자동 압축에 사용할 컨텍스트 창을 선택하세요.",
   "directContextCompactionTitle": "컨텍스트 압축",
@@ -4025,5 +4038,6 @@
   "accountsRemoveAddressMessage": "Conduit이 더 이상 이 주소를 시도하지 않습니다. 계정은 로그인 상태로 유지됩니다.",
   "accountsAddressConfirmTitle": "이 주소를 확인할까요?",
   "accountsAddressConfirmMessage": "{host}이(가) 이 서버인지 확인하기 위해 Conduit이 이 기기에 저장된 계정의 세션을 해당 주소로 보냅니다. 이 주소를 신뢰하는 경우에만 계속하세요.",
-  "accountsAddressConfirmAction": "주소 확인"
+  "accountsAddressConfirmAction": "주소 확인",
+  "modelPickerHint": "모델 선택기를 엽니다"
 }

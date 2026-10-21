@@ -86,6 +86,7 @@ import '../widgets/openwebui_chat_settings_sheet.dart';
 import '../widgets/modern_chat_input.dart';
 import '../widgets/user_message_bubble.dart';
 import '../reactions/quick_reply_reactions.dart';
+import '../avatar/assistant_avatar_strip.dart';
 import '../widgets/assistant_message_widget.dart' as assistant;
 import '../widgets/file_attachment_widget.dart';
 import '../widgets/context_attachment_widget.dart';
@@ -1278,6 +1279,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     final topInset =
         MediaQuery.paddingOf(context).top +
         conduitAdaptiveToolbarHeightOf(context) +
+        _assistantAvatarInset +
         Spacing.md;
     _pinToTopEndSpaceExtent = math.max(
       0,
@@ -2934,6 +2936,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     final topPadding =
         MediaQuery.paddingOf(context).top +
         conduitAdaptiveToolbarHeightOf(context) +
+        _assistantAvatarInset +
         Spacing.md;
     final bottomPadding = _messageListBottomPadding();
     return CustomScrollView(
@@ -3021,6 +3024,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     final topPadding =
         MediaQuery.paddingOf(context).top +
         conduitAdaptiveToolbarHeightOf(context) +
+        _assistantAvatarInset +
         Spacing.md;
     final bottomPadding = _messageListBottomPadding();
 
@@ -3844,6 +3848,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     final topPadding =
         MediaQuery.paddingOf(context).top +
         conduitAdaptiveToolbarHeightOf(context) +
+        _assistantAvatarInset +
         Spacing.md;
     final bottomPadding = _messageListBottomPadding();
     return LayoutBuilder(
@@ -4228,6 +4233,23 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     final modelLabel =
         hermesBot?.title ?? formattedModelName ?? l10n.chooseModel;
     final overlayStyle = theme.appBarTheme.systemOverlayStyle;
+    final assistantAvatarEnabled = ref.watch(
+      appSettingsProvider.select((s) => s.assistantAvatarEnabled),
+    );
+    final toolbarHeight = conduitAdaptiveToolbarHeightOf(context);
+    // The strip takes the toolbar's title slot and hangs below the toolbar.
+    _assistantAvatarInset = assistantAvatarEnabled
+        ? AssistantAvatarStrip.insetBelowToolbar(toolbarHeight)
+        : 0;
+    final chromeTopHeight =
+        MediaQuery.viewPaddingOf(context).top + toolbarHeight;
+    // Hide the picker only for a true single-agent Hermes-only install. Mixed
+    // setups must retain a way to switch back to an OpenWebUI model.
+    final showModelDropdown = shouldShowChatModelDropdown(
+      selectedModel: selectedModel,
+      isHermesOnly: ref.watch(hermesOnlyModeProvider),
+      isHermesBot: hermesBot != null,
+    );
 
     // Whether the messages list can actually scroll (avoids showing button when not needed)
     final canScroll = _hasScrollableTranscriptContent();
@@ -4284,6 +4306,17 @@ class _ChatPageState extends ConsumerState<ChatPage> {
           isLoadingConversation: isLoadingConversation,
           modelLabel: modelLabel,
           hermesBot: hermesBot,
+          showModelDropdown: showModelDropdown,
+          avatarStrip: assistantAvatarEnabled
+              ? AssistantAvatarStrip(
+                  modelName: hermesBot?.title ?? formattedModelName,
+                  onNamePressed: showModelDropdown
+                      ? () => _openModelSelector(context)
+                      : null,
+                  onActivityPressed: _userScrollToBottom,
+                  isLoading: isLoadingConversation || _isOpeningModelSelector,
+                )
+              : null,
         ),
         body: GestureDetector(
           behavior: HitTestBehavior.translucent,
@@ -4304,9 +4337,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                 right: 0,
                 top: 0,
                 child: ConduitChromeGradientFade.top(
-                  contentHeight:
-                      MediaQuery.viewPaddingOf(context).top +
-                      conduitAdaptiveToolbarHeightOf(context),
+                  contentHeight: chromeTopHeight + _assistantAvatarInset,
                 ),
               ),
               Positioned(
@@ -4412,6 +4443,10 @@ class _ChatPageState extends ConsumerState<ChatPage> {
 
   bool _isOpeningModelSelector = false;
 
+  /// Height the optional assistant avatar strip takes under the app bar;
+  /// the message list and the pin-to-top math start below it.
+  double _assistantAvatarInset = 0;
+
   Future<void> _openModelSelector(BuildContext context) async {
     // Model loading can take a moment on a cold cache. Show that on the
     // selector itself and reject overlapping taps instead of letting the
@@ -4450,6 +4485,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     required bool isLoadingConversation,
     required String modelLabel,
     required HermesBotChatPresentation? hermesBot,
+    required bool showModelDropdown,
+    required Widget? avatarStrip,
   }) {
     final activeConversation = ref.watch(activeConversationProvider);
     final isTemporary = ref.watch(temporaryChatEnabledProvider);
@@ -4462,23 +4499,21 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       trailingActionCount: trailingActionCount,
       maxWidth: kConduitAdaptiveToolbarMaxModelSelectorWidth,
     );
-    // Hide the picker only for a true single-agent Hermes-only install. Mixed
-    // setups must retain a way to switch back to an OpenWebUI model.
     final selectedModel = ref.watch(selectedModelProvider);
-    final showModelDropdown = shouldShowChatModelDropdown(
-      selectedModel: selectedModel,
-      isHermesOnly: ref.watch(hermesOnlyModeProvider),
-      isHermesBot: hermesBot != null,
-    );
-    final title = _buildChatToolbarTitle(
-      context: context,
-      isLoadingConversation: isLoadingConversation,
-      modelLabel: modelLabel,
-      maxModelWidth: maxModelWidth,
-      showModelDropdown: showModelDropdown,
-      hermesBot: hermesBot,
-      hermesBotActive: hermesBot != null && ref.watch(isChatStreamingProvider),
-    );
+    // With the avatar strip on, the strip's pill is the model selector and
+    // the toolbar's title slot stays empty under the circle.
+    final title = avatarStrip != null
+        ? const SizedBox.shrink(key: ValueKey('chat-title-in-avatar-strip'))
+        : _buildChatToolbarTitle(
+            context: context,
+            isLoadingConversation: isLoadingConversation,
+            modelLabel: modelLabel,
+            maxModelWidth: maxModelWidth,
+            showModelDropdown: showModelDropdown,
+            hermesBot: hermesBot,
+            hermesBotActive:
+                hermesBot != null && ref.watch(isChatStreamingProvider),
+          );
     final actionDescriptors = _buildAdaptiveToolbarActions(
       context: context,
       activeConversation: activeConversation,
@@ -4504,7 +4539,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
             ],
           )
         : Row(mainAxisSize: MainAxisSize.min, children: actionWidgets);
-    return buildConduitCenteredAdaptiveAppBar(
+    final appBar = buildConduitCenteredAdaptiveAppBar(
       context: context,
       tintColor: tintColor,
       leading: ConduitAdaptiveAppBarIconButton(
@@ -4519,6 +4554,12 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       actions: actionWidgets,
       cupertinoTrailing: cupertinoTrailing,
       centerTitle: false,
+    );
+    if (avatarStrip == null) return appBar;
+    return wrapConduitAdaptiveAppBarWithOverlay(
+      base: appBar,
+      height: AssistantAvatarStrip.height,
+      overlay: avatarStrip,
     );
   }
 

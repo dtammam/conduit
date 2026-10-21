@@ -3467,6 +3467,19 @@
   "quickReplyTextNo": "Non",
   "quickReplyTextConfirm": "Oui, vas-y.",
   "quickReplyTextCancel": "Annuler.",
+  "assistantAvatar": "Avatar de l’assistant",
+  "assistantAvatarDescription": "Afficher au-dessus du chat un avatar qui réagit à ce que fait l’assistant",
+  "assistantActivityIdle": "Inactif",
+  "assistantActivityWorking": "Au travail",
+  "assistantActivityMaking": "Création",
+  "assistantActivityDone": "Terminé",
+  "assistantAvatarMediaVideo": "Vidéo",
+  "assistantAvatarMediaImage": "Image",
+  "assistantAvatarMediaNone": "Aucun",
+  "assistantAvatarChoose": "Choisir",
+  "assistantAvatarRemove": "Retirer",
+  "assistantAvatarEditLabel": "{name}, {state}",
+  "assistantAvatarPickFailed": "Impossible d’utiliser ce fichier",
   "directContextCompactionDescription": "Ces modèles n'indiquent pas de fenêtre de contexte. Conduit utilise la limite sélectionnée pour compacter les anciens messages avant que les requêtes ne deviennent trop volumineuses.",
   "directContextCompactionPickerDescription": "Choisissez la fenêtre de contexte que Conduit doit utiliser pour le compactage automatique.",
   "directContextCompactionTitle": "Compactage du contexte",
@@ -4253,5 +4266,6 @@
   "accountsRemoveAddressMessage": "Conduit n'essaiera plus cette adresse. Vos comptes restent connectés.",
   "accountsAddressConfirmTitle": "Vérifier cette adresse ?",
   "accountsAddressConfirmMessage": "Pour s'assurer que {host} est bien ce serveur, Conduit lui envoie la session d'un compte enregistré ici. Ne continuez que si vous faites confiance à cette adresse.",
-  "accountsAddressConfirmAction": "Vérifier l'adresse"
+  "accountsAddressConfirmAction": "Vérifier l'adresse",
+  "modelPickerHint": "Ouvre le sélecteur de modèle"
 }

@@ -596,6 +596,9 @@ const nativeDeliveryReceiptsId = 'delivery-receipts';
 /// Control id of the "Quick-reply reactions" toggle in the native Chats page.
 const nativeQuickReplyReactionsId = 'quick-reply-reactions';
 
+/// Control id of the "Assistant avatar" toggle in the native Chats page.
+const nativeAssistantAvatarId = 'assistant-avatar';
+
 /// Control id the accountless "Connect to Open WebUI" root row sends.
 const nativeConnectOpenWebUiActionId = 'add-owui-server';
 

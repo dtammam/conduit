@@ -3467,6 +3467,19 @@
   "quickReplyTextNo": "Nee",
   "quickReplyTextConfirm": "Ja, doe het.",
   "quickReplyTextCancel": "Annuleren.",
+  "assistantAvatar": "Assistent-avatar",
+  "assistantAvatarDescription": "Toon boven de chat een avatar die reageert op wat de assistent doet",
+  "assistantActivityIdle": "Inactief",
+  "assistantActivityWorking": "Bezig",
+  "assistantActivityMaking": "Maakt",
+  "assistantActivityDone": "Klaar",
+  "assistantAvatarMediaVideo": "Video",
+  "assistantAvatarMediaImage": "Afbeelding",
+  "assistantAvatarMediaNone": "Geen",
+  "assistantAvatarChoose": "Kiezen",
+  "assistantAvatarRemove": "Verwijderen",
+  "assistantAvatarEditLabel": "{name}, {state}",
+  "assistantAvatarPickFailed": "Dit bestand kan niet worden gebruikt",
   "directContextCompactionDescription": "Deze modellen geven geen contextvenster op. Conduit gebruikt de gekozen limiet om oudere berichten te comprimeren voordat verzoeken te groot worden.",
   "directContextCompactionPickerDescription": "Kies het contextvenster dat Conduit moet gebruiken voor automatisch comprimeren.",
   "directContextCompactionTitle": "Context comprimeren",
@@ -4253,5 +4266,6 @@
   "accountsRemoveAddressMessage": "Conduit probeert dit adres niet meer. Je accounts blijven ingelogd.",
   "accountsAddressConfirmTitle": "Dit adres controleren?",
   "accountsAddressConfirmMessage": "Om zeker te weten dat {host} deze server is, stuurt Conduit er de sessie van een hier opgeslagen account naartoe. Ga alleen verder als je dit adres vertrouwt.",
-  "accountsAddressConfirmAction": "Adres controleren"
+  "accountsAddressConfirmAction": "Adres controleren",
+  "modelPickerHint": "Opent de modelkiezer"
 }
