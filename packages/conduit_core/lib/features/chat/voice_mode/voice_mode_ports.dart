@@ -80,6 +80,20 @@ abstract interface class VoiceModeInput {
   /// recorder), so the audio session need not start one.
   Future<bool> prepareResponseWaitHandoff();
 
+  /// Loudness of the capture held through the assistant's turn (a held
+  /// server recorder), one level per short frame, so the call can hear the
+  /// user start talking over the assistant. Silent while nothing is held.
+  Stream<VoiceCaptureLevel> get heldCaptureLevels;
+
+  /// [beginListeningEvents] for a take that starts on voice onset during the
+  /// assistant's turn: a held server recorder resumes with the last
+  /// [lookback] of its audio first, so the start of the speech is kept.
+  /// Without a held recorder it is an ordinary listen.
+  Future<Stream<VoiceTranscriptEvent>> beginBargeInListeningEvents({
+    required Duration lookback,
+    bool iosAudioSessionManagedExternally = false,
+  });
+
   Future<void> stopListening();
 }
 
@@ -269,6 +283,16 @@ class UnavailableVoiceModeInput implements VoiceModeInput {
   }) async => throw StateError('This host has no speech recognizer');
   @override
   Future<bool> prepareResponseWaitHandoff() async => false;
+  @override
+  Stream<VoiceCaptureLevel> get heldCaptureLevels =>
+      const Stream<VoiceCaptureLevel>.empty();
+  @override
+  Future<Stream<VoiceTranscriptEvent>> beginBargeInListeningEvents({
+    required Duration lookback,
+    bool iosAudioSessionManagedExternally = false,
+  }) => beginListeningEvents(
+    iosAudioSessionManagedExternally: iosAudioSessionManagedExternally,
+  );
   @override
   Future<void> stopListening() async {}
 }

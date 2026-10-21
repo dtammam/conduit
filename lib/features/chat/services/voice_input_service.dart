@@ -17,6 +17,7 @@ import 'package:conduit_core/features/chat/server_speech/server_speech.dart';
 import 'package:conduit_core/features/chat/server_speech/server_speech_providers.dart';
 
 import 'package:conduit_core/services/settings_service.dart';
+import 'package:conduit_core/voice/barge_in_onset.dart' show Pcm16LevelMeter;
 
 import 'package:conduit_core/utils/debug_logger.dart';
 
@@ -56,6 +57,10 @@ class VoiceInputService implements VoiceModeInput {
     milliseconds: 900,
   );
   static const String _bundledVadAssetBasePath = 'assets/vad/';
+
+  /// How much of a held server recorder's audio is kept for a take that
+  /// starts on voice onset: the onset's own sustain and pre-roll fit inside.
+  static const Duration _heldAudioRetention = Duration(seconds: 2);
   VadHandler? _vadHandler;
   ServerVadRecorderSession? _serverVadRecorderSession;
   final NativeSttService _nativeStt;
@@ -101,6 +106,16 @@ class VoiceInputService implements VoiceModeInput {
       _intensityController?.stream ?? const Stream<int>.empty();
   int _lastIntensity = 0;
   Timer? _intensityDecayTimer;
+  final StreamController<VoiceCaptureLevel> _heldLevelController =
+      StreamController<VoiceCaptureLevel>.broadcast();
+  final Pcm16LevelMeter _heldLevelMeter = Pcm16LevelMeter(
+    sampleRate: _vadSampleRate,
+    frameSamples: _vadFrameSamples,
+  );
+  Duration? _pendingHeldAudioLookback;
+  @override
+  Stream<VoiceCaptureLevel> get heldCaptureLevels =>
+      _heldLevelController.stream;
   List<double>? _vadPendingSamples;
 
   Stream<String> get textStream =>
@@ -132,6 +147,7 @@ class VoiceInputService implements VoiceModeInput {
   final ValueNotifier<bool> transcribing = ValueNotifier<bool>(false);
   final Set<Future<void>> _activeTranscriptions = <Future<void>>{};
   SttPreference get preference => _preference;
+
   /// Server only while the chat's server can transcribe; a chat whose
   /// backend has no transcription uses the device instead.
   @override
@@ -669,6 +685,8 @@ class VoiceInputService implements VoiceModeInput {
     }
     final resumeHeldServerRecorder =
         shouldUseServer && isHoldingServerRecorderForResponse;
+    final heldAudioLookback = _pendingHeldAudioLookback;
+    _pendingHeldAudioLookback = null;
     if (!resumeHeldServerRecorder && isHoldingServerRecorderForResponse) {
       await stopListening();
     }
@@ -733,6 +751,7 @@ class VoiceInputService implements VoiceModeInput {
               resumeHeldServerRecorder &&
               await _resumeHeldServerRecording(
                 listenGeneration: listenGeneration,
+                lookback: heldAudioLookback,
               );
           if (!resumed) {
             await _startServerRecording(
@@ -805,6 +824,22 @@ class VoiceInputService implements VoiceModeInput {
       holdServerRecorderForResponseWait: true,
     );
     return transcriptEvents;
+  }
+
+  @override
+  Future<Stream<VoiceTranscriptEvent>> beginBargeInListeningEvents({
+    required Duration lookback,
+    bool iosAudioSessionManagedExternally = false,
+  }) async {
+    _pendingHeldAudioLookback = lookback;
+    try {
+      return await beginListeningEvents(
+        iosAudioSessionManagedExternally: iosAudioSessionManagedExternally,
+      );
+    } finally {
+      // Only the resume that starts this listen may use it.
+      _pendingHeldAudioLookback = null;
+    }
   }
 
   @override
@@ -940,6 +975,7 @@ class VoiceInputService implements VoiceModeInput {
 
   Future<bool> _resumeHeldServerRecording({
     required int listenGeneration,
+    Duration? lookback,
   }) async {
     bool lostOwnership() =>
         listenGeneration != _listenGeneration ||
@@ -958,9 +994,23 @@ class VoiceInputService implements VoiceModeInput {
     _vadPendingSamples = null;
     await _setupVadStreams(vad);
     if (lostOwnership()) return false;
+    _heldLevelMeter.reset();
     return recorderSession.resumeForwarding(
       connectVad: (audioStream) => _connectServerVad(vad, audioStream),
+      lookbackBytes: lookback == null ? 0 : _pcmBytesFor(lookback),
     );
+  }
+
+  static int _pcmBytesFor(Duration duration) =>
+      duration.inMicroseconds * _vadSampleRate * 2 ~/ 1000000;
+
+  /// Measures what a held recorder hears while the assistant speaks, only
+  /// while the call is listening for a barge-in.
+  void _handleHeldAudio(Uint8List bytes) {
+    if (!_heldLevelController.hasListener) return;
+    for (final level in _heldLevelMeter.add(bytes)) {
+      _heldLevelController.add(level);
+    }
   }
 
   Future<void> _startServerRecording({
@@ -985,9 +1035,11 @@ class VoiceInputService implements VoiceModeInput {
     // Create fresh native resources for every session so audio-focus failures
     // cannot poison the next recording attempt.
     final vad = VadHandler.create();
-    final recorderSession = ServerVadRecorderSession(
-      _serverVadRecorderFactory(),
-    );
+    final recorderSession =
+        ServerVadRecorderSession(_serverVadRecorderFactory())
+          ..onHeldAudio = _handleHeldAudio
+          ..heldAudioRetentionBytes = _pcmBytesFor(_heldAudioRetention);
+    _heldLevelMeter.reset();
     _vadHandler = vad;
     _serverVadRecorderSession = recorderSession;
     await _setupVadStreams(vad);
@@ -1388,6 +1440,9 @@ class VoiceInputService implements VoiceModeInput {
     } catch (_) {}
     if (!_responseCaptureFailureController.isClosed) {
       await _responseCaptureFailureController.close();
+    }
+    if (!_heldLevelController.isClosed) {
+      await _heldLevelController.close();
     }
     // A transcription started by an earlier stop may still be in flight; let
     // it clear the notifier before the notifier goes away.
