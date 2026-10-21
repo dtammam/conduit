@@ -1828,6 +1828,54 @@
   "@assistantAvatarDescription": {
     "description": "Subtitle for the assistant avatar toggle."
   },
+  "messageBubbles": "Message bubbles",
+  "@messageBubbles": {
+    "description": "Toggle title: replies sit in gray bubbles and the user's own bubbles take the avatar's color."
+  },
+  "messageBubblesDescription": "Show replies in gray bubbles and color your own from the assistant avatar",
+  "@messageBubblesDescription": {
+    "description": "Subtitle for the message bubbles toggle."
+  },
+  "assistantAvatarBubbleColor": "Bubble color",
+  "@assistantAvatarBubbleColor": {
+    "description": "Heading in the assistant avatar sheet for the color of the user's own message bubbles."
+  },
+  "assistantAvatarBubbleColorDescription": "Your message bubbles take this color",
+  "@assistantAvatarBubbleColorDescription": {
+    "description": "Explanation under the bubble color heading in the assistant avatar sheet."
+  },
+  "assistantAvatarBubbleColorAuto": "Auto",
+  "@assistantAvatarBubbleColorAuto": {
+    "description": "Bubble color choice that follows the assistant avatar."
+  },
+  "assistantAvatarBubbleColorGray": "Gray",
+  "@assistantAvatarBubbleColorGray": {
+    "description": "Bubble color choice for plain neutral gray bubbles."
+  },
+  "assistantAvatarBubbleColorGold": "Gold",
+  "@assistantAvatarBubbleColorGold": {
+    "description": "Bubble color swatch name."
+  },
+  "assistantAvatarBubbleColorOrange": "Orange",
+  "@assistantAvatarBubbleColorOrange": {
+    "description": "Bubble color swatch name."
+  },
+  "assistantAvatarBubbleColorPink": "Pink",
+  "@assistantAvatarBubbleColorPink": {
+    "description": "Bubble color swatch name."
+  },
+  "assistantAvatarBubbleColorPurple": "Purple",
+  "@assistantAvatarBubbleColorPurple": {
+    "description": "Bubble color swatch name."
+  },
+  "assistantAvatarBubbleColorBlue": "Blue",
+  "@assistantAvatarBubbleColorBlue": {
+    "description": "Bubble color swatch name."
+  },
+  "assistantAvatarBubbleColorGreen": "Green",
+  "@assistantAvatarBubbleColorGreen": {
+    "description": "Bubble color swatch name."
+  },
   "assistantActivityIdle": "Idle",
   "@assistantActivityIdle": {
     "description": "Word in the pill under the assistant avatar while no reply is being generated."

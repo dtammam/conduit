@@ -1,3 +1,4 @@
+import 'package:checks/checks.dart';
 import 'package:conduit/shared/widgets/platform_ui/platform_ui.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -150,10 +151,13 @@ void main() {
     await tester.pumpWidget(_sectionHarness(AppCustomizationSection.chat));
     await tester.pumpAndSettle();
 
+    // The Advanced row sits below the fold once the chat toggles above it
+    // fill the viewport; a lazily built row has no semantics until shown.
+    final toggle = find.byKey(const Key('chat-settings-advanced-toggle'));
+    await tester.scrollUntilVisible(toggle, 300);
+    await tester.pumpAndSettle();
     expect(
-      tester.getSemantics(
-        find.byKey(const Key('chat-settings-advanced-toggle')),
-      ),
+      tester.getSemantics(toggle),
       isSemantics(hasToggledState: true, isToggled: false),
     );
     semantics.dispose();
@@ -188,6 +192,32 @@ void main() {
       PreferencesStore.get<bool>(PreferenceKeys.advancedFeaturesEnabled),
       isTrue,
     );
+  });
+
+  testWidgets('Chat toggles the persisted message bubbles, off by default', (
+    tester,
+  ) async {
+    addTearDown(PreferencesStore.debugReset);
+    await tester.runAsync(() async {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      PreferencesStore.debugOverride(await FlutterKeyValueStore.load());
+    });
+    await tester.pumpWidget(
+      _sectionHarness(AppCustomizationSection.chat, persistSettings: true),
+    );
+    await tester.pumpAndSettle();
+
+    check(PreferencesStore.get<bool>(PreferenceKeys.messageBubbles))
+        .not((it) => it.equals(true));
+    final row = find.text('Message bubbles');
+    await tester.scrollUntilVisible(row, 300);
+    await tester.ensureVisible(row);
+    await tester.pumpAndSettle();
+    await tester.tap(row);
+    await tester.pumpAndSettle();
+
+    check(PreferencesStore.get<bool>(PreferenceKeys.messageBubbles))
+        .equals(true);
   });
 
   testWidgets('Data and Connection owns transport and streaming diagnostics', (

@@ -7,6 +7,7 @@ import 'package:cupertino_ui/cupertino_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../shared/theme/theme_extensions.dart';
+import '../../../shared/widgets/markdown/markdown_prose_bubble.dart';
 import '../../../shared/widgets/markdown/streaming_markdown_widget.dart';
 import '../../../shared/widgets/markdown/renderer/markdown_style.dart';
 
@@ -78,6 +79,7 @@ import '../reactions/quick_reply_reactions.dart';
 import 'chat_branch_actions.dart';
 import 'chat_comparison_widgets.dart';
 import 'message_badge.dart';
+import 'message_bubble_colors.dart';
 import 'code_execution_display.dart';
 import 'follow_up_suggestions.dart';
 import 'usage_stats_modal.dart';
@@ -852,6 +854,7 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
     String displayedContent, {
     required AssistantResponseBuilder? responseBuilder,
     required List<ChatSourceReference> activeSources,
+    MarkdownProseBubble? proseBubble,
   }) {
     final children = <Widget>[];
     final trimmedContent = displayedContent.trim();
@@ -860,6 +863,7 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
         displayedContent,
         responseBuilder: responseBuilder,
         activeSources: activeSources,
+        proseBubble: proseBubble,
       );
       children.add(RepaintBoundary(child: markdownWidget));
     }
@@ -900,6 +904,7 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
   Widget _buildStreamingContentBody({
     required AssistantResponseBuilder? responseBuilder,
     required List<ChatSourceReference> activeSources,
+    MarkdownProseBubble? proseBubble,
   }) {
     return ValueListenableBuilder<String>(
       valueListenable: _displayedContentListenable,
@@ -909,6 +914,7 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
           displayedContent,
           responseBuilder: responseBuilder,
           activeSources: activeSources,
+          proseBubble: proseBubble,
         );
         // Always wrap in a FadeTransition with a stable key/type so the widget
         // at this slot survives the streaming/completed boundary.
@@ -1314,6 +1320,15 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
             includeActions: widget.showActionBar,
           )
         : null;
+    final messageBubbles = ref.watch(
+      appSettingsProvider.select((settings) => settings.messageBubbles),
+    );
+    final proseBubble = messageBubbles ? _buildProseBubble() : null;
+    // Bubbles read like a conversation with one partner, so the sender line
+    // only appears when a selected version names a different model.
+    final showSenderLine =
+        !messageBubbles ||
+        _resolveActiveModelName() != widget.modelName?.trim();
 
     final content = Container(
       width: double.infinity,
@@ -1322,7 +1337,7 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Cached AI Name and Avatar to prevent flashing
-          _cachedAvatar ?? const SizedBox.shrink(),
+          if (showSenderLine) _cachedAvatar ?? const SizedBox.shrink(),
 
           // Every saved answer of a multi-model turn stays reachable, whether
           // or not Advanced is on: only comparison setup depends on it.
@@ -1352,6 +1367,7 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
 
           // Documentation-style content without heavy bubble; premium markdown
           _withQuickReplies(
+            showBadge: proseBubble == null,
             SizedBox(
               width: double.infinity,
               child: Column(
@@ -1393,6 +1409,7 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
                     _buildStreamingContentBody(
                       responseBuilder: responseBuilder,
                       activeSources: contentSources,
+                      proseBubble: proseBubble,
                     ),
 
                   if (showQueuedRecoveryBanner) ...[
@@ -1497,11 +1514,13 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
 
   /// Long-press on the reply content opens the reaction picker, and the
   /// reaction already sent sits on the content's bottom-trailing corner, with
-  /// room reserved under it so the footer never covers it. Both wrappers stay
+  /// room reserved under it so the footer never covers it (bubbles off; with
+  /// bubbles the last bubble keeps fixed room instead). Both wrappers stay
   /// in the tree when idle so the content keeps its state.
-  Widget _withQuickReplies(Widget content) {
-    final badge = widget.quickReplyBadge;
-    final l10n = AppLocalizations.of(context)!;
+  ///
+  /// With message bubbles the badge rides on the last bubble instead (see
+  /// [_buildProseBubble]) and [showBadge] is false here.
+  Widget _withQuickReplies(Widget content, {bool showBadge = true}) {
     return QuickReplyLongPress(
       enabled: _showsQuickReplies,
       onSelected: _sendQuickReply,
@@ -1509,16 +1528,82 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
       // trailing edge; the overhang needs a little more.
       child: MessageBadgeAnchor(
         trailingRoom: 8,
-        badge: badge == null
-            ? null
-            : MessageBadge(
-                key: const ValueKey<String>('assistant-quick-reply-badge'),
-                emoji: badge.emoji,
-                semanticsLabel: l10n.quickReplyReactionBadge(
-                  badge.localizedText(l10n),
-                ),
-              ),
+        badge: showBadge ? _buildQuickReplyBadge() : null,
         child: content,
+      ),
+    );
+  }
+
+  Widget? _buildQuickReplyBadge({double ringWidth = 1}) {
+    final badge = widget.quickReplyBadge;
+    if (badge == null) return null;
+    final l10n = AppLocalizations.of(context)!;
+    return MessageBadge(
+      key: const ValueKey<String>('assistant-quick-reply-badge'),
+      emoji: badge.emoji,
+      semanticsLabel: l10n.quickReplyReactionBadge(badge.localizedText(l10n)),
+      ringWidth: ringWidth,
+    );
+  }
+
+  /// The last [_buildProseBubble] result and the inputs it was built from,
+  /// so a parent rebuild hands [StreamingMarkdownWidget] the same instance.
+  MarkdownProseBubble? _proseBubble;
+  Object? _proseBubbleInputs;
+
+  /// The reply bubble with the "Message bubbles" setting on: the reply's
+  /// prose sits in leading dark gray bubbles of at most 85% of the column,
+  /// while tool rows, the status timeline, attachments, the action row and
+  /// follow-ups stay outside on the same leading edge. The quick-reply badge
+  /// sits on the last bubble's bottom-trailing corner.
+  MarkdownProseBubble _buildProseBubble() {
+    final theme = context.conduitTheme;
+    // The reply fill does not depend on the user accent.
+    final colors = resolveMessageBubbleColors(theme, null);
+    final reaction = widget.quickReplyBadge;
+    // The badge hangs below the last bubble into the gap above the action
+    // row. That gap is a paragraph space, a little less than the hang, and on
+    // a short reply the badge sits right over the first action buttons. So a
+    // reply that offers or carries a reaction keeps the difference below its
+    // last bubble at all times: the row sits just clear of a badge's bottom
+    // edge, and a reaction arriving never moves the row, follow-ups or the
+    // next message. Replies that cannot carry one keep the plain gap. This
+    // check leaves out the finished-reply conditions of [_showsQuickReplies]
+    // so the room is already there while the reply streams and the settle
+    // into the action row does not move the list either.
+    final canCarryBadge =
+        reaction != null ||
+        (widget.onQuickReply != null && !widget.readOnly && !_isVoiceReply);
+    const hang = MessageBadgeAnchor.insetHang;
+    final paragraphGap = ConduitMarkdownStyle.fromTheme(context)
+        .paragraphSpacing;
+    final double? badgeRoom = canCarryBadge
+        ? (hang - paragraphGap).clamp(0.0, hang)
+        : null;
+    final l10n = AppLocalizations.of(context)!;
+    final inputs = (
+      colors.assistantFill,
+      reaction,
+      reaction?.localizedText(l10n),
+      badgeRoom,
+    );
+    final cached = _proseBubble;
+    if (cached != null && inputs == _proseBubbleInputs) return cached;
+    final badge = _buildQuickReplyBadge(ringWidth: 3);
+    _proseBubbleInputs = inputs;
+    return _proseBubble = MarkdownProseBubble(
+      color: colors.assistantFill,
+      radius: AppBorderRadius.chatBubble,
+      padding: const EdgeInsetsDirectional.symmetric(
+        horizontal: Spacing.md,
+        vertical: Spacing.sm + Spacing.xxs,
+      ),
+      maxWidthFactor: kAssistantBubbleMaxWidthFactor,
+      decorate: (bubble, {required isLastBubble}) => MessageBadgeAnchor(
+        inset: true,
+        badge: isLastBubble ? badge : null,
+        fixedRoom: isLastBubble ? badgeRoom : null,
+        child: bubble,
       ),
     );
   }
@@ -1779,6 +1864,7 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
     String content, {
     required AssistantResponseBuilder? responseBuilder,
     required List<ChatSourceReference> activeSources,
+    MarkdownProseBubble? proseBubble,
   }) {
     if (content.trim().isEmpty) {
       return const SizedBox.shrink();
@@ -1802,6 +1888,7 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
         onTapLink: _markdownLinkTapCallback,
         sources: activeSources,
         imageBuilderOverride: _markdownImageBuilder,
+        proseBubble: proseBubble,
       );
     }
 

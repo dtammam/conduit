@@ -10,17 +10,25 @@ class MarkdownDisplayPart {
     required this.partId,
     required this.isMutableTail,
     required this.document,
+    this.kind = MarkdownDisplayPartKind.markdownBlock,
   });
 
   final String partId;
   final bool isMutableTail;
   final CompiledMarkdownDocument document;
 
+  /// Whether this part is prose or a collapsible details block or group
+  /// (tool calls, reasoning).
+  final MarkdownDisplayPartKind kind;
+
+  bool get isDetails => kind != MarkdownDisplayPartKind.markdownBlock;
+
   MarkdownDisplayPart copyWith({CompiledMarkdownDocument? document}) {
     return MarkdownDisplayPart(
       partId: partId,
       isMutableTail: isMutableTail,
       document: document ?? this.document,
+      kind: kind,
     );
   }
 }
@@ -62,6 +70,7 @@ List<MarkdownDisplayPart> buildMarkdownDisplayParts(
           nodeResolution: nodeResolution,
           isMutableTail: isMutableTail,
         ),
+        kind: kind,
       ),
     );
   }

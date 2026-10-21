@@ -10,6 +10,11 @@ final class PreferenceKeys {
       'quick_reply_reactions_enabled';
   static const String deliveryReceiptsEnabled = 'delivery_receipts_enabled';
   static const String assistantAvatarEnabled = 'assistant_avatar_enabled';
+  static const String messageBubbles = 'message_bubbles';
+  static const String assistantAvatarBubbleColor =
+      'assistant_avatar_bubble_color';
+  static const String assistantAvatarAccentCache =
+      'assistant_avatar_accent_cache';
   static const String highContrast = 'high_contrast';
   static const String darkMode = 'dark_mode';
   static const String defaultModel = 'default_model';

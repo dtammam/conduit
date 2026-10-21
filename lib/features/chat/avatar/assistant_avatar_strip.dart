@@ -8,12 +8,15 @@ import 'package:conduit/shared/widgets/conduit_loading.dart';
 import 'package:conduit/shared/widgets/platform_ui/platform_ui.dart';
 import 'package:conduit/shared/widgets/themed_sheets.dart';
 import 'package:conduit_core/features/chat/providers/chat_providers.dart';
+import 'package:conduit_core/services/settings_service.dart';
 import 'package:conduit_core/utils/debug_logger.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:video_player/video_player.dart';
 
+import '../widgets/message_bubble_colors.dart';
 import 'assistant_activity.dart';
+import 'assistant_avatar_accent.dart';
 import 'assistant_avatar_media.dart';
 
 const String _logScope = 'chat/avatar';
@@ -97,6 +100,10 @@ class _AssistantAvatarStripState extends ConsumerState<AssistantAvatarStrip> {
   String? _playingId;
   bool _disposed = false;
 
+  /// Bumped by every [_refreshAccent], so a slow read never records a color
+  /// for media that has since changed.
+  int _accentGeneration = 0;
+
   @override
   void initState() {
     super.initState();
@@ -126,6 +133,37 @@ class _AssistantAvatarStripState extends ConsumerState<AssistantAvatarStrip> {
     _failedMedia.clear();
     _playingId = null;
     setState(() => _media = media);
+    unawaited(_refreshAccent());
+  }
+
+  /// Derives the bubble color from the avatar's resting media once per
+  /// clip, only while "Message bubbles" is on. Images are decoded at
+  /// thumbnail size; a video clip leaves the bubbles gray.
+  Future<void> _refreshAccent() async {
+    final generation = ++_accentGeneration;
+    if (!ref.read(appSettingsProvider).messageBubbles) return;
+    final notifier = ref.read(assistantAvatarAutoAccentProvider.notifier);
+    final source = assistantAvatarAccentSource(_media);
+    if (source == null || source.kind == AssistantAvatarMediaKind.video) {
+      await notifier.clear();
+      return;
+    }
+    final cacheKey = await assistantAvatarMediaCacheKey(source);
+    if (_disposed || generation != _accentGeneration) return;
+    if (notifier.cachedKey == cacheKey) return;
+    try {
+      final bytes = await File(source.path).readAsBytes();
+      final color = await dominantVividColorOfEncoded(bytes);
+      if (_disposed || generation != _accentGeneration) return;
+      await notifier.record(cacheKey, color);
+    } catch (error, stackTrace) {
+      DebugLogger.error(
+        'accent-image-failed',
+        scope: _logScope,
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
   }
 
   void _onStreamingChanged(bool? previous, bool next) {
@@ -229,6 +267,12 @@ class _AssistantAvatarStripState extends ConsumerState<AssistantAvatarStrip> {
   @override
   Widget build(BuildContext context) {
     ref.listen<bool>(isChatStreamingProvider, _onStreamingChanged);
+    ref.listen<bool>(
+      appSettingsProvider.select((settings) => settings.messageBubbles),
+      (previous, next) {
+        if (next && previous != true) unawaited(_refreshAccent());
+      },
+    );
     ref.watch(isChatStreamingProvider);
     final snapshot = ref.watch(
       chatMessagesProvider.select(assistantActivitySnapshot),
@@ -502,17 +546,18 @@ class _AvatarInitial extends StatelessWidget {
 }
 
 /// The themed sheet that assigns a clip to each state.
-class _AssistantAvatarSheet extends StatefulWidget {
+class _AssistantAvatarSheet extends ConsumerStatefulWidget {
   const _AssistantAvatarSheet({required this.store, this.onChanged});
 
   final AssistantAvatarMediaStore store;
   final Future<void> Function()? onChanged;
 
   @override
-  State<_AssistantAvatarSheet> createState() => _AssistantAvatarSheetState();
+  ConsumerState<_AssistantAvatarSheet> createState() =>
+      _AssistantAvatarSheetState();
 }
 
-class _AssistantAvatarSheetState extends State<_AssistantAvatarSheet> {
+class _AssistantAvatarSheetState extends ConsumerState<_AssistantAvatarSheet> {
   AssistantAvatarMediaSet _media = AssistantAvatarMediaSet.empty;
   AssistantActivity? _busy;
 
@@ -594,6 +639,10 @@ class _AssistantAvatarSheetState extends State<_AssistantAvatarSheet> {
             const SizedBox(height: Spacing.md),
             for (final state in AssistantActivity.values)
               _buildRow(context, l10n, theme, state),
+            if (ref.watch(
+              appSettingsProvider.select((settings) => settings.messageBubbles),
+            ))
+              _BubbleColorPicker(l10n: l10n, theme: theme),
           ],
         ),
       ),
@@ -653,6 +702,167 @@ class _AssistantAvatarSheetState extends State<_AssistantAvatarSheet> {
             useNative: false,
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// The user bubble color choice, shown in the avatar sheet while "Message
+/// bubbles" is on: Auto (from the avatar), Gray (the neutral look) and a few
+/// swatches, each previewed as the bubble it would make in this theme.
+class _BubbleColorPicker extends ConsumerWidget {
+  const _BubbleColorPicker({required this.l10n, required this.theme});
+
+  final AppLocalizations l10n;
+  final ConduitThemeExtension theme;
+
+  String _swatchLabel(MessageBubbleSwatch swatch) => switch (swatch) {
+    MessageBubbleSwatch.gold => l10n.assistantAvatarBubbleColorGold,
+    MessageBubbleSwatch.orange => l10n.assistantAvatarBubbleColorOrange,
+    MessageBubbleSwatch.pink => l10n.assistantAvatarBubbleColorPink,
+    MessageBubbleSwatch.purple => l10n.assistantAvatarBubbleColorPurple,
+    MessageBubbleSwatch.blue => l10n.assistantAvatarBubbleColorBlue,
+    MessageBubbleSwatch.green => l10n.assistantAvatarBubbleColorGreen,
+  };
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final selected = ref.watch(
+      appSettingsProvider.select(
+        (settings) => settings.assistantAvatarBubbleColor,
+      ),
+    );
+    final auto = ref.watch(assistantAvatarAutoAccentProvider);
+    void choose(String value) => ref
+        .read(appSettingsProvider.notifier)
+        .setAssistantAvatarBubbleColor(value);
+
+    final options = <Widget>[
+      _BubbleColorOption(
+        key: const ValueKey('bubble-color-auto'),
+        label: l10n.assistantAvatarBubbleColorAuto,
+        colors: resolveMessageBubbleColors(theme, auto),
+        icon: cupertinoIconForSFSymbol('sparkles'),
+        selected: selected == assistantAvatarBubbleColorAuto,
+        onTap: () => choose(assistantAvatarBubbleColorAuto),
+        theme: theme,
+      ),
+      _BubbleColorOption(
+        key: const ValueKey('bubble-color-gray'),
+        label: l10n.assistantAvatarBubbleColorGray,
+        colors: resolveMessageBubbleColors(theme, null),
+        selected: selected == assistantAvatarBubbleColorGray,
+        onTap: () => choose(assistantAvatarBubbleColorGray),
+        theme: theme,
+      ),
+      for (final swatch in MessageBubbleSwatch.values)
+        _BubbleColorOption(
+          key: ValueKey('bubble-color-${swatch.name}'),
+          label: _swatchLabel(swatch),
+          colors: resolveMessageBubbleColors(theme, swatch.color),
+          selected:
+              parseBubbleColor(selected)?.toARGB32() == swatch.color.toARGB32(),
+          onTap: () => choose(swatch.storageValue),
+          theme: theme,
+        ),
+    ];
+
+    return Padding(
+      padding: const EdgeInsets.only(top: Spacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            l10n.assistantAvatarBubbleColor,
+            style: AppTypography.bodyLargeStyle.copyWith(
+              color: theme.textPrimary,
+            ),
+          ),
+          Text(
+            l10n.assistantAvatarBubbleColorDescription,
+            style: AppTypography.bodySmallStyle.copyWith(
+              color: theme.textSecondary,
+            ),
+          ),
+          const SizedBox(height: Spacing.sm),
+          Wrap(spacing: Spacing.sm, runSpacing: Spacing.sm, children: options),
+        ],
+      ),
+    );
+  }
+}
+
+class _BubbleColorOption extends StatelessWidget {
+  const _BubbleColorOption({
+    super.key,
+    required this.label,
+    required this.colors,
+    required this.selected,
+    required this.onTap,
+    required this.theme,
+    this.icon,
+  });
+
+  static const double _size = 40;
+
+  final String label;
+  final MessageBubbleColors colors;
+  final bool selected;
+  final VoidCallback onTap;
+  final ConduitThemeExtension theme;
+  final IconData? icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: label,
+      excludeSemantics: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: SizedBox(
+          width: 56,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: _size + 6,
+                height: _size + 6,
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: selected
+                        ? theme.textPrimary
+                        : const Color(0x00000000),
+                    width: 2,
+                  ),
+                ),
+                child: Container(
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: colors.userFill,
+                  ),
+                  child: icon == null
+                      ? null
+                      : Icon(icon, size: 18, color: colors.userText),
+                ),
+              ),
+              const SizedBox(height: Spacing.xxs),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.captionStyle.copyWith(
+                  color: selected ? theme.textPrimary : theme.textSecondary,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

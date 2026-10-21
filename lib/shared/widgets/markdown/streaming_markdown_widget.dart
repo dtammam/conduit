@@ -13,6 +13,7 @@ import 'markdown_config.dart';
 import 'markdown_compile_service.dart';
 import 'markdown_display_part.dart';
 import 'markdown_document_controller.dart';
+import 'markdown_prose_bubble.dart';
 import 'markdown_render_gate.dart';
 import 'markdown_loading_skeleton.dart';
 
@@ -100,6 +101,7 @@ class StreamingMarkdownWidget extends ConsumerStatefulWidget {
     this.askConduitComposerTargetId,
     this.stateScopeId,
     this.enableStreamingTextFade = true,
+    this.proseBubble,
     this.debugTreatAsWidgetTest,
     this.debugRenderInterval,
     this.debugOnCompiledViewMounted,
@@ -135,6 +137,10 @@ class StreamingMarkdownWidget extends ConsumerStatefulWidget {
   /// explicitly disables it so token updates remain immediate; low-frequency
   /// preview surfaces can retain the decorative reveal.
   final bool enableStreamingTextFade;
+
+  /// When set, prose is laid into chat bubbles and details blocks (tool
+  /// calls, reasoning) render bare between them. Null keeps the plain flow.
+  final MarkdownProseBubble? proseBubble;
 
   @visibleForTesting
   final bool? debugTreatAsWidgetTest;
@@ -854,34 +860,46 @@ class _StreamingMarkdownWidgetState
       _displayPartsWereStreaming = widget.isStreaming;
       _displayPartsMemo = stableParts;
     }
+    final bubble = widget.proseBubble;
     if (stableParts.isEmpty) {
       _displayPartDocumentCache.clear();
-      return _buildMarkdownWithCitations(
+      final whole = _buildMarkdownWithCitations(
         document: document,
         stateScopeId: widget.stateScopeId,
         enableStreamingTextFade:
             widget.isStreaming && widget.enableStreamingTextFade,
         trimLastBlockBottomPadding: true,
       );
+      if (bubble == null) return whole;
+      return MarkdownProseBubbleSegment(
+        style: bubble,
+        isFirst: true,
+        isLast: true,
+        fillWidth: false,
+        isLastBubble: true,
+        child: whole,
+      );
     }
 
-    final partWidgets = <Widget>[
-      for (var index = 0; index < stableParts.length; index += 1)
-        KeyedSubtree(
-          key: ValueKey<String>(
-            'markdown-display-part:${stableParts[index].partId}',
-          ),
-          child: _buildMarkdownWithCitations(
-            document: stableParts[index].document,
-            stateScopeId: _stateScopeIdForPart(stableParts[index]),
-            enableStreamingTextFade:
-                widget.isStreaming &&
-                widget.enableStreamingTextFade &&
-                stableParts[index].isMutableTail,
-            trimLastBlockBottomPadding: index == stableParts.length - 1,
-          ),
-        ),
-    ];
+    final partWidgets = bubble == null
+        ? <Widget>[
+            for (var index = 0; index < stableParts.length; index += 1)
+              KeyedSubtree(
+                key: ValueKey<String>(
+                  'markdown-display-part:${stableParts[index].partId}',
+                ),
+                child: _buildMarkdownWithCitations(
+                  document: stableParts[index].document,
+                  stateScopeId: _stateScopeIdForPart(stableParts[index]),
+                  enableStreamingTextFade:
+                      widget.isStreaming &&
+                      widget.enableStreamingTextFade &&
+                      stableParts[index].isMutableTail,
+                  trimLastBlockBottomPadding: index == stableParts.length - 1,
+                ),
+              ),
+          ]
+        : _buildBubbledParts(stableParts, bubble);
 
     // This column — not the per-part block columns — is where a giant
     // settled message inflates: the display-part split produces one
@@ -898,10 +916,86 @@ class _StreamingMarkdownWidgetState
     // reveals immediately (blocks arrive one at a time; the live tail must
     // never trail the pin/extent math), and that progress is monotonic, so
     // the streaming→settled flip re-inflates nothing.
-    return ChunkedBlockColumn(
+    final column = ChunkedBlockColumn(
       revealImmediately: widget.isStreaming,
       children: partWidgets,
     );
+    final decorate = bubble?.decorate;
+    if (decorate == null) return column;
+    // A reply made only of details blocks has no bubble to carry the
+    // decoration, so the whole column takes it. The wrapper is always there
+    // so the column keeps its state when the first prose block arrives.
+    return decorate(
+      column,
+      isLastBubble: !stableParts.any((part) => !part.isDetails),
+    );
+  }
+
+  /// Lays consecutive prose parts into one bubble each, slice by slice, and
+  /// leaves details parts bare between them. Every part keeps the key it has
+  /// without bubbles, so toggling streaming never remounts a block.
+  List<Widget> _buildBubbledParts(
+    List<MarkdownDisplayPart> parts,
+    MarkdownProseBubble bubble,
+  ) {
+    // Length of the prose run each part belongs to (0 for details parts).
+    final runLengths = List<int>.filled(parts.length, 0);
+    var runStart = -1;
+    for (var index = 0; index <= parts.length; index += 1) {
+      final isProse = index < parts.length && !parts[index].isDetails;
+      if (isProse && runStart < 0) runStart = index;
+      if (!isProse && runStart >= 0) {
+        for (var i = runStart; i < index; i += 1) {
+          runLengths[i] = index - runStart;
+        }
+        runStart = -1;
+      }
+    }
+    var lastProseIndex = -1;
+    for (var index = parts.length - 1; index >= 0; index -= 1) {
+      if (!parts[index].isDetails) {
+        lastProseIndex = index;
+        break;
+      }
+    }
+
+    final widgets = <Widget>[];
+    for (var index = 0; index < parts.length; index += 1) {
+      final part = parts[index];
+      final isFirst = index == 0 || parts[index - 1].isDetails;
+      final isLast = index == parts.length - 1 || parts[index + 1].isDetails;
+      final markdown = _buildMarkdownWithCitations(
+        document: part.document,
+        stateScopeId: _stateScopeIdForPart(part),
+        enableStreamingTextFade:
+            widget.isStreaming &&
+            widget.enableStreamingTextFade &&
+            part.isMutableTail,
+        // Each bubble closes on its own padding, so its last block drops the
+        // trailing paragraph gap.
+        trimLastBlockBottomPadding: part.isDetails
+            ? index == parts.length - 1
+            : isLast,
+      );
+      widgets.add(
+        KeyedSubtree(
+          key: ValueKey<String>('markdown-display-part:${part.partId}'),
+          child: part.isDetails
+              ? markdown
+              : MarkdownProseBubbleSegment(
+                  style: bubble,
+                  isFirst: isFirst,
+                  isLast: isLast,
+                  fillWidth: runLengths[index] > 1,
+                  gapBefore: isFirst && index > 0,
+                  gapAfter: isLast && index < parts.length - 1,
+                  isLastBubble: index == lastProseIndex,
+                  child: markdown,
+                ),
+        ),
+      );
+    }
+    return widgets;
   }
 
   List<MarkdownDisplayPart> _reuseStableDisplayPartDocuments(

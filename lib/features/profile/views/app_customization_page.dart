@@ -552,6 +552,28 @@ class AppCustomizationPage extends ConsumerWidget {
               .read(appSettingsProvider.notifier)
               .setAssistantAvatarEnabled(!settings.assistantAvatarEnabled),
         ),
+        const SizedBox(height: Spacing.sm),
+        CustomizationTile(
+          leading: _buildIconBadge(
+            context,
+            Platform.isIOS
+                ? CupertinoIcons.chat_bubble_2
+                : Icons.chat_bubble_outline,
+            color: theme.buttonPrimary,
+          ),
+          title: l10n.messageBubbles,
+          subtitle: l10n.messageBubblesDescription,
+          toggled: settings.messageBubbles,
+          trailing: AdaptiveSwitch(
+            value: settings.messageBubbles,
+            onChanged: (value) =>
+                ref.read(appSettingsProvider.notifier).setMessageBubbles(value),
+          ),
+          showChevron: false,
+          onTap: () => ref
+              .read(appSettingsProvider.notifier)
+              .setMessageBubbles(!settings.messageBubbles),
+        ),
         if (Platform.isAndroid) ...[
           const SizedBox(height: Spacing.sm),
           CustomizationTile(
