@@ -132,13 +132,13 @@ void main() {
         check(settings.quickReplyReactionsEnabled).equals(true);
       });
 
-      test('toolActivityInAvatar defaults to false and needs the avatar', () {
-        check(settings.toolActivityInAvatar).equals(false);
+      test('toolActivityInAvatar defaults to true and needs the avatar', () {
+        check(settings.toolActivityInAvatar).equals(true);
         check(settings.toolActivityInAvatarActive).equals(false);
-        final on = settings.copyWith(toolActivityInAvatar: true);
-        check(on.toolActivityInAvatarActive).equals(false);
         check(
-          on.copyWith(assistantAvatarEnabled: true).toolActivityInAvatarActive,
+          settings
+              .copyWith(assistantAvatarEnabled: true)
+              .toolActivityInAvatarActive,
         ).equals(true);
       });
     });

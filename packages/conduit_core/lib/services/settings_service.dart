@@ -780,7 +780,7 @@ class SettingsService {
       compactToolSummaries:
           get<bool>(PreferenceKeys.compactToolSummaries) ?? false,
       toolActivityInAvatar:
-          get<bool>(PreferenceKeys.toolActivityInAvatar) ?? false,
+          get<bool>(PreferenceKeys.toolActivityInAvatar) ?? true,
       waveTypingIndicator:
           get<bool>(PreferenceKeys.waveTypingIndicator) ?? false,
       chatDragToFolder: get<bool>(PreferenceKeys.chatDragToFolder) ?? true,
@@ -1025,7 +1025,7 @@ class AppSettings {
     this.messageBubbles = false,
     this.assistantAvatarBubbleColor = assistantAvatarBubbleColorAuto,
     this.compactToolSummaries = false,
-    this.toolActivityInAvatar = false,
+    this.toolActivityInAvatar = true,
     this.waveTypingIndicator = false,
     this.chatDragToFolder = true,
     this.chatSwipeToDelete = true,

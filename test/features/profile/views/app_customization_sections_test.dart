@@ -285,8 +285,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    // On until the user turns it off.
     check(PreferencesStore.get<bool>(PreferenceKeys.toolActivityInAvatar))
-        .not((it) => it.equals(true));
+        .isNull();
     final row = find.text('Tool activity in avatar');
     await tester.scrollUntilVisible(row, 300);
     await tester.ensureVisible(row);
@@ -295,7 +296,7 @@ void main() {
     await tester.pumpAndSettle();
 
     check(PreferencesStore.get<bool>(PreferenceKeys.toolActivityInAvatar))
-        .equals(true);
+        .equals(false);
   });
 
   testWidgets('Data and Connection owns transport and streaming diagnostics', (
