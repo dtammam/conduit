@@ -605,6 +605,9 @@ const nativeMessageBubblesId = 'message-bubbles';
 /// Control id of the "Compact tool summaries" toggle in the native Chats page.
 const nativeCompactToolSummariesId = 'compact-tool-summaries';
 
+/// Control id of the "Tool activity in avatar" toggle in the native Chats page.
+const nativeToolActivityInAvatarId = 'tool-activity-in-avatar';
+
 /// Control id of the "Wave typing indicator" toggle in the native Chats page.
 const nativeWaveTypingIndicatorId = 'wave-typing-indicator';
 

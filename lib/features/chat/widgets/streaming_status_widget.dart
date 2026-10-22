@@ -43,6 +43,7 @@ class StreamingStatusWidget extends StatefulWidget {
     required this.updates,
     this.isStreaming = true,
     this.compactToolSummaries = false,
+    this.hideToolSteps = false,
   });
 
   final List<ChatStatusUpdate> updates;
@@ -52,6 +53,10 @@ class StreamingStatusWidget extends StatefulWidget {
   /// (the "Compact tool summaries" setting).
   final bool compactToolSummaries;
 
+  /// Leaves Hermes tool steps out of the timeline, because the assistant
+  /// avatar lists them ("Tool activity in avatar").
+  final bool hideToolSteps;
+
   @override
   State<StreamingStatusWidget> createState() => _StreamingStatusWidgetState();
 }
@@ -59,10 +64,15 @@ class StreamingStatusWidget extends StatefulWidget {
 class _StreamingStatusWidgetState extends State<StreamingStatusWidget> {
   @override
   Widget build(BuildContext context) {
-    final displayUpdates = filterVisibleStatusUpdates(
+    final visibleUpdates = filterVisibleStatusUpdates(
       widget.updates,
       isStreaming: widget.isStreaming,
     );
+    final displayUpdates = widget.hideToolSteps
+        ? visibleUpdates
+              .where((update) => !_isHermesToolUpdate(update))
+              .toList(growable: false)
+        : visibleUpdates;
     if (displayUpdates.isEmpty) return const SizedBox.shrink();
 
     final current = displayUpdates.last;

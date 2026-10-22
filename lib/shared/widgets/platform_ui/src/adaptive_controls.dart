@@ -34,6 +34,12 @@ IconData? cupertinoIconForSFSymbol(String symbol) => switch (symbol) {
   'plus' => CupertinoIcons.plus,
   'mic' => CupertinoIcons.mic,
   'paperplane.fill' => CupertinoIcons.arrow_up_circle_fill,
+  'checkmark.circle.fill' => CupertinoIcons.check_mark_circled_solid,
+  'xmark.circle.fill' => CupertinoIcons.xmark_circle_fill,
+  'exclamationmark.triangle.fill' =>
+    CupertinoIcons.exclamationmark_triangle_fill,
+  'wrench' => CupertinoIcons.wrench,
+  'clock' => CupertinoIcons.clock,
   _ => null,
 };
 

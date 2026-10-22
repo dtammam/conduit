@@ -14,6 +14,13 @@ bool compactToolSummariesOf(WidgetRef ref) => ref.watch(
   appSettingsProvider.select((settings) => settings.compactToolSummaries),
 );
 
+/// Whether tool calls are left out of the transcript because the assistant
+/// avatar lists them (the "Tool activity in avatar" setting, with the avatar
+/// on). Images and embeds a tool returned still show.
+bool toolActivityHiddenOf(WidgetRef ref) => ref.watch(
+  appSettingsProvider.select((settings) => settings.toolActivityInAvatarActive),
+);
+
 /// The title of a group of [count] tool calls: the tool names joined in
 /// [summary], or the compact "Used tools" form.
 String toolCallGroupTitle(
@@ -157,13 +164,32 @@ class _MarkdownDetailsGroupState extends State<MarkdownDetailsGroup> {
   @override
   Widget build(BuildContext context) {
     return Consumer(
-      builder: (context, ref, _) =>
-          _buildGroup(context, compact: compactToolSummariesOf(ref)),
+      builder: (context, ref, _) => _buildGroup(
+        context,
+        compact: compactToolSummariesOf(ref),
+        hidden: toolActivityHiddenOf(ref),
+      ),
     );
   }
 
-  Widget _buildGroup(BuildContext context, {required bool compact}) {
+  Widget _buildGroup(
+    BuildContext context, {
+    required bool compact,
+    required bool hidden,
+  }) {
     final theme = context.conduitTheme;
+    if (hidden) {
+      // Only what the tools returned for display, no rows.
+      return MarkdownDetailsGroupRenderScope(
+        mode: MarkdownDetailsGroupRenderMode.previewsOnly,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: widget.items
+              .map((item) => Builder(builder: item.childBuilder))
+              .toList(growable: false),
+        ),
+      );
+    }
 
     return Padding(
       padding: const EdgeInsets.only(bottom: Spacing.xs),

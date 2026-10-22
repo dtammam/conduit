@@ -16,6 +16,9 @@ final class PreferenceKeys {
   static const String assistantAvatarAccentCache =
       'assistant_avatar_accent_cache';
   static const String compactToolSummaries = 'compact_tool_summaries';
+  static const String toolActivityInAvatar = 'tool_activity_in_avatar';
+  static const String assistantActionLog = 'assistant_action_log_v1';
+  static const String assistantActionLogSeen = 'assistant_action_log_seen_v1';
   static const String waveTypingIndicator = 'wave_typing_indicator';
   static const String chatDragToFolder = 'chat_drag_to_folder';
   static const String chatSwipeToDelete = 'chat_swipe_to_delete';

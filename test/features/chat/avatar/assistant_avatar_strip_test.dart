@@ -11,6 +11,7 @@ import 'package:conduit/shared/theme/theme_extensions.dart';
 import 'package:conduit/shared/theme/tweakcn_themes.dart';
 import 'package:conduit/shared/widgets/platform_ui/platform_ui.dart';
 import 'package:conduit/shared/widgets/themed_sheets.dart';
+import 'package:conduit_core/features/automations/providers/automation_providers.dart';
 import 'package:conduit_core/features/chat/providers/chat_providers.dart';
 import 'package:conduit_core/models/chat_message.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -82,7 +83,10 @@ void main() {
     messages = _Messages(initial ?? [_user()]);
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [chatMessagesProvider.overrideWith(() => messages)],
+        overrides: [
+          chatMessagesProvider.overrideWith(() => messages),
+          automationsAvailableProvider.overrideWithValue(false),
+        ],
         child: MaterialApp(
           theme: AppTheme.light(TweakcnThemes.t3Chat),
           localizationsDelegates: conduitLocalizationsDelegates,
@@ -335,7 +339,9 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('assistant-avatar-circle')));
     await tester.pumpAndSettle();
 
-    check(find.text('Assistant avatar').evaluate()).length.equals(1);
+    // The sheet opens on Activity; the state rows live under Appearance.
+    await tester.tap(find.text('Appearance'));
+    await tester.pumpAndSettle();
     // Exactly four slots, top to bottom: Idle, Working, Making, Done.
     check(AssistantActivity.values.map((state) => state.name).toList())
         .deepEquals(['idle', 'working', 'making', 'done']);

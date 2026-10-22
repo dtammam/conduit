@@ -8,6 +8,7 @@ import 'package:conduit/shared/widgets/conduit_loading.dart';
 import 'package:conduit/shared/widgets/platform_ui/platform_ui.dart';
 import 'package:conduit/shared/widgets/themed_sheets.dart';
 import 'package:conduit_core/features/chat/providers/chat_providers.dart';
+import 'package:conduit_core/providers/app_providers.dart';
 import 'package:conduit_core/services/settings_service.dart';
 import 'package:conduit_core/utils/debug_logger.dart';
 import 'package:flutter/rendering.dart';
@@ -15,21 +16,14 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:video_player/video_player.dart';
 
-import '../widgets/message_bubble_colors.dart';
+import 'assistant_action_log.dart';
 import 'assistant_activity.dart';
 import 'assistant_avatar_accent.dart';
 import 'assistant_avatar_media.dart';
+import 'assistant_avatar_sheet.dart';
+import 'assistant_pending_approval.dart';
 
 const String _logScope = 'chat/avatar';
-
-/// The word shown in the pill for [activity].
-String _activityLabel(AppLocalizations l10n, AssistantActivity activity) =>
-    switch (activity) {
-      AssistantActivity.idle => l10n.assistantActivityIdle,
-      AssistantActivity.working => l10n.assistantActivityWorking,
-      AssistantActivity.making => l10n.assistantActivityMaking,
-      AssistantActivity.done => l10n.assistantActivityDone,
-    };
 
 /// A centered round avatar that reacts to what the assistant is doing, with
 /// a pill naming the assistant under it. It takes the app bar's title slot
@@ -97,6 +91,9 @@ class _AssistantAvatarStripState extends ConsumerState<AssistantAvatarStrip> {
   final Map<String, VideoPlayerController> _controllers = {};
   final Set<String> _failedMedia = {};
   bool _holdingDone = false;
+
+  /// What the circle shows right now, for the sheet's header.
+  Widget? _circleContent;
   Timer? _doneTimer;
   String? _playingId;
   bool _disposed = false;
@@ -117,6 +114,8 @@ class _AssistantAvatarStripState extends ConsumerState<AssistantAvatarStrip> {
   void initState() {
     super.initState();
     unawaited(_reloadMedia());
+    // A chat that is already open counts as loaded.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scanLoadedChat());
   }
 
   @override
@@ -248,6 +247,7 @@ class _AssistantAvatarStripState extends ConsumerState<AssistantAvatarStrip> {
       return;
     }
     if (previous != true) return;
+    _scanLoadedChat(finishedAt: DateTime.now());
     final failed = latestAssistantMessage(ref.read(chatMessagesProvider))
         ?.error;
     if (failed != null) return;
@@ -336,12 +336,57 @@ class _AssistantAvatarStripState extends ConsumerState<AssistantAvatarStrip> {
     }
   }
 
-  Future<void> _openSheet() async {
-    await ThemedSheets.showSurface<void>(
-      context: context,
-      builder: (_) =>
-          _AssistantAvatarSheet(store: _store, onChanged: _reloadMedia),
+  /// Records the tool calls of the open chat's settled replies that the log
+  /// has not read yet. The log remembers what it has read, so calling this
+  /// again costs a length comparison per reply.
+  void _scanLoadedChat({DateTime? finishedAt}) {
+    if (_disposed || !mounted) return;
+    final chatId = ref.read(activeConversationProvider)?.id;
+    if (chatId == null || isTemporaryChat(chatId)) return;
+    if (ref.read(isChatStreamingProvider)) return;
+    unawaited(
+      ref
+          .read(assistantActionLogProvider.notifier)
+          .scanMessages(
+            chatId,
+            ref.read(chatMessagesProvider),
+            finishedAt: finishedAt,
+          ),
     );
+  }
+
+  bool _sheetOpen = false;
+
+  Future<void> _openSheet({
+    AssistantSheetTab? tab,
+    Set<String>? messageIds,
+  }) async {
+    if (_sheetOpen) return;
+    _sheetOpen = true;
+    try {
+      await ThemedSheets.showSurface<void>(
+        context: context,
+        builder: (_) => AssistantAvatarSheet(
+          store: _store,
+          onChanged: _reloadMedia,
+          modelName: widget.modelName,
+          avatar: _circleContent,
+          initialTab: tab,
+          messageIds: messageIds,
+        ),
+      );
+    } finally {
+      _sheetOpen = false;
+    }
+  }
+
+  void _onSheetRequest(
+    AssistantSheetRequest? previous,
+    AssistantSheetRequest? next,
+  ) {
+    if (next == null) return;
+    ref.read(assistantSheetRequestProvider.notifier).consume();
+    unawaited(_openSheet(tab: next.tab, messageIds: next.messageIds));
   }
 
   @override
@@ -351,6 +396,32 @@ class _AssistantAvatarStripState extends ConsumerState<AssistantAvatarStrip> {
       appSettingsProvider.select((settings) => settings.messageBubbles),
       (previous, next) {
         if (next && previous != true) unawaited(_refreshAccent());
+      },
+    );
+    ref.listen<AssistantSheetRequest?>(
+      assistantSheetRequestProvider,
+      _onSheetRequest,
+    );
+    ref.listen<int>(
+      chatMessagesProvider.select((messages) => messages.length),
+      (previous, next) => _scanLoadedChat(),
+    );
+    ref.listen<String?>(
+      activeConversationProvider.select((conversation) => conversation?.id),
+      (previous, next) => _scanLoadedChat(),
+    );
+    ref.listen<({String? callId, String? messageId})>(
+      chatMessagesProvider.select((messages) {
+        final snapshot = assistantActivitySnapshot(messages);
+        return (callId: snapshot.callId, messageId: snapshot.messageId);
+      }),
+      (previous, next) {
+        final callId = next.callId;
+        final messageId = next.messageId;
+        if (callId == null || callId.isEmpty || messageId == null) return;
+        ref
+            .read(assistantActionLogProvider.notifier)
+            .noteRunning(messageId, callId);
       },
     );
     ref.watch(isChatStreamingProvider);
@@ -363,7 +434,7 @@ class _AssistantAvatarStripState extends ConsumerState<AssistantAvatarStrip> {
     );
     final l10n = AppLocalizations.of(context)!;
     final theme = context.conduitTheme;
-    final word = _activityLabel(l10n, activity);
+    final word = assistantActivityLabel(l10n, activity);
     // The line under the name: the running tool step when the stream names
     // one ("Search web", "Searching the web"), else the state word.
     final stateLine =
@@ -419,6 +490,7 @@ class _AssistantAvatarStripState extends ConsumerState<AssistantAvatarStrip> {
         );
       }
     }
+    _circleContent = content;
     // Play and pause after the frame, and only when the clip changes.
     if (playingId != _playingId) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -426,6 +498,12 @@ class _AssistantAvatarStripState extends ConsumerState<AssistantAvatarStrip> {
       });
     }
 
+    final unseenFailures = ref.watch(
+      assistantActionLogProvider.select((log) => log.unseenFailures),
+    );
+    final approvalPending = ref.watch(
+      assistantApprovalProvider.select((approval) => approval != null),
+    );
     final busy = activity != AssistantActivity.idle;
     final pillTap = busy ? widget.onActivityPressed : widget.onNamePressed;
     // Idle and tappable, the name is the model picker. No chevron marks it,
@@ -440,33 +518,47 @@ class _AssistantAvatarStripState extends ConsumerState<AssistantAvatarStrip> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.start,
           children: [
-            Semantics(
-              button: true,
-              label: l10n.assistantAvatarEditLabel(
-                displayName ?? l10n.assistantAvatar,
-                word,
-              ),
-              excludeSemantics: true,
-              child: GestureDetector(
-                key: const ValueKey('assistant-avatar-circle'),
-                behavior: HitTestBehavior.opaque,
-                onTap: _openSheet,
-                child: Container(
-                  width: AssistantAvatarStrip.avatarSize,
-                  height: AssistantAvatarStrip.avatarSize,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: theme.surfaceContainer,
-                    border: Border.all(color: theme.cardBorder),
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Semantics(
+                  button: true,
+                  label: l10n.assistantAvatarEditLabel(
+                    displayName ?? l10n.assistantAvatar,
+                    word,
                   ),
-                  child: ClipOval(
-                    child: RepaintBoundary(
-                      key: _mediaBoundaryKey,
-                      child: content ?? _AvatarInitial(name: widget.modelName),
+                  excludeSemantics: true,
+                  child: GestureDetector(
+                    key: const ValueKey('assistant-avatar-circle'),
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => unawaited(_openSheet()),
+                    child: Container(
+                      width: AssistantAvatarStrip.avatarSize,
+                      height: AssistantAvatarStrip.avatarSize,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: theme.surfaceContainer,
+                        border: Border.all(color: theme.cardBorder),
+                      ),
+                      child: ClipOval(
+                        child: RepaintBoundary(
+                          key: _mediaBoundaryKey,
+                          child:
+                              content ?? _AvatarInitial(name: widget.modelName),
+                        ),
+                      ),
                     ),
                   ),
                 ),
-              ),
+                Positioned(
+                  top: -2,
+                  right: -2,
+                  child: _AvatarBadge(
+                    failures: unseenFailures,
+                    approval: approvalPending,
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: Spacing.sm),
             // The pill names the assistant and, while it is busy, says what it
@@ -628,329 +720,55 @@ class _AvatarInitial extends StatelessWidget {
   }
 }
 
-/// The themed sheet that assigns a clip to each state.
-class _AssistantAvatarSheet extends ConsumerStatefulWidget {
-  const _AssistantAvatarSheet({required this.store, this.onChanged});
+/// The mark on the avatar circle: a red count of tool calls that failed since
+/// the user last looked at the activity list, else an amber mark while a
+/// prompt waits for an answer. Nothing otherwise.
+class _AvatarBadge extends StatelessWidget {
+  const _AvatarBadge({required this.failures, required this.approval});
 
-  final AssistantAvatarMediaStore store;
-  final Future<void> Function()? onChanged;
-
-  @override
-  ConsumerState<_AssistantAvatarSheet> createState() =>
-      _AssistantAvatarSheetState();
-}
-
-class _AssistantAvatarSheetState extends ConsumerState<_AssistantAvatarSheet> {
-  AssistantAvatarMediaSet _media = AssistantAvatarMediaSet.empty;
-  AssistantActivity? _busy;
-
-  @override
-  void initState() {
-    super.initState();
-    unawaited(_reload());
-  }
-
-  Future<void> _reload() async {
-    final media = await widget.store.load();
-    if (!mounted) return;
-    setState(() => _media = media);
-  }
-
-  Future<void> _choose(AssistantActivity state) async {
-    setState(() => _busy = state);
-    final stored = await widget.store.pickAndAssign(state);
-    if (!mounted) return;
-    setState(() => _busy = null);
-    if (stored == false) {
-      AdaptiveSnackBar.show(
-        context,
-        message: AppLocalizations.of(context)!.assistantAvatarPickFailed,
-        type: AdaptiveSnackBarType.error,
-      );
-      return;
-    }
-    if (stored == true) await _changed();
-  }
-
-  Future<void> _remove(AssistantActivity state) async {
-    setState(() => _busy = state);
-    await widget.store.remove(state);
-    if (!mounted) return;
-    setState(() => _busy = null);
-    await _changed();
-  }
-
-  Future<void> _changed() async {
-    await _reload();
-    await widget.onChanged?.call();
-  }
-
-  String _kindLabel(AppLocalizations l10n, AssistantActivity state) {
-    final user = _media.userFiles[state];
-    if (user != null) {
-      return user.kind == AssistantAvatarMediaKind.video
-          ? l10n.assistantAvatarMediaVideo
-          : l10n.assistantAvatarMediaImage;
-    }
-    if (_media.bundled.contains(state)) return l10n.assistantAvatarMediaDefault;
-    return l10n.assistantAvatarMediaNone;
-  }
+  final int failures;
+  final bool approval;
 
   @override
   Widget build(BuildContext context) {
+    if (failures <= 0 && !approval) return const SizedBox.shrink();
     final l10n = AppLocalizations.of(context)!;
     final theme = context.conduitTheme;
-    return SafeArea(
-      top: false,
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(
-          Spacing.modalPadding,
-          Spacing.sm,
-          Spacing.modalPadding,
-          Spacing.lg,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              l10n.assistantAvatar,
-              style: AppTypography.titleMediumStyle.copyWith(
-                color: theme.textPrimary,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: Spacing.md),
-            for (final state in AssistantActivity.values)
-              _buildRow(context, l10n, theme, state),
-            if (ref.watch(
-              appSettingsProvider.select((settings) => settings.messageBubbles),
-            ))
-              _BubbleColorPicker(l10n: l10n, theme: theme),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildRow(
-    BuildContext context,
-    AppLocalizations l10n,
-    ConduitThemeExtension theme,
-    AssistantActivity state,
-  ) {
-    final hasUserFile = _media.userFiles.containsKey(state);
-    final overridesDefault = hasUserFile && _media.bundled.contains(state);
-    final busy = _busy != null;
-    return Padding(
-      key: ValueKey('assistant-avatar-row-${state.name}'),
-      padding: const EdgeInsets.symmetric(vertical: Spacing.xs),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _activityLabel(l10n, state),
-                  style: AppTypography.bodyLargeStyle.copyWith(
-                    color: theme.textPrimary,
-                  ),
-                ),
-                Text(
-                  overridesDefault
-                      ? '${_kindLabel(l10n, state)} · '
-                            '${l10n.assistantAvatarRemoveRestoresDefault}'
-                      : _kindLabel(l10n, state),
-                  style: AppTypography.bodySmallStyle.copyWith(
-                    color: theme.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: Spacing.sm),
-          AdaptiveButton(
-            key: ValueKey('assistant-avatar-choose-${state.name}'),
-            onPressed: () => _choose(state),
-            enabled: !busy,
-            label: l10n.assistantAvatarChoose,
-            style: AdaptiveButtonStyle.tinted,
-            size: AdaptiveButtonSize.small,
-            useNative: false,
-          ),
-          const SizedBox(width: Spacing.xs),
-          AdaptiveButton(
-            key: ValueKey('assistant-avatar-remove-${state.name}'),
-            onPressed: () => _remove(state),
-            enabled: !busy && hasUserFile,
-            label: l10n.assistantAvatarRemove,
-            style: AdaptiveButtonStyle.plain,
-            size: AdaptiveButtonSize.small,
-            useNative: false,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// The user bubble color choice, shown in the avatar sheet while "Message
-/// bubbles" is on: Auto (from the avatar), Gray (the neutral look) and a few
-/// swatches, each previewed as the bubble it would make in this theme.
-class _BubbleColorPicker extends ConsumerWidget {
-  const _BubbleColorPicker({required this.l10n, required this.theme});
-
-  final AppLocalizations l10n;
-  final ConduitThemeExtension theme;
-
-  String _swatchLabel(MessageBubbleSwatch swatch) => switch (swatch) {
-    MessageBubbleSwatch.gold => l10n.assistantAvatarBubbleColorGold,
-    MessageBubbleSwatch.orange => l10n.assistantAvatarBubbleColorOrange,
-    MessageBubbleSwatch.pink => l10n.assistantAvatarBubbleColorPink,
-    MessageBubbleSwatch.purple => l10n.assistantAvatarBubbleColorPurple,
-    MessageBubbleSwatch.blue => l10n.assistantAvatarBubbleColorBlue,
-    MessageBubbleSwatch.green => l10n.assistantAvatarBubbleColorGreen,
-  };
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final selected = ref.watch(
-      appSettingsProvider.select(
-        (settings) => settings.assistantAvatarBubbleColor,
-      ),
-    );
-    final auto = ref.watch(assistantAvatarAutoAccentProvider);
-    void choose(String value) => ref
-        .read(appSettingsProvider.notifier)
-        .setAssistantAvatarBubbleColor(value);
-
-    final options = <Widget>[
-      _BubbleColorOption(
-        key: const ValueKey('bubble-color-auto'),
-        label: l10n.assistantAvatarBubbleColorAuto,
-        colors: resolveMessageBubbleColors(theme, auto),
-        icon: cupertinoIconForSFSymbol('sparkles'),
-        selected: selected == assistantAvatarBubbleColorAuto,
-        onTap: () => choose(assistantAvatarBubbleColorAuto),
-        theme: theme,
-      ),
-      _BubbleColorOption(
-        key: const ValueKey('bubble-color-gray'),
-        label: l10n.assistantAvatarBubbleColorGray,
-        colors: resolveMessageBubbleColors(theme, null),
-        selected: selected == assistantAvatarBubbleColorGray,
-        onTap: () => choose(assistantAvatarBubbleColorGray),
-        theme: theme,
-      ),
-      for (final swatch in MessageBubbleSwatch.values)
-        _BubbleColorOption(
-          key: ValueKey('bubble-color-${swatch.name}'),
-          label: _swatchLabel(swatch),
-          colors: resolveMessageBubbleColors(theme, swatch.color),
-          selected:
-              parseBubbleColor(selected)?.toARGB32() == swatch.color.toARGB32(),
-          onTap: () => choose(swatch.storageValue),
-          theme: theme,
-        ),
-    ];
-
-    return Padding(
-      padding: const EdgeInsets.only(top: Spacing.md),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            l10n.assistantAvatarBubbleColor,
-            style: AppTypography.bodyLargeStyle.copyWith(
-              color: theme.textPrimary,
-            ),
-          ),
-          Text(
-            l10n.assistantAvatarBubbleColorDescription,
-            style: AppTypography.bodySmallStyle.copyWith(
-              color: theme.textSecondary,
-            ),
-          ),
-          const SizedBox(height: Spacing.sm),
-          Wrap(spacing: Spacing.sm, runSpacing: Spacing.sm, children: options),
-        ],
-      ),
-    );
-  }
-}
-
-class _BubbleColorOption extends StatelessWidget {
-  const _BubbleColorOption({
-    super.key,
-    required this.label,
-    required this.colors,
-    required this.selected,
-    required this.onTap,
-    required this.theme,
-    this.icon,
-  });
-
-  static const double _size = 40;
-
-  final String label;
-  final MessageBubbleColors colors;
-  final bool selected;
-  final VoidCallback onTap;
-  final ConduitThemeExtension theme;
-  final IconData? icon;
-
-  @override
-  Widget build(BuildContext context) {
+    final showCount = failures > 0;
+    final color = showCount ? theme.error : theme.warning;
     return Semantics(
-      button: true,
-      selected: selected,
-      label: label,
+      label: showCount
+          ? l10n.assistantFailedCount(failures)
+          : l10n.assistantApprovalWaiting,
       excludeSemantics: true,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: SizedBox(
-          width: 56,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: _size + 6,
-                height: _size + 6,
-                padding: const EdgeInsets.all(2),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: selected
-                        ? theme.textPrimary
-                        : const Color(0x00000000),
-                    width: 2,
-                  ),
-                ),
-                child: Container(
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: colors.userFill,
-                  ),
-                  child: icon == null
-                      ? null
-                      : Icon(icon, size: 18, color: colors.userText),
-                ),
-              ),
-              const SizedBox(height: Spacing.xxs),
-              Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTypography.captionStyle.copyWith(
-                  color: selected ? theme.textPrimary : theme.textSecondary,
-                ),
-              ),
-            ],
-          ),
+      child: Container(
+        key: ValueKey(
+          showCount
+              ? 'assistant-avatar-badge-failed'
+              : 'assistant-avatar-badge-approval',
         ),
+        constraints: BoxConstraints(
+          minWidth: showCount ? 18 : 14,
+          minHeight: showCount ? 18 : 14,
+        ),
+        padding: showCount
+            ? const EdgeInsets.symmetric(horizontal: 5)
+            : EdgeInsets.zero,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(AppBorderRadius.round),
+          border: Border.all(color: theme.surfaceBackground, width: 2),
+        ),
+        child: showCount
+            ? Text(
+                failures > 99 ? '99+' : '$failures',
+                style: AppTypography.micro.copyWith(
+                  color: const Color(0xFFFFFFFF),
+                  fontWeight: FontWeight.w700,
+                ),
+              )
+            : null,
       ),
     );
   }

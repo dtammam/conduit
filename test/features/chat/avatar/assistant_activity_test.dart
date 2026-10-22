@@ -260,6 +260,25 @@ void main() {
     });
   });
 
+  group('toolStepLabel', () {
+    test('humanizes a plain tool name', () {
+      check(toolStepLabel('search_notes')).equals('Search notes');
+    });
+
+    test('drops an MCP server id that has a hyphen', () {
+      check(toolStepLabel('calendar-mcp_event_create')).equals('Event create');
+    });
+
+    test('keeps a leading segment that has no hyphen', () {
+      check(toolStepLabel('notes_search_notes')).equals('Notes search notes');
+    });
+
+    test('is null for an empty name', () {
+      check(toolStepLabel('  ')).isNull();
+      check(toolStepLabel(null)).isNull();
+    });
+  });
+
   group('resolveDisplayedAssistantActivity', () {
     test('a live activity always wins', () {
       for (final live in [

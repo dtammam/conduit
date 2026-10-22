@@ -146,6 +146,19 @@ class _MarkdownDetailsBlockState extends State<MarkdownDetailsBlock> {
       // result) sits one tap inside, exactly as in a group of several.
       return Consumer(
         builder: (context, ref, _) {
+          if (toolActivityHiddenOf(ref)) {
+            // The avatar lists the call; keep only what it returned for
+            // display.
+            final embeds = _canRenderToolCallEmbeds
+                ? _buildToolCallEmbeds(context)
+                : const <Widget>[];
+            return embeds.isEmpty
+                ? const SizedBox.shrink()
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: embeds,
+                  );
+          }
           if (!compactToolSummariesOf(ref)) return _buildBlock(context);
           final stateId = widget.inlineExpansionStateId;
           return MarkdownDetailsGroup(
@@ -411,10 +424,7 @@ class _MarkdownDetailsBlockState extends State<MarkdownDetailsBlock> {
     }
 
     if (_isToolCall) {
-      final failed =
-          _toolCallData.isError ||
-          _detailsData.status == 'rejected' ||
-          _detailsData.status == 'incomplete';
+      final failed = _detailsData.toolCallFailed;
       return Icon(
         failed ? Icons.cancel_outlined : Icons.check_circle_outline_rounded,
         size: iconSize,

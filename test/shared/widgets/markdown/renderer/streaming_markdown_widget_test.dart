@@ -2445,6 +2445,109 @@ After
     });
   });
 
+  group('tool activity in avatar', () {
+    const calls = '''
+<details type="tool_calls" done="true" name="web_search" result="&quot;one&quot;">
+<summary>Tool Executed</summary>
+</details>
+<details type="tool_calls" done="true" name="create_event" result="&quot;two&quot;">
+<summary>Tool Executed</summary>
+</details>
+After
+''';
+    const lone = '''
+<details type="tool_calls" done="true" name="web_search" result="&quot;one&quot;">
+<summary>Tool Executed</summary>
+</details>
+After
+''';
+    const reasoning = '''
+<details type="reasoning" done="true" duration="2">
+<summary>Thought for 2 seconds</summary>
+Some thinking
+</details>
+<details type="tool_calls" done="true" name="web_search" result="&quot;one&quot;">
+<summary>Tool Executed</summary>
+</details>
+After
+''';
+
+    List<Override> settings({required bool avatar, required bool activity}) => [
+      appSettingsProvider.overrideWith(
+        () => _FixedSettings(
+          AppSettings(
+            assistantAvatarEnabled: avatar,
+            toolActivityInAvatar: activity,
+          ),
+        ),
+      ),
+    ];
+
+    testWidgets('with the avatar and the setting on, a group is not drawn', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        buildHarness(
+          calls,
+          overrides: settings(avatar: true, activity: true),
+        ),
+      );
+
+      check(find.textContaining('Explored').evaluate()).isEmpty();
+      check(find.textContaining('web_search').evaluate()).isEmpty();
+      check(find.text('After').evaluate()).length.equals(1);
+    });
+
+    testWidgets('a lone tool call is not drawn either', (tester) async {
+      await tester.pumpWidget(
+        buildHarness(lone, overrides: settings(avatar: true, activity: true)),
+      );
+
+      check(find.text('View Result from web_search').evaluate()).isEmpty();
+      check(find.text('After').evaluate()).length.equals(1);
+    });
+
+    testWidgets('reasoning blocks stay', (tester) async {
+      await tester.pumpWidget(
+        buildHarness(
+          reasoning,
+          overrides: settings(avatar: true, activity: true),
+        ),
+      );
+
+      check(find.textContaining('Thought for').evaluate()).isNotEmpty();
+      check(find.textContaining('web_search').evaluate()).isEmpty();
+    });
+
+    testWidgets('without the avatar the setting changes nothing', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        buildHarness(
+          calls,
+          overrides: settings(avatar: false, activity: true),
+        ),
+      );
+
+      check(find.text('Explored web_search, create_event').evaluate())
+          .length
+          .equals(1);
+    });
+
+    testWidgets('with the setting off the rows stay', (tester) async {
+      await tester.pumpWidget(
+        buildHarness(
+          calls,
+          overrides: settings(avatar: true, activity: false),
+        ),
+      );
+
+      check(find.text('Explored web_search, create_event').evaluate())
+          .length
+          .equals(1);
+    });
+  });
+
   testWidgets(
     'keeps grouped tool call embeds visible while details are closed',
     (tester) async {
@@ -4737,4 +4840,14 @@ TextSpan? _findTextSpan(InlineSpan span, String text) {
 class _CompactToolSummariesSettings extends AppSettingsNotifier {
   @override
   AppSettings build() => const AppSettings(compactToolSummaries: true);
+}
+
+/// App settings fixed to [value].
+class _FixedSettings extends AppSettingsNotifier {
+  _FixedSettings(this.value);
+
+  final AppSettings value;
+
+  @override
+  AppSettings build() => value;
 }

@@ -40,6 +40,8 @@ export 'src/adaptive_chip.dart';
 
 export 'src/adaptive_progress.dart';
 
+export 'src/adaptive_selectable_text.dart';
+
 export 'src/adaptive_value_segmented_control.dart';
 
 export 'src/adaptive_floating_action_button.dart';

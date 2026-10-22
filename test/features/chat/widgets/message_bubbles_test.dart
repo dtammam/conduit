@@ -21,6 +21,7 @@ import 'package:conduit/shared/theme/theme_extensions.dart';
 import 'package:conduit/shared/theme/tweakcn_themes.dart';
 import 'package:conduit/shared/widgets/markdown/markdown_prose_bubble.dart';
 import 'package:conduit/shared/widgets/markdown/streaming_markdown_widget.dart';
+import 'package:conduit_core/features/automations/providers/automation_providers.dart';
 import 'package:conduit_core/features/chat/providers/chat_providers.dart';
 import 'package:conduit_core/models/chat_message.dart';
 import 'package:conduit_core/persistence/persistence_keys.dart';
@@ -810,7 +811,10 @@ void main() {
     ) async {
       await tester.pumpWidget(
         ProviderScope(
-          overrides: [chatMessagesProvider.overrideWith(_NoMessages.new)],
+          overrides: [
+            chatMessagesProvider.overrideWith(_NoMessages.new),
+            automationsAvailableProvider.overrideWithValue(false),
+          ],
           child: MaterialApp(
             theme: AppTheme.dark(TweakcnThemes.t3Chat),
             localizationsDelegates: conduitLocalizationsDelegates,
@@ -827,7 +831,8 @@ void main() {
       await tester.pump();
       await tester.tap(find.byKey(const ValueKey('assistant-avatar-circle')));
       await tester.pumpAndSettle();
-      check(find.text('Assistant avatar').evaluate()).isNotEmpty();
+      await tester.tap(find.text('Appearance'));
+      await tester.pumpAndSettle();
       // Hidden while message bubbles are off.
       check(find.byKey(const ValueKey('bubble-color-auto')).evaluate())
           .isEmpty();

@@ -8300,5 +8300,146 @@
   "assistantAvatarRemoveRestoresDefault": "Usunięcie przywraca domyślny",
   "@assistantAvatarRemoveRestoresDefault": {
     "description": "Hint in the assistant avatar sheet that removing a picked clip brings back the bundled one."
+  },
+  "toolActivityInAvatar": "Aktywność narzędzi w awatarze",
+  "@toolActivityInAvatar": {
+    "description": "Toggle title: tool calls leave the chat and show in the assistant avatar's sheet."
+  },
+  "toolActivityInAvatarDescription": "Ukrywa wywołania narzędzi w czacie i wyświetla je w arkuszu awatara. Wymaga awatara asystenta.",
+  "@toolActivityInAvatarDescription": {
+    "description": "Subtitle for the tool activity in avatar toggle."
+  },
+  "assistantSheetTabActivity": "Aktywność",
+  "@assistantSheetTabActivity": {
+    "description": "Tab in the assistant avatar sheet listing recorded tool calls."
+  },
+  "assistantSheetTabApprovals": "Zatwierdzenia",
+  "@assistantSheetTabApprovals": {
+    "description": "Tab in the assistant avatar sheet showing a request waiting for approval."
+  },
+  "assistantSheetTabUpcoming": "Zaplanowane",
+  "@assistantSheetTabUpcoming": {
+    "description": "Tab in the assistant avatar sheet listing scheduled tasks."
+  },
+  "assistantSheetTabAppearance": "Wygląd",
+  "@assistantSheetTabAppearance": {
+    "description": "Tab in the assistant avatar sheet for clips and bubble color."
+  },
+  "assistantActivityEmpty": "Brak wywołań narzędzi",
+  "@assistantActivityEmpty": {
+    "description": "Empty state of the tool activity list."
+  },
+  "assistantActivityArguments": "Argumenty",
+  "@assistantActivityArguments": {
+    "description": "Heading above the arguments a tool call was given."
+  },
+  "assistantActivityResult": "Wynik",
+  "@assistantActivityResult": {
+    "description": "Heading above the result a tool call returned."
+  },
+  "assistantActivityDuration": "Trwało {seconds} s",
+  "@assistantActivityDuration": {
+    "description": "How long a tool call took, in seconds.",
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "assistantActivityOpenInChat": "Otwórz w czacie",
+  "@assistantActivityOpenInChat": {
+    "description": "Button that opens the chat a tool call came from."
+  },
+  "assistantActivityClearTitle": "Wyczyścić aktywność narzędzi?",
+  "@assistantActivityClearTitle": {
+    "description": "Title of the confirmation for clearing the tool activity log."
+  },
+  "assistantActivityClearMessage": "Dziennik zostanie usunięty z tego urządzenia. Twoje czaty się nie zmienią.",
+  "@assistantActivityClearMessage": {
+    "description": "Body of the confirmation for clearing the tool activity log."
+  },
+  "assistantActivityFromReply": "Z tej odpowiedzi",
+  "@assistantActivityFromReply": {
+    "description": "Chip shown while the activity list is filtered to one reply."
+  },
+  "assistantActivityShowAll": "Pokaż całą aktywność",
+  "@assistantActivityShowAll": {
+    "description": "Accessibility label of the button that removes the reply filter."
+  },
+  "assistantActivityFailed": "Nie powiodło się",
+  "@assistantActivityFailed": {
+    "description": "Accessibility label of a failed tool call."
+  },
+  "assistantActivitySucceeded": "Powiodło się",
+  "@assistantActivitySucceeded": {
+    "description": "Accessibility label of a tool call that succeeded."
+  },
+  "assistantApprovalsEmpty": "Nic na ciebie nie czeka",
+  "@assistantApprovalsEmpty": {
+    "description": "Empty state of the approvals tab."
+  },
+  "assistantApprovalsAnswerInChat": "Odpowiedz w czacie",
+  "@assistantApprovalsAnswerInChat": {
+    "description": "Button that closes the sheet so a question can be answered in the chat."
+  },
+  "assistantApprovalWaiting": "Oczekuje na zatwierdzenie",
+  "@assistantApprovalWaiting": {
+    "description": "Accessibility label of the avatar badge when a request waits for approval."
+  },
+  "assistantUpcomingEmpty": "Nic nie zaplanowano",
+  "@assistantUpcomingEmpty": {
+    "description": "Empty state of the upcoming tab."
+  },
+  "assistantUpcomingNextRun": "Następne uruchomienie {time}",
+  "@assistantUpcomingNextRun": {
+    "description": "When a scheduled task runs next.",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "assistantFailedCount": "Nieudane: {count}",
+  "@assistantFailedCount": {
+    "description": "Number of failed tool calls.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "assistantViewActions": "Zobacz działania",
+  "@assistantViewActions": {
+    "description": "Reply menu item that opens the tool activity for that reply."
+  },
+  "assistantToolFailure": "Nie udało się ukończyć: {tool}: {reason}",
+  "@assistantToolFailure": {
+    "description": "Line in a reply when a tool call failed; tool is its name, reason the first line of the error.",
+    "placeholders": {
+      "tool": {
+        "type": "String"
+      },
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "assistantToolFailureNoReason": "Nie udało się ukończyć: {tool}",
+  "@assistantToolFailureNoReason": {
+    "description": "Line in a reply when a tool call failed and gave no reason.",
+    "placeholders": {
+      "tool": {
+        "type": "String"
+      }
+    }
+  },
+  "assistantToolFailureMany": "{count, plural, =1{Nie udało się ukończyć 1 działania} few{Nie udało się ukończyć {count} działań} many{Nie udało się ukończyć {count} działań} other{Nie udało się ukończyć {count} działania}}",
+  "@assistantToolFailureMany": {
+    "description": "Line in a reply when several tool calls failed.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   }
 }

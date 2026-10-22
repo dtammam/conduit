@@ -261,6 +261,11 @@ void main() {
       for (var frame = 0; frame < 3; frame++) {
         await tester.pump(const Duration(milliseconds: 200));
       }
+      // The sheet opens on Activity; the clips are under Appearance.
+      await tester.tap(find.text('Appearance'));
+      for (var frame = 0; frame < 3; frame++) {
+        await tester.pump(const Duration(milliseconds: 200));
+      }
       check(find.byKey(const ValueKey('assistant-avatar-row-idle')).evaluate())
           .length
           .equals(1);

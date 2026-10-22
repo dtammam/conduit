@@ -272,6 +272,32 @@ void main() {
         .equals(true);
   });
 
+  testWidgets('Chat toggles the persisted tool activity in avatar', (
+    tester,
+  ) async {
+    addTearDown(PreferencesStore.debugReset);
+    await tester.runAsync(() async {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      PreferencesStore.debugOverride(await FlutterKeyValueStore.load());
+    });
+    await tester.pumpWidget(
+      _sectionHarness(AppCustomizationSection.chat, persistSettings: true),
+    );
+    await tester.pumpAndSettle();
+
+    check(PreferencesStore.get<bool>(PreferenceKeys.toolActivityInAvatar))
+        .not((it) => it.equals(true));
+    final row = find.text('Tool activity in avatar');
+    await tester.scrollUntilVisible(row, 300);
+    await tester.ensureVisible(row);
+    await tester.pumpAndSettle();
+    await tester.tap(row);
+    await tester.pumpAndSettle();
+
+    check(PreferencesStore.get<bool>(PreferenceKeys.toolActivityInAvatar))
+        .equals(true);
+  });
+
   testWidgets('Data and Connection owns transport and streaming diagnostics', (
     tester,
   ) async {

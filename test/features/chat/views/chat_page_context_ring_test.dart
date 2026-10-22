@@ -1,4 +1,5 @@
 import 'package:checks/checks.dart';
+import 'package:conduit/features/chat/avatar/assistant_action_log.dart';
 import 'package:conduit/features/chat/widgets/context_usage_ring.dart';
 import 'package:conduit/features/chat/views/chat_page.dart';
 import 'package:conduit/l10n/app_localizations.dart';
@@ -12,6 +13,7 @@ import 'package:conduit/shared/widgets/conduit_components.dart';
 import 'package:conduit_core/database/chat_database_repository.dart';
 import 'package:conduit_core/database/database_provider.dart';
 import 'package:conduit_core/features/auth/providers/unified_auth_providers.dart';
+import 'package:conduit_core/features/automations/providers/automation_providers.dart';
 import 'package:conduit_core/features/chat/providers/chat_providers.dart';
 import 'package:conduit_core/features/tools/providers/tools_providers.dart';
 import 'package:conduit_core/models/chat_message.dart';
@@ -87,12 +89,40 @@ class _Storage extends Fake implements OptimizedStorageService {
 }
 
 class _Settings extends AppSettingsNotifier {
-  _Settings({required this.showContextUsage});
+  _Settings({required this.showContextUsage, this.tooling = false});
 
   final bool showContextUsage;
 
+  /// Both the avatar and the tool activity setting on.
+  final bool tooling;
+
   @override
-  AppSettings build() => AppSettings(showContextUsage: showContextUsage);
+  AppSettings build() => AppSettings(
+    showContextUsage: showContextUsage,
+    assistantAvatarEnabled: tooling,
+    toolActivityInAvatar: tooling,
+  );
+}
+
+/// A log holding one failed call nobody has seen, so the avatar badge shows.
+class _FailedLog extends AssistantActionLog {
+  @override
+  AssistantActionLogState build() => AssistantActionLogState(
+    records: [
+      AssistantActionRecord(
+        id: 'call_1',
+        chatId: 'chat',
+        messageId: 'm1',
+        toolName: 'create_event',
+        arguments: '{}',
+        result: 'Error: offline',
+        status: AssistantActionStatus.failed,
+        startedAt: DateTime.now(),
+        finishedAt: DateTime.now(),
+      ),
+    ],
+    failuresSeenAt: DateTime.now().subtract(const Duration(days: 1)),
+  );
 }
 
 ApiService _api() => ApiService(
@@ -152,6 +182,7 @@ void main() {
     WidgetTester tester, {
     required List<ChatMessage> messages,
     bool showContextUsage = true,
+    bool tooling = false,
   }) async {
     final originalErrorWidgetBuilder = ErrorWidget.builder;
     final originalFlutterErrorOnError = FlutterError.onError;
@@ -163,8 +194,13 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         appSettingsProvider.overrideWith(
-          () => _Settings(showContextUsage: showContextUsage),
+          () => _Settings(
+            showContextUsage: showContextUsage,
+            tooling: tooling,
+          ),
         ),
+        if (tooling) assistantActionLogProvider.overrideWith(_FailedLog.new),
+        if (tooling) automationsAvailableProvider.overrideWithValue(false),
         apiServiceProvider.overrideWithValue(_api()),
         appDatabaseProvider.overrideWith((ref) => null),
         isAuthenticatedProvider2.overrideWithValue(false),
@@ -312,6 +348,31 @@ void main() {
     final ring = find.byType(ContextUsageRing);
     check(tester.getSize(ring).width).isLessThan(tester.getSize(button).width);
     check(tester.getCenter(ring)).equals(tester.getCenter(button));
+  });
+
+  testWidgets('with the avatar and its badge on, the ring stays put and works', (
+    tester,
+  ) async {
+    await mountPage(tester, messages: _messages, tooling: true);
+
+    final badge = find.byKey(const ValueKey('assistant-avatar-badge-failed'));
+    final circle = find.byKey(const ValueKey('assistant-avatar-circle'));
+    final button = find.byType(ContextUsageRingButton);
+    expect(badge, findsOneWidget);
+    expect(button, findsOneWidget);
+    expect(find.byType(ContextUsageRing), findsOneWidget);
+    // The ring keeps its place beside the menu and clear of the avatar.
+    final menu = tester.getRect(
+      find.byKey(const ValueKey('chat-sidebar-toggle')),
+    );
+    final ringRect = tester.getRect(button);
+    check(ringRect.left - menu.right).isCloseTo(Spacing.sm, 0.01);
+    check(ringRect.overlaps(tester.getRect(circle))).isFalse();
+    check(ringRect.overlaps(tester.getRect(badge))).isFalse();
+
+    await tester.tap(button);
+    await pumpFrames(tester, 4);
+    expect(find.byType(ContextUsageSheetContent), findsOneWidget);
   });
 
   testWidgets('tapping the ring opens the context sheet', (tester) async {

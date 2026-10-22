@@ -75,6 +75,8 @@ import 'streaming_status_widget.dart';
 
 import 'package:conduit_core/features/chat/utils/file_utils.dart';
 
+import '../avatar/assistant_action_log.dart';
+import '../avatar/assistant_activity.dart' show toolStepLabel;
 import '../reactions/quick_reply_reactions.dart';
 import 'chat_branch_actions.dart';
 import 'chat_comparison_widgets.dart';
@@ -1397,9 +1399,16 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
                           (settings) => settings.compactToolSummaries,
                         ),
                       ),
+                      hideToolSteps: ref.watch(
+                        appSettingsProvider.select(
+                          (settings) => settings.toolActivityInAvatarActive,
+                        ),
+                      ),
                     ),
                     const SizedBox(height: Spacing.xs),
                   ],
+
+                  ..._buildToolFailureLine(),
 
                   if (showQueuedAsEmptyState)
                     _buildQueuedCompletionBanner(queuedCompletion)
@@ -2245,11 +2254,13 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
     final actions = includeActions
         ? _buildFooterActions()
         : const <_AssistantFooterAction>[];
+    bool alwaysInOverflow(_AssistantFooterAction action) =>
+        action.id == 'delete' || action.id == 'view-actions';
     final forcedOverflowActions = actions
-        .where((action) => action.id == 'delete')
+        .where(alwaysInOverflow)
         .toList(growable: false);
     final inlineCandidateActions = actions
-        .where((action) => action.id != 'delete')
+        .where((action) => !alwaysInOverflow(action))
         .toList(growable: false);
     final visibleActions = inlineCandidateActions
         .take(maxInlineActions)
@@ -2458,6 +2469,115 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
     return _errorScanResult;
   }
 
+  // Reading a reply's tool calls parses all of it; the failure line rebuilds
+  // far more often than the content changes, so memoize by identity.
+  String? _failureScanContent;
+  List<AssistantActionRecord> _failureScanResult = const [];
+
+  List<AssistantActionRecord> get _failedToolCalls {
+    final content = _displayedContent;
+    if (!identical(_failureScanContent, content)) {
+      _failureScanContent = content;
+      _failureScanResult = extractToolCallRecords(
+        chatId: '',
+        messageId: _messageId,
+        content: content,
+        messageTime: DateTime.now(),
+      ).where((record) => record.failed).toList(growable: false);
+    }
+    return _failureScanResult;
+  }
+
+  /// With "Tool activity in avatar" on, the one line that stands in for the
+  /// tool rows of a reply whose tool call failed. Tapping it opens the
+  /// avatar's sheet on the calls of this reply.
+  List<Widget> _buildToolFailureLine() {
+    final hidden = ref.watch(
+      appSettingsProvider.select(
+        (settings) => settings.toolActivityInAvatarActive,
+      ),
+    );
+    if (!hidden || _uiTreatsAsStreaming || _messageId.isEmpty) return const [];
+    final failed = _failedToolCalls;
+    if (failed.isEmpty) return const [];
+    final l10n = AppLocalizations.of(context)!;
+    final theme = context.conduitTheme;
+    final first = failed.first;
+    final tool = toolStepLabel(first.toolName) ?? first.toolName;
+    final reason = toolResultPreview(first);
+    final text = failed.length > 1
+        ? l10n.assistantToolFailureMany(failed.length)
+        : reason.isEmpty
+        ? l10n.assistantToolFailureNoReason(tool)
+        : l10n.assistantToolFailure(tool, reason);
+    return [
+      GestureDetector(
+        key: const ValueKey<String>('assistant-tool-failure-line'),
+        behavior: HitTestBehavior.opaque,
+        onTap: () => ref
+            .read(assistantSheetRequestProvider.notifier)
+            .open(messageIds: {_messageId}),
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: Spacing.xs),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Icon(
+                  cupertinoIconForSFSymbol('exclamationmark.triangle.fill'),
+                  size: IconSize.sm,
+                  color: theme.error,
+                ),
+              ),
+              const SizedBox(width: Spacing.xs),
+              Expanded(
+                child: Text(
+                  text,
+                  style: AppTypography.bodySmallStyle.copyWith(
+                    color: theme.error,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ];
+  }
+
+  /// The "View actions" item of the reply's menu: the tool calls of this turn
+  /// in the avatar's sheet. Null unless tool activity lives in the avatar and
+  /// the log has calls for the turn.
+  _AssistantFooterAction? _buildViewActionsAction(
+    AppLocalizations l10n,
+    String? chatId,
+  ) {
+    final hidden = ref.watch(
+      appSettingsProvider.select(
+        (settings) => settings.toolActivityInAvatarActive,
+      ),
+    );
+    final messageId = _messageId;
+    if (!hidden || chatId == null || messageId.isEmpty) return null;
+    // Rebuild when the log changes size, not on every record edit.
+    ref.watch(assistantActionLogProvider.select((log) => log.records.length));
+    final scope = turnMessageIds(ref.read(chatMessagesProvider), messageId);
+    final calls = ref
+        .read(assistantActionLogProvider)
+        .forMessages(chatId, scope);
+    if (calls.isEmpty) return null;
+    return _AssistantFooterAction(
+      id: 'view-actions',
+      icon: Platform.isIOS ? CupertinoIcons.wrench : Icons.handyman_outlined,
+      label: l10n.assistantViewActions,
+      onTap: () => ref
+          .read(assistantSheetRequestProvider.notifier)
+          .open(messageIds: scope),
+      sfSymbol: 'wrench',
+    );
+  }
+
   List<_AssistantFooterAction> _buildFooterActions() {
     final l10n = AppLocalizations.of(context)!;
     // Watch only the playback fields the footer renders so Listen/Stop stays
@@ -2635,6 +2755,7 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
           ),
           sfSymbol: 'arrow.triangle.branch',
         ),
+      ?_buildViewActionsAction(l10n, branchChatId),
       if (!widget.readOnly)
         _AssistantFooterAction(
           id: 'delete',

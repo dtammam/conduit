@@ -82,11 +82,11 @@ ChatMessage? latestAssistantMessage(List<ChatMessage> messages) {
 /// call's name as the status rows show it ("search_web" reads "Search
 /// web"). Never returns [AssistantActivity.done]; the avatar holds that
 /// state for [kAssistantActivityDoneHold] after streaming ends.
-({AssistantActivity activity, String? detail}) _deriveLive(
+({AssistantActivity activity, String? detail, String? callId}) _deriveLive(
   ChatMessage? message,
 ) {
   if (message == null || !message.isStreaming) {
-    return (activity: AssistantActivity.idle, detail: null);
+    return (activity: AssistantActivity.idle, detail: null, callId: null);
   }
 
   ChatStatusUpdate? status;
@@ -101,12 +101,14 @@ ChatMessage? latestAssistantMessage(List<ChatMessage> messages) {
       return (
         activity: AssistantActivity.making,
         detail: _statusDetail(status),
+        callId: null,
       );
     }
     if (_isToolStatusAction(status.action)) {
       return (
         activity: AssistantActivity.working,
         detail: _statusDetail(status),
+        callId: null,
       );
     }
   }
@@ -117,12 +119,13 @@ ChatMessage? latestAssistantMessage(List<ChatMessage> messages) {
       activity: _isImageToolName(active.name)
           ? AssistantActivity.making
           : AssistantActivity.working,
-      detail: _toolStepLabel(active.name),
+      detail: toolStepLabel(active.name),
+      callId: active.type == 'tool_calls' ? active.id : null,
     );
   }
   // Reasoning, waiting for the first token and writing the answer are one
   // busy state.
-  return (activity: AssistantActivity.working, detail: null);
+  return (activity: AssistantActivity.working, detail: null, callId: null);
 }
 
 String? _statusDetail(ChatStatusUpdate status) {
@@ -132,14 +135,26 @@ String? _statusDetail(ChatStatusUpdate status) {
   final name = action.startsWith('hermes_tool_')
       ? action.substring('hermes_tool_'.length)
       : action;
-  return _toolStepLabel(name);
+  return toolStepLabel(name);
 }
 
 /// A tool or action name the way the streaming status rows print one
 /// (`streaming_status_widget.dart`): underscores become spaces and the
 /// first letter is capitalized. Null for an empty name.
-String? _toolStepLabel(String? name) {
-  final words = name?.replaceAll('_', ' ').trim() ?? '';
+///
+/// MCP tools arrive as `<server id>_<tool>`; a leading segment that has a
+/// hyphen and is followed by an underscore is the server id and is dropped
+/// (`calendar-mcp_event_create` reads "Event create"). A name with no such
+/// segment (`search_notes`) is left whole.
+String? toolStepLabel(String? name) {
+  var raw = name?.trim() ?? '';
+  final underscore = raw.indexOf('_');
+  if (underscore > 0 &&
+      underscore < raw.length - 1 &&
+      raw.substring(0, underscore).contains('-')) {
+    raw = raw.substring(underscore + 1);
+  }
+  final words = raw.replaceAll('_', ' ').trim();
   if (words.isEmpty) return null;
   return '${words[0].toUpperCase()}${words.substring(1)}';
 }
@@ -157,11 +172,14 @@ AssistantActivity resolveDisplayedAssistantActivity({
 
 /// The narrow slice of the transcript the avatar rebuilds on: the live
 /// activity, the running tool step's name when there is one, and whether
-/// the latest reply carries an error.
+/// the latest reply carries an error. [callId] and [messageId] name the
+/// running tool call, for the action log's start time.
 typedef AssistantActivitySnapshot = ({
   AssistantActivity live,
   String? detail,
   bool failed,
+  String? callId,
+  String? messageId,
 });
 
 AssistantActivitySnapshot assistantActivitySnapshot(
@@ -173,6 +191,8 @@ AssistantActivitySnapshot assistantActivitySnapshot(
     live: live.activity,
     detail: live.detail,
     failed: message?.error != null,
+    callId: live.callId,
+    messageId: live.callId == null ? null : message?.id,
   );
 }
 
@@ -190,13 +210,16 @@ final RegExp _detailsOpenTag = RegExp(
 );
 final RegExp _detailsTypeAttr = RegExp(r'''type\s*=\s*["']([^"']+)["']''');
 final RegExp _detailsNameAttr = RegExp(r'''\bname\s*=\s*["']([^"']*)["']''');
+final RegExp _detailsIdAttr = RegExp(r'''\bid\s*=\s*["']([^"']*)["']''');
 final RegExp _detailsDoneTrue = RegExp(r'''done\s*=\s*["']true["']''');
 
-/// The `type` and `name` of the last `<details>` block when it is still
+/// The `type`, `name` and `id` of the last `<details>` block when it is still
 /// running and nothing visible follows it: an unclosed block, or a closed
 /// one marked `done="false"` (how Open WebUI shows a tool call in flight).
 /// Only the last [_trailingDetailsWindow] characters are read.
-({String type, String? name})? _activeTrailingDetails(String content) {
+({String type, String? name, String? id})? _activeTrailingDetails(
+  String content,
+) {
   final windowStart = math.max(0, content.length - _trailingDetailsWindow);
   RegExpMatch? last;
   for (final match in _detailsOpenTag.allMatches(content, windowStart)) {
@@ -216,5 +239,6 @@ final RegExp _detailsDoneTrue = RegExp(r'''done\s*=\s*["']true["']''');
   return (
     type: type,
     name: _detailsNameAttr.firstMatch(attributes)?.group(1)?.trim(),
+    id: _detailsIdAttr.firstMatch(attributes)?.group(1)?.trim(),
   );
 }

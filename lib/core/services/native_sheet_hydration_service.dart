@@ -1636,6 +1636,14 @@ class NativeSheetHydrationService {
         value: appSettings.compactToolSummaries,
       ),
       NativeSheetItemConfig(
+        id: nativeToolActivityInAvatarId,
+        title: l10n.toolActivityInAvatar,
+        subtitle: l10n.toolActivityInAvatarDescription,
+        sfSymbol: 'list.bullet.rectangle',
+        kind: NativeSheetItemKind.toggle,
+        value: appSettings.toolActivityInAvatar,
+      ),
+      NativeSheetItemConfig(
         id: nativeWaveTypingIndicatorId,
         title: l10n.waveTypingIndicator,
         subtitle: l10n.waveTypingIndicatorDescription,

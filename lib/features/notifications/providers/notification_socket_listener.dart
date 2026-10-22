@@ -91,6 +91,27 @@ void _bumpChannelUnread(Ref ref, AppNotification notification) {
   }
 }
 
+/// Opens the chat [chatId] on the chat page: the local copy first, then a
+/// pull from the server. A notification tap and the avatar's activity list
+/// both open chats this way.
+Future<void> openChatById(Ref ref, String chatId) async {
+  final ownership = captureOpenWebUiConversationRead(ref);
+  if (ownership == null) return;
+  final outgoing = ref.read(activeConversationProvider);
+  if (outgoing == null || !conversationMatchesScopedId(outgoing, chatId)) {
+    clearSelectedFiltersForConversationBoundary(ref);
+  }
+  // DB-first open, mirroring the conversation-list selection flow.
+  await NavigationService.navigateToChat();
+  if (!openWebUiConversationReadIsCurrent(ref, ownership)) return;
+  final local = await loadLocalConversation(ref, chatId, ownership: ownership);
+  if (!openWebUiConversationReadIsCurrent(ref, ownership)) return;
+  if (local != null) {
+    ref.read(activeConversationProvider.notifier).set(local);
+  }
+  schedulePullChatNow(ref, chatId, ownership: ownership);
+}
+
 Future<void> _handleTap(Ref ref, NotificationTap tap) async {
   // Fire-and-forget from tap streams / cold launch — never let a navigation
   // failure surface as an uncaught async error.
@@ -99,26 +120,7 @@ Future<void> _handleTap(Ref ref, NotificationTap tap) async {
       case NotificationKind.channelMessage:
         NavigationService.navigateToChannel(tap.sourceId);
       case NotificationKind.chatCompletion:
-        final ownership = captureOpenWebUiConversationRead(ref);
-        if (ownership == null) return;
-        final outgoing = ref.read(activeConversationProvider);
-        if (outgoing == null ||
-            !conversationMatchesScopedId(outgoing, tap.sourceId)) {
-          clearSelectedFiltersForConversationBoundary(ref);
-        }
-        // DB-first open, mirroring the conversation-list selection flow.
-        await NavigationService.navigateToChat();
-        if (!openWebUiConversationReadIsCurrent(ref, ownership)) return;
-        final local = await loadLocalConversation(
-          ref,
-          tap.sourceId,
-          ownership: ownership,
-        );
-        if (!openWebUiConversationReadIsCurrent(ref, ownership)) return;
-        if (local != null) {
-          ref.read(activeConversationProvider.notifier).set(local);
-        }
-        schedulePullChatNow(ref, tap.sourceId, ownership: ownership);
+        await openChatById(ref, tap.sourceId);
     }
   } catch (e, st) {
     DebugLogger.error(

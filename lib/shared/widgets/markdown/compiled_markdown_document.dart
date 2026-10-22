@@ -1115,6 +1115,14 @@ class CompiledMarkdownDetailsData {
   final bool hasDuration;
   final CompiledMarkdownToolCallData? toolCallData;
 
+  /// Whether this tool call failed: its result reads as an error, or it was
+  /// rejected or left incomplete. The status rows and the assistant action
+  /// log share this rule.
+  bool get toolCallFailed =>
+      (toolCallData?.isError ?? false) ||
+      status == 'rejected' ||
+      status == 'incomplete';
+
   bool get supportsInlineExpansion =>
       kind == CompiledMarkdownDetailsKind.reasoning ||
       kind == CompiledMarkdownDetailsKind.codeInterpreter;

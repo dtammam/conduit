@@ -308,6 +308,7 @@ class SettingsService {
           settings.assistantAvatarBubbleColor,
       PreferenceKeys.deliveryReceiptsEnabled: settings.deliveryReceiptsEnabled,
       PreferenceKeys.compactToolSummaries: settings.compactToolSummaries,
+      PreferenceKeys.toolActivityInAvatar: settings.toolActivityInAvatar,
       PreferenceKeys.waveTypingIndicator: settings.waveTypingIndicator,
       PreferenceKeys.chatDragToFolder: settings.chatDragToFolder,
       PreferenceKeys.chatSwipeToDelete: settings.chatSwipeToDelete,
@@ -778,6 +779,8 @@ class SettingsService {
           get<bool>(PreferenceKeys.deliveryReceiptsEnabled) ?? true,
       compactToolSummaries:
           get<bool>(PreferenceKeys.compactToolSummaries) ?? false,
+      toolActivityInAvatar:
+          get<bool>(PreferenceKeys.toolActivityInAvatar) ?? false,
       waveTypingIndicator:
           get<bool>(PreferenceKeys.waveTypingIndicator) ?? false,
       chatDragToFolder: get<bool>(PreferenceKeys.chatDragToFolder) ?? true,
@@ -931,6 +934,16 @@ class AppSettings {
   /// naming each tool; the names stay one tap away.
   final bool compactToolSummaries;
 
+  /// Whether tool calls leave the transcript and show in the assistant
+  /// avatar's sheet instead. Only takes effect while [assistantAvatarEnabled]
+  /// is on; see [toolActivityInAvatarActive].
+  final bool toolActivityInAvatar;
+
+  /// Whether tool calls are hidden from the transcript: the setting is on and
+  /// the avatar that shows them is on too.
+  bool get toolActivityInAvatarActive =>
+      toolActivityInAvatar && assistantAvatarEnabled;
+
   /// Whether a running reply shows three dots that rise in a wave instead of
   /// the stepped orbit under it.
   final bool waveTypingIndicator;
@@ -1012,6 +1025,7 @@ class AppSettings {
     this.messageBubbles = false,
     this.assistantAvatarBubbleColor = assistantAvatarBubbleColorAuto,
     this.compactToolSummaries = false,
+    this.toolActivityInAvatar = false,
     this.waveTypingIndicator = false,
     this.chatDragToFolder = true,
     this.chatSwipeToDelete = true,
@@ -1071,6 +1085,7 @@ class AppSettings {
     String? assistantAvatarBubbleColor,
     bool? deliveryReceiptsEnabled,
     bool? compactToolSummaries,
+    bool? toolActivityInAvatar,
     bool? waveTypingIndicator,
     bool? chatDragToFolder,
     bool? chatSwipeToDelete,
@@ -1134,6 +1149,7 @@ class AppSettings {
       deliveryReceiptsEnabled:
           deliveryReceiptsEnabled ?? this.deliveryReceiptsEnabled,
       compactToolSummaries: compactToolSummaries ?? this.compactToolSummaries,
+      toolActivityInAvatar: toolActivityInAvatar ?? this.toolActivityInAvatar,
       waveTypingIndicator: waveTypingIndicator ?? this.waveTypingIndicator,
       chatDragToFolder: chatDragToFolder ?? this.chatDragToFolder,
       chatSwipeToDelete: chatSwipeToDelete ?? this.chatSwipeToDelete,
@@ -1226,6 +1242,7 @@ class AppSettings {
         other.assistantAvatarBubbleColor == assistantAvatarBubbleColor &&
         other.deliveryReceiptsEnabled == deliveryReceiptsEnabled &&
         other.compactToolSummaries == compactToolSummaries &&
+        other.toolActivityInAvatar == toolActivityInAvatar &&
         other.waveTypingIndicator == waveTypingIndicator &&
         other.chatDragToFolder == chatDragToFolder &&
         other.chatSwipeToDelete == chatSwipeToDelete &&
@@ -1289,6 +1306,7 @@ class AppSettings {
       assistantAvatarBubbleColor,
       deliveryReceiptsEnabled,
       compactToolSummaries,
+      toolActivityInAvatar,
       waveTypingIndicator,
       chatDragToFolder,
       chatSwipeToDelete,
@@ -1439,6 +1457,14 @@ class AppSettingsNotifier extends _$AppSettingsNotifier {
     state = state.copyWith(deliveryReceiptsEnabled: value);
     await SettingsService._putPreference(
       PreferenceKeys.deliveryReceiptsEnabled,
+      value,
+    );
+  }
+
+  Future<void> setToolActivityInAvatar(bool value) async {
+    state = state.copyWith(toolActivityInAvatar: value);
+    await SettingsService._putPreference(
+      PreferenceKeys.toolActivityInAvatar,
       value,
     );
   }

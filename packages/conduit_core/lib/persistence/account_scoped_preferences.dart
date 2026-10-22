@@ -69,6 +69,9 @@ const Set<String> accountScopedPreferenceKeys = <String>{
   PreferenceKeys.sidebarActiveTab,
   PreferenceKeys.temporaryChatByDefault,
   PreferenceKeys.contextWindowOverrides,
+  // The tool call log names this account's chats.
+  PreferenceKeys.assistantActionLog,
+  PreferenceKeys.assistantActionLogSeen,
 };
 
 /// The Open WebUI account whose preferences apply: the stored active

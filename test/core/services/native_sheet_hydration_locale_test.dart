@@ -390,6 +390,7 @@ void main() {
         'assistant-avatar',
         'message-bubbles',
         'compact-tool-summaries',
+        'tool-activity-in-avatar',
         'wave-typing-indicator',
         'chat-drag-to-folder',
         'chat-swipe-to-delete',

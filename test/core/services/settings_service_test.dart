@@ -131,6 +131,16 @@ void main() {
       test('quickReplyReactionsEnabled defaults to true', () {
         check(settings.quickReplyReactionsEnabled).equals(true);
       });
+
+      test('toolActivityInAvatar defaults to false and needs the avatar', () {
+        check(settings.toolActivityInAvatar).equals(false);
+        check(settings.toolActivityInAvatarActive).equals(false);
+        final on = settings.copyWith(toolActivityInAvatar: true);
+        check(on.toolActivityInAvatarActive).equals(false);
+        check(
+          on.copyWith(assistantAvatarEnabled: true).toolActivityInAvatarActive,
+        ).equals(true);
+      });
     });
 
     group('copyWith', () {
