@@ -22,8 +22,12 @@ void main() {
   test('different words are the user', () {
     check(isBargeInEcho('What about tomorrow?', assistant)).isFalse();
     check(isBargeInEcho('Good, now add lunch at noon', assistant)).isFalse();
-    check(isBargeInEcho('yes', assistant)).isFalse();
-    check(isBargeInEcho('Good', '')).isFalse();
+  });
+
+  test('takes under three words are echo, however foreign', () {
+    check(isBargeInEcho('Tinha', assistant)).isTrue();
+    check(isBargeInEcho('yes please', assistant)).isTrue();
+    check(isBargeInEcho('Good', '')).isTrue();
   });
 
   test('asking it to stop or wait is always the user', () {
