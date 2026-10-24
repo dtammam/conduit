@@ -39,6 +39,7 @@ final class PreferenceKeys {
   static const String voiceBargeInEnabled = 'voice_barge_in_enabled';
   static const String voiceCallKitEnabled = 'voice_callkit_enabled';
   static const String voiceProviderForAllChats = 'voice_provider_for_all_chats';
+  static const String voiceEngineEchoCancel = 'voice_engine_echo_cancel';
   static const String voiceCallMode = 'voice_call_mode';
   static const String voiceSttPreference = 'voice_stt_preference';
   static const String voiceSttLanguageCode = 'voice_stt_language_code';

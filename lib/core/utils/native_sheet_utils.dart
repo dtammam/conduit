@@ -961,6 +961,14 @@ NativeAudioSheetParts buildNativeAudioSheetParts(
       kind: NativeSheetItemKind.toggle,
       value: appSettings.voiceCallKitEnabled,
     ),
+    NativeSheetItemConfig(
+      id: 'voice-engine-echo-cancel',
+      title: l10n.voiceEngineEchoCancel,
+      subtitle: l10n.voiceEngineEchoCancelDescription,
+      sfSymbol: 'waveform.path',
+      kind: NativeSheetItemKind.toggle,
+      value: appSettings.voiceEngineEchoCancel,
+    ),
   ];
 
   final ttsItems = <NativeSheetItemConfig>[

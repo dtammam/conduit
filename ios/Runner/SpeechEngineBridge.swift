@@ -80,6 +80,7 @@ final class SpeechEngineBridge: ConduitBridge {
       object: created.engine,
       queue: nil
     ) { [weak self] _ in
+      created.noteConfigurationChange()
       // A route or format change stops the engine; carry on where it was.
       self?.work.async {
         do {
@@ -132,6 +133,8 @@ final class SpeechEngineBridge: ConduitBridge {
       }
     case "stopCapture":
       try speech.stopCapture()
+    case "diagnostics":
+      return speech.diagnostics(reset: args["reset"] as? Bool ?? false)
     case "dispose":
       speech.shutDown()
     default:

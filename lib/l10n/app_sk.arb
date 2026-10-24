@@ -6336,5 +6336,13 @@
   "omniSessionDividerLabel": "Nová relácia",
   "omniSessionIdle": "Nová relácia po",
   "omniSessionIdleDescription": "Model vidí len aktuálnu reláciu; nová začne po takom čase bez správy.",
-  "omniSessionIdleMinutes": "{minutes} min"
+  "omniSessionIdleMinutes": "{minutes} min",
+  "voiceEngineEchoCancel": "Potlačenie ozveny na hlasovom engine",
+  "@voiceEngineEchoCancel": {
+    "description": "Toggle that makes iOS voice calls capture on the speech engine with echo cancellation."
+  },
+  "voiceEngineEchoCancelDescription": "Hlasové hovory berú mikrofón z toho istého zvukového enginu, ktorý prehráva asistenta, s potlačením ozveny od Applu. Vypnite, ak hlas asistenta praská: hovory potom použijú bežný mikrofón. Platí od nasledujúceho hovoru.",
+  "@voiceEngineEchoCancelDescription": {
+    "description": "Explains the toggle for echo cancellation on the speech engine."
+  }
 }

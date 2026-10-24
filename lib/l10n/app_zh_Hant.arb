@@ -4427,5 +4427,13 @@
   "omniSessionDividerLabel": "新工作階段",
   "omniSessionIdle": "新工作階段間隔",
   "omniSessionIdleDescription": "模型只看得到目前的工作階段；超過這段時間沒有訊息後開始新的工作階段。",
-  "omniSessionIdleMinutes": "{minutes} 分鐘"
+  "omniSessionIdleMinutes": "{minutes} 分鐘",
+  "voiceEngineEchoCancel": "語音引擎上的回音消除",
+  "@voiceEngineEchoCancel": {
+    "description": "Toggle that makes iOS voice calls capture on the speech engine with echo cancellation."
+  },
+  "voiceEngineEchoCancelDescription": "語音通話從播放助理聲音的同一個音訊引擎取得麥克風，並使用 Apple 的回音消除。若助理的聲音有雜音，請關閉：通話將改用一般麥克風。下一次通話開始時生效。",
+  "@voiceEngineEchoCancelDescription": {
+    "description": "Explains the toggle for echo cancellation on the speech engine."
+  }
 }

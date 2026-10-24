@@ -337,6 +337,7 @@ class SettingsService {
       PreferenceKeys.voiceCallKitEnabled: settings.voiceCallKitEnabled,
       PreferenceKeys.voiceProviderForAllChats:
           settings.voiceProviderForAllChats,
+      PreferenceKeys.voiceEngineEchoCancel: settings.voiceEngineEchoCancel,
       PreferenceKeys.voiceCallMode: settings.voiceCallMode.name,
       _socketTransportModeKey: settings.socketTransportMode,
       _quickPillsKey: settings.quickPills.toList(),
@@ -774,25 +775,23 @@ class SettingsService {
         PreferencesStore.getStringList(scopedPreferenceReadKey(key));
     return AppSettings(
       reduceMotion: get<bool>(_reduceMotionKey) ?? false,
-      animationSpeed:
-          get<num>(_animationSpeedKey)?.toDouble() ?? 1.0,
+      animationSpeed: get<num>(_animationSpeedKey)?.toDouble() ?? 1.0,
       disableHapticsWhileStreaming:
           get<bool>(_disableHapticsWhileStreamingKey) ?? false,
-      citationShowTitles:
-          get<bool>(PreferenceKeys.citationShowTitles) ??
-          false,
+      citationShowTitles: get<bool>(PreferenceKeys.citationShowTitles) ?? false,
       quickReplyReactionsEnabled:
           get<bool>(PreferenceKeys.quickReplyReactionsEnabled) ?? true,
       assistantAvatarEnabled:
           get<bool>(PreferenceKeys.assistantAvatarEnabled) ?? false,
       messageBubbles: get<bool>(PreferenceKeys.messageBubbles) ?? false,
       // The old build stored the gray choice as 'grey'.
-      assistantAvatarBubbleColor:
-          switch (get<String>(PreferenceKeys.assistantAvatarBubbleColor)) {
-            'grey' => assistantAvatarBubbleColorGray,
-            final String stored => stored,
-            null => assistantAvatarBubbleColorAuto,
-          },
+      assistantAvatarBubbleColor: switch (get<String>(
+        PreferenceKeys.assistantAvatarBubbleColor,
+      )) {
+        'grey' => assistantAvatarBubbleColorGray,
+        final String stored => stored,
+        null => assistantAvatarBubbleColorAuto,
+      },
       deliveryReceiptsEnabled:
           get<bool>(PreferenceKeys.deliveryReceiptsEnabled) ?? true,
       compactToolSummaries:
@@ -815,52 +814,34 @@ class SettingsService {
       openRouterImageGenerationModel: get<String>(
         _openRouterImageGenerationModelKey,
       ),
-      voiceLocaleId: normalizeVoiceLocaleId(
-        get<String>(_voiceLocaleKey),
-      ),
+      voiceLocaleId: normalizeVoiceLocaleId(get<String>(_voiceLocaleKey)),
       voiceHoldToTalk: get<bool>(_voiceHoldToTalkKey) ?? false,
-      voiceAutoSendFinal:
-          get<bool>(_voiceAutoSendKey) ?? false,
+      voiceAutoSendFinal: get<bool>(_voiceAutoSendKey) ?? false,
       voiceBargeInEnabled:
-          get<bool>(PreferenceKeys.voiceBargeInEnabled) ??
-          false,
+          get<bool>(PreferenceKeys.voiceBargeInEnabled) ?? false,
       voiceCallKitEnabled:
           get<bool>(PreferenceKeys.voiceCallKitEnabled) ?? false,
       voiceProviderForAllChats:
           get<bool>(PreferenceKeys.voiceProviderForAllChats) ?? true,
+      voiceEngineEchoCancel:
+          get<bool>(PreferenceKeys.voiceEngineEchoCancel) ?? false,
       voiceCallMode: VoiceCallMode.values.firstWhere(
         (mode) => mode.name == get<String>(PreferenceKeys.voiceCallMode),
         orElse: () => VoiceCallMode.auto,
       ),
-      socketTransportMode:
-          get<String>(_socketTransportModeKey) ?? 'ws',
+      socketTransportMode: get<String>(_socketTransportModeKey) ?? 'ws',
       quickPills: getStringList(_quickPillsKey) ?? const [],
-      chatWebSearchEnabled: get<bool>(
-        _chatWebSearchEnabledKey,
-      ),
-      chatImageGenerationEnabled: get<bool>(
-        _chatImageGenerationEnabledKey,
-      ),
+      chatWebSearchEnabled: get<bool>(_chatWebSearchEnabledKey),
+      chatImageGenerationEnabled: get<bool>(_chatImageGenerationEnabledKey),
       sendOnEnter: get<bool>(_sendOnEnterKey) ?? false,
       ttsVoice: get<String>(PreferenceKeys.ttsVoice),
       ttsVoiceName: get<String>(PreferenceKeys.ttsVoiceName),
-      ttsSpeechRate:
-          get<num>(PreferenceKeys.ttsSpeechRate)?.toDouble() ??
-          0.5,
-      ttsPitch:
-          get<num>(PreferenceKeys.ttsPitch)?.toDouble() ?? 1.0,
-      ttsVolume:
-          get<num>(PreferenceKeys.ttsVolume)?.toDouble() ??
-          1.0,
-      ttsEngine: _parseTtsEngine(
-        get<String>(PreferenceKeys.ttsEngine),
-      ),
-      ttsServerVoiceId: get<String>(
-        PreferenceKeys.ttsServerVoiceId,
-      ),
-      ttsServerVoiceName: get<String>(
-        PreferenceKeys.ttsServerVoiceName,
-      ),
+      ttsSpeechRate: get<num>(PreferenceKeys.ttsSpeechRate)?.toDouble() ?? 0.5,
+      ttsPitch: get<num>(PreferenceKeys.ttsPitch)?.toDouble() ?? 1.0,
+      ttsVolume: get<num>(PreferenceKeys.ttsVolume)?.toDouble() ?? 1.0,
+      ttsEngine: _parseTtsEngine(get<String>(PreferenceKeys.ttsEngine)),
+      ttsServerVoiceId: get<String>(PreferenceKeys.ttsServerVoiceId),
+      ttsServerVoiceName: get<String>(PreferenceKeys.ttsServerVoiceName),
       sttPreference: _parseSttPreference(
         get<String>(PreferenceKeys.voiceSttPreference),
       ),
@@ -871,30 +852,21 @@ class SettingsService {
         get<String>(_androidAssistantTriggerKey),
       ),
       voiceSilenceDuration:
-          (get<int>(_voiceSilenceDurationKey) ??
-                  defaultVoiceSilenceDurationMs)
+          (get<int>(_voiceSilenceDurationKey) ?? defaultVoiceSilenceDurationMs)
               .clamp(minVoiceSilenceDurationMs, maxVoiceSilenceDurationMs),
       temporaryChatByDefault:
-          get<bool>(PreferenceKeys.temporaryChatByDefault) ??
-          false,
+          get<bool>(PreferenceKeys.temporaryChatByDefault) ?? false,
       advancedFeaturesEnabled:
-          get<bool>(PreferenceKeys.advancedFeaturesEnabled) ??
-          false,
+          get<bool>(PreferenceKeys.advancedFeaturesEnabled) ?? false,
       pinnedModels: sanitizePinnedModels(
         getStringList(_pinnedModelsKey) ?? const <String>[],
       ),
-      notificationsEnabled:
-          get<bool>(_notificationsEnabledKey) ?? false,
-      notificationSound:
-          get<bool>(_notificationSoundKey) ?? true,
-      notificationSoundAlways:
-          get<bool>(_notificationSoundAlwaysKey) ?? false,
-      notificationInAppBanner:
-          get<bool>(_notificationInAppBannerKey) ?? true,
-      notificationSystem:
-          get<bool>(_notificationSystemKey) ?? true,
-      notificationChatEnabled:
-          get<bool>(_notificationChatEnabledKey) ?? true,
+      notificationsEnabled: get<bool>(_notificationsEnabledKey) ?? false,
+      notificationSound: get<bool>(_notificationSoundKey) ?? true,
+      notificationSoundAlways: get<bool>(_notificationSoundAlwaysKey) ?? false,
+      notificationInAppBanner: get<bool>(_notificationInAppBannerKey) ?? true,
+      notificationSystem: get<bool>(_notificationSystemKey) ?? true,
+      notificationChatEnabled: get<bool>(_notificationChatEnabledKey) ?? true,
       notificationChannelEnabled:
           get<bool>(_notificationChannelEnabledKey) ?? true,
       notificationScheduledTaskReminders:
@@ -905,9 +877,7 @@ class SettingsService {
       webSearchSafeSearch: parseSafeSearch(
         get<String>(PreferenceKeys.webSearchSafeSearch),
       ),
-      webSearchRegion: get<String>(
-        PreferenceKeys.webSearchRegion,
-      ),
+      webSearchRegion: get<String>(PreferenceKeys.webSearchRegion),
       directVoiceProvider: _parseDirectVoiceProvider(
         get<String>(PreferenceKeys.directVoiceProvider),
       ),
@@ -1017,6 +987,13 @@ class AppSettings {
   /// listens for Open WebUI chats, instead of the server's own audio
   /// endpoints. A request it cannot serve falls back to the server's.
   final bool voiceProviderForAllChats;
+
+  /// Whether an iOS voice call takes its microphone from the speech engine
+  /// that plays the assistant, with the platform's voice processing (echo
+  /// cancellation against that playback). Off, the call records through the
+  /// `record` plugin and the engine plays without voice processing. Read when
+  /// a call starts. No effect elsewhere.
+  final bool voiceEngineEchoCancel;
   final VoiceCallMode voiceCallMode;
   final String socketTransportMode; // 'polling' or 'ws'
   final List<String> quickPills; // e.g., ['web','image']
@@ -1089,6 +1066,7 @@ class AppSettings {
     this.voiceBargeInEnabled = false,
     this.voiceCallKitEnabled = false,
     this.voiceProviderForAllChats = true,
+    this.voiceEngineEchoCancel = false,
     this.voiceCallMode = VoiceCallMode.auto,
     this.socketTransportMode = 'ws',
     this.quickPills = const [],
@@ -1153,6 +1131,7 @@ class AppSettings {
     bool? voiceBargeInEnabled,
     bool? voiceCallKitEnabled,
     bool? voiceProviderForAllChats,
+    bool? voiceEngineEchoCancel,
     VoiceCallMode? voiceCallMode,
     String? socketTransportMode,
     List<String>? quickPills,
@@ -1230,6 +1209,8 @@ class AppSettings {
       voiceCallKitEnabled: voiceCallKitEnabled ?? this.voiceCallKitEnabled,
       voiceProviderForAllChats:
           voiceProviderForAllChats ?? this.voiceProviderForAllChats,
+      voiceEngineEchoCancel:
+          voiceEngineEchoCancel ?? this.voiceEngineEchoCancel,
       voiceCallMode: voiceCallMode ?? this.voiceCallMode,
       socketTransportMode: socketTransportMode ?? this.socketTransportMode,
       quickPills: quickPills ?? this.quickPills,
@@ -1321,6 +1302,7 @@ class AppSettings {
         other.voiceBargeInEnabled == voiceBargeInEnabled &&
         other.voiceCallKitEnabled == voiceCallKitEnabled &&
         other.voiceProviderForAllChats == voiceProviderForAllChats &&
+        other.voiceEngineEchoCancel == voiceEngineEchoCancel &&
         other.voiceCallMode == voiceCallMode &&
         other.chatWebSearchEnabled == chatWebSearchEnabled &&
         other.chatImageGenerationEnabled == chatImageGenerationEnabled &&
@@ -1388,6 +1370,7 @@ class AppSettings {
       voiceBargeInEnabled,
       voiceCallKitEnabled,
       voiceProviderForAllChats,
+      voiceEngineEchoCancel,
       voiceCallMode,
       chatWebSearchEnabled,
       chatImageGenerationEnabled,
@@ -1585,10 +1568,7 @@ class AppSettingsNotifier extends _$AppSettingsNotifier {
 
   Future<void> setChatMultiSelect(bool value) async {
     state = state.copyWith(chatMultiSelect: value);
-    await SettingsService._putPreference(
-      PreferenceKeys.chatMultiSelect,
-      value,
-    );
+    await SettingsService._putPreference(PreferenceKeys.chatMultiSelect, value);
   }
 
   Future<void> setShowContextUsage(bool value) async {
@@ -1882,6 +1862,11 @@ class AppSettingsNotifier extends _$AppSettingsNotifier {
 
   Future<void> setVoiceProviderForAllChats(bool value) async {
     state = state.copyWith(voiceProviderForAllChats: value);
+    await SettingsService.saveSettings(state);
+  }
+
+  Future<void> setVoiceEngineEchoCancel(bool value) async {
+    state = state.copyWith(voiceEngineEchoCancel: value);
     await SettingsService.saveSettings(state);
   }
 

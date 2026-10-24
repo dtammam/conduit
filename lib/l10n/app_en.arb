@@ -9414,5 +9414,13 @@
         "type": "int"
       }
     }
+  },
+  "voiceEngineEchoCancel": "Echo cancellation on the speech engine",
+  "@voiceEngineEchoCancel": {
+    "description": "Toggle that makes iOS voice calls capture on the speech engine with echo cancellation."
+  },
+  "voiceEngineEchoCancelDescription": "Voice calls take the microphone from the same audio engine that plays the assistant, with Apple's echo cancellation. Turn off if the assistant's voice crackles: calls then use the plain microphone. Takes effect at the next call.",
+  "@voiceEngineEchoCancelDescription": {
+    "description": "Explains the toggle for echo cancellation on the speech engine."
   }
 }

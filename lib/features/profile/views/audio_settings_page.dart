@@ -323,6 +323,26 @@ class AudioSettingsPage extends ConsumerWidget {
             onTap: () =>
                 notifier.setVoiceCallKitEnabled(!settings.voiceCallKitEnabled),
           ),
+          const SizedBox(height: Spacing.sm),
+          CustomizationTile(
+            leading: SettingsIconBadge(
+              icon: UiUtils.platformIcon(
+                ios: CupertinoIcons.waveform_path,
+                android: Icons.graphic_eq,
+              ),
+              color: theme.buttonPrimary,
+            ),
+            title: l10n.voiceEngineEchoCancel,
+            subtitle: l10n.voiceEngineEchoCancelDescription,
+            trailing: AdaptiveSwitch(
+              value: settings.voiceEngineEchoCancel,
+              onChanged: notifier.setVoiceEngineEchoCancel,
+            ),
+            showChevron: false,
+            onTap: () => notifier.setVoiceEngineEchoCancel(
+              !settings.voiceEngineEchoCancel,
+            ),
+          ),
         ],
       ],
     );

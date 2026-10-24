@@ -4427,5 +4427,13 @@
   "omniSessionDividerLabel": "Sesión nueva",
   "omniSessionIdle": "Sesión nueva tras",
   "omniSessionIdleDescription": "El modelo solo ve la sesión actual; empieza una nueva tras este tiempo sin mensajes.",
-  "omniSessionIdleMinutes": "{minutes} min"
+  "omniSessionIdleMinutes": "{minutes} min",
+  "voiceEngineEchoCancel": "Cancelación de eco en el motor de voz",
+  "@voiceEngineEchoCancel": {
+    "description": "Toggle that makes iOS voice calls capture on the speech engine with echo cancellation."
+  },
+  "voiceEngineEchoCancelDescription": "Las llamadas de voz toman el micrófono del mismo motor de audio que reproduce al asistente, con la cancelación de eco de Apple. Desactívalo si la voz del asistente cruje: las llamadas usan entonces el micrófono normal. Se aplica desde la próxima llamada.",
+  "@voiceEngineEchoCancelDescription": {
+    "description": "Explains the toggle for echo cancellation on the speech engine."
+  }
 }

@@ -4199,5 +4199,13 @@
   "omniSessionDividerLabel": "새 세션",
   "omniSessionIdle": "새 세션 시작 간격",
   "omniSessionIdleDescription": "모델은 현재 세션만 봅니다. 이 시간 동안 메시지가 없으면 새 세션이 시작됩니다.",
-  "omniSessionIdleMinutes": "{minutes}분"
+  "omniSessionIdleMinutes": "{minutes}분",
+  "voiceEngineEchoCancel": "음성 엔진의 에코 제거",
+  "@voiceEngineEchoCancel": {
+    "description": "Toggle that makes iOS voice calls capture on the speech engine with echo cancellation."
+  },
+  "voiceEngineEchoCancelDescription": "음성 통화는 어시스턴트를 재생하는 동일한 오디오 엔진에서 마이크를 가져오며 Apple의 에코 제거를 사용합니다. 어시스턴트 목소리에 잡음이 생기면 끄세요. 그러면 통화는 일반 마이크를 사용합니다. 다음 통화부터 적용됩니다.",
+  "@voiceEngineEchoCancelDescription": {
+    "description": "Explains the toggle for echo cancellation on the speech engine."
+  }
 }

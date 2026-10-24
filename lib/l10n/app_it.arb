@@ -4427,5 +4427,13 @@
   "omniSessionDividerLabel": "Nuova sessione",
   "omniSessionIdle": "Nuova sessione dopo",
   "omniSessionIdleDescription": "Il modello vede solo la sessione corrente; ne inizia una nuova dopo questo tempo senza messaggi.",
-  "omniSessionIdleMinutes": "{minutes} min"
+  "omniSessionIdleMinutes": "{minutes} min",
+  "voiceEngineEchoCancel": "Cancellazione dell'eco sul motore vocale",
+  "@voiceEngineEchoCancel": {
+    "description": "Toggle that makes iOS voice calls capture on the speech engine with echo cancellation."
+  },
+  "voiceEngineEchoCancelDescription": "Le chiamate vocali prendono il microfono dallo stesso motore audio che riproduce l'assistente, con la cancellazione dell'eco di Apple. Disattiva se la voce dell'assistente crepita: le chiamate usano allora il microfono normale. Vale dalla prossima chiamata.",
+  "@voiceEngineEchoCancelDescription": {
+    "description": "Explains the toggle for echo cancellation on the speech engine."
+  }
 }

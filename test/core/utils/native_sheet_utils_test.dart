@@ -115,6 +115,23 @@ void main() {
     check(const AppSettings().voiceCallKitEnabled).equals(false);
   });
 
+  test('native engine echo cancellation toggle follows the setting', () {
+    for (final enabled in [true, false]) {
+      final parts = buildNativeAudioSheetParts(
+        l10n,
+        AppSettings(voiceEngineEchoCancel: enabled),
+      );
+      final item = parts.mainSections
+          .expand((section) => section.items)
+          .singleWhere((item) => item.id == 'voice-engine-echo-cancel');
+
+      check(item.kind).equals(NativeSheetItemKind.toggle);
+      check(item.title).equals(l10n.voiceEngineEchoCancel);
+      check(item.value).equals(enabled);
+    }
+    check(const AppSettings().voiceEngineEchoCancel).equals(false);
+  });
+
   for (final stt in SttPreference.values) {
     for (final tts in TtsEngine.values) {
       for (final enabled in [false, true]) {

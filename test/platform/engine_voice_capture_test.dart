@@ -39,6 +39,8 @@ void main() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
           final args = call.arguments as Map?;
+          // Diagnostics are read-only and not part of the capture sequence.
+          if (call.method == 'diagnostics') return <String, Object?>{};
           calls.add(
             call.method == 'setVoiceProcessing'
                 ? 'vp ${args!['on']}'
@@ -71,7 +73,8 @@ void main() {
     check(record.calls).isEmpty();
 
     await EngineVoiceCapture.endCall();
-    check(calls.sublist(calls.length - 2)).deepEquals(['stopCapture', 'vp false']);
+    check(calls.sublist(calls.length - 2))
+        .deepEquals(['stopCapture', 'vp false']);
     check(EngineVoiceCapture.voiceProcessingActive).isFalse();
   });
 

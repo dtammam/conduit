@@ -4427,5 +4427,13 @@
   "omniSessionDividerLabel": "Neue Sitzung",
   "omniSessionIdle": "Neue Sitzung nach",
   "omniSessionIdleDescription": "Das Modell sieht nur die aktuelle Sitzung; eine neue beginnt nach so langer Zeit ohne Nachricht.",
-  "omniSessionIdleMinutes": "{minutes} Min."
+  "omniSessionIdleMinutes": "{minutes} Min.",
+  "voiceEngineEchoCancel": "Echo-Unterdrückung auf der Sprach-Engine",
+  "@voiceEngineEchoCancel": {
+    "description": "Toggle that makes iOS voice calls capture on the speech engine with echo cancellation."
+  },
+  "voiceEngineEchoCancelDescription": "Sprachanrufe nutzen das Mikrofon derselben Audio-Engine, die den Assistenten abspielt, mit Apples Echo-Unterdrückung. Ausschalten, wenn die Stimme des Assistenten knistert: Anrufe verwenden dann das normale Mikrofon. Gilt ab dem nächsten Anruf.",
+  "@voiceEngineEchoCancelDescription": {
+    "description": "Explains the toggle for echo cancellation on the speech engine."
+  }
 }

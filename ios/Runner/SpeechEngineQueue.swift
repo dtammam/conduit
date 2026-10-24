@@ -1,4 +1,5 @@
 import AVFoundation
+import os
 
 /// Plays spoken clips that arrive as small MP3 pieces as one continuous
 /// waveform on an AVAudioEngine.
@@ -237,6 +238,8 @@ final class SpeechEngineQueue {
     let (wants, resumeItem) = queue.sync {
       (wantsPlayback, lastStartedItem ?? scheduleItem)
     }
+    countDiag { recoveries += 1 }
+    Self.log.notice("recover after configuration change, wants=\(wants, privacy: .public)")
     guard wants else { return }
     try queue.sync { try startEngineIfNeeded() }
     try seek(toItem: resumeItem)
@@ -260,6 +263,12 @@ final class SpeechEngineQueue {
       (engine.isRunning, lastStartedItem ?? scheduleItem)
     }
     if capturing { try stopCapture() }
+    countDiag {
+      voiceProcessingToggles += 1
+      togglingVoiceProcessing = true
+    }
+    Self.log.notice("setVoiceProcessing \(on, privacy: .public)")
+    defer { countDiag { togglingVoiceProcessing = false } }
     try Self.objc {
       if self.engine.isRunning { self.engine.stop() }
       try self.engine.inputNode.setVoiceProcessingEnabled(on)
@@ -335,6 +344,85 @@ final class SpeechEngineQueue {
           let samples = out.int16ChannelData
     else { return nil }
     return Data(bytes: samples[0], count: Int(out.frameLength) * 2)
+  }
+
+  // MARK: - Diagnostics (voice-call crackle hunt)
+
+  private static let log = Logger(
+    subsystem: "app.cogwheel.conduit",
+    category: "voice-engine"
+  )
+  private let diagLock = NSLock()
+  private var configChanges = 0
+  private var configChangesDuringToggle = 0
+  private var recoveries = 0
+  private var voiceProcessingToggles = 0
+  private var togglingVoiceProcessing = false
+
+  /// The engine posted a configuration change. Cheap; any thread.
+  func noteConfigurationChange() {
+    diagLock.lock()
+    configChanges += 1
+    if togglingVoiceProcessing { configChangesDuringToggle += 1 }
+    let n = configChanges
+    diagLock.unlock()
+    Self.log.notice("configuration change #\(n, privacy: .public)")
+  }
+
+  private func countDiag(_ body: () -> Void) {
+    diagLock.lock()
+    body()
+    diagLock.unlock()
+  }
+
+  /// Counters since the last reset, with the audio session and the engine's
+  /// formats as they are now. Off the render thread (called from Dart).
+  func diagnostics(reset: Bool) -> [String: Any] {
+    diagLock.lock()
+    var out: [String: Any] = [
+      "configChanges": configChanges,
+      "configChangesDuringToggle": configChangesDuringToggle,
+      "recoveries": recoveries,
+      "voiceProcessingToggles": voiceProcessingToggles,
+      "voiceProcessing": voiceProcessing,
+    ]
+    if reset {
+      configChanges = 0
+      configChangesDuringToggle = 0
+      recoveries = 0
+      voiceProcessingToggles = 0
+    }
+    diagLock.unlock()
+    let session = AVAudioSession.sharedInstance()
+    out["hwSampleRate"] = session.sampleRate
+    out["preferredSampleRate"] = session.preferredSampleRate
+    out["ioBufferMs"] = (session.ioBufferDuration * 1000 * 10).rounded() / 10
+    out["outputLatencyMs"] = (session.outputLatency * 1000 * 10).rounded() / 10
+    out["category"] = session.category.rawValue
+    out["mode"] = session.mode.rawValue
+    out["route"] = session.currentRoute.outputs
+      .map { "\($0.portType.rawValue)" }.joined(separator: ",")
+    out["input"] = session.currentRoute.inputs
+      .map { "\($0.portType.rawValue)" }.joined(separator: ",")
+    func describe(_ f: AVAudioFormat) -> String {
+      "\(Int(f.sampleRate))Hz/\(f.channelCount)ch"
+    }
+    out["playerFormat"] = describe(format)
+    if let formats = try? Self.objc({ () -> [String] in
+      [
+        describe(self.engine.mainMixerNode.outputFormat(forBus: 0)),
+        describe(self.engine.outputNode.outputFormat(forBus: 0)),
+        describe(self.engine.inputNode.inputFormat(forBus: 0)),
+      ]
+    }) {
+      out["mixerOut"] = formats[0]
+      out["engineOutput"] = formats[1]
+      out["engineInput"] = formats[2]
+    }
+    let text = out.sorted { $0.key < $1.key }
+      .map { "\($0.key)=\($0.value)" }.joined(separator: " ")
+    Self.log.notice("\(text, privacy: .public)")
+    return out
   }
 
   func shutDown() {

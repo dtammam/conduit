@@ -60,6 +60,7 @@ class EngineVoiceCapture implements AudioCapturePort {
       return _fallback.startStream(config);
     }
     try {
+      await _logDiagnostics(_channel, 'call-reset', reset: true, log: false);
       await _channel.invokeMethod<Object?>('setVoiceProcessing', {
         'on': config.echoCancel,
       });
@@ -71,6 +72,7 @@ class EngineVoiceCapture implements AudioCapturePort {
         'sampleRate': config.sampleRate.toDouble(),
       });
       _usingEngine = true;
+      await _logDiagnostics(_channel, 'call-start');
       DebugLogger.info(
         'voice-engine-capture',
         scope: 'voice/engine',
@@ -109,9 +111,38 @@ class EngineVoiceCapture implements AudioCapturePort {
     final wasActive = voiceProcessingActive;
     voiceProcessingActive = false;
     if (!wasActive) return;
+    await _logDiagnostics(engine, 'call-end', reset: true);
     try {
       await engine.invokeMethod<Object?>('stopCapture');
       await engine.invokeMethod<Object?>('setVoiceProcessing', {'on': false});
+    } catch (_) {}
+  }
+
+  /// What the engine and the audio session look like, and how often the engine
+  /// was reconfigured since the last reset: configuration changes, the
+  /// recoveries they caused, voice processing toggles, the hardware sample
+  /// rate and IO buffer, the route, and the player format against the
+  /// engine's own. The native side also writes it to the unified log
+  /// (subsystem app.cogwheel.conduit, category voice-engine), which release
+  /// builds keep. Never throws.
+  static Future<void> _logDiagnostics(
+    MethodChannel channel,
+    String phase, {
+    bool reset = false,
+    bool log = true,
+  }) async {
+    try {
+      final result = await channel.invokeMapMethod<String, Object?>(
+        'diagnostics',
+        {'reset': reset},
+      );
+      if (log) {
+        DebugLogger.info(
+          'voice-engine-diagnostics',
+          scope: 'voice/engine',
+          data: {'phase': phase, ...?result},
+        );
+      }
     } catch (_) {}
   }
 }

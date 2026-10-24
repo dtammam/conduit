@@ -1050,9 +1050,14 @@ class VoiceInputService implements VoiceModeInput {
         // The platform routing that used to be spelled out here now follows
         // from the profile; see RecordAudioCapture.
         config: AudioCaptureConfig(
-          // A call's capture (the session is the call's): on iOS it runs on
-          // the speech engine with echo cancellation.
-          profile: iosAudioSessionManagedExternally
+          // A call's capture (the session is the call's). On iOS it runs on
+          // the speech engine with echo cancellation, unless that setting is
+          // off: then it records through `record`, as before the engine.
+          profile:
+              iosAudioSessionManagedExternally &&
+                  (Platform.isAndroid ||
+                      (_ref?.read(appSettingsProvider).voiceEngineEchoCancel ??
+                          false))
               ? AudioCaptureProfile.voiceCall
               : AudioCaptureProfile.dictation,
           sampleRate: _vadSampleRate,
