@@ -44,7 +44,7 @@ void main() {
 
   group('TtsManager splitTextForStreamingSpeech', () {
     const reply =
-        "That's awesome, Dean! Chocolate is made from roasted cocoa beans, "
+        "That's awesome, Sam! Chocolate is made from roasted cocoa beans, "
         'ground into a paste, then mixed with sugar and milk. Enjoy it.';
 
     test('keeps the first sentence and cuts a long second one', () async {
@@ -52,7 +52,7 @@ void main() {
         const TtsConfig(preferServer: true),
       );
       check(TtsManager.instance.splitTextForStreamingSpeech(reply)).deepEquals([
-        "That's awesome, Dean!",
+        "That's awesome, Sam!",
         'Chocolate is made from roasted cocoa beans,',
         'ground into a paste,',
         'then mixed with sugar and milk.',

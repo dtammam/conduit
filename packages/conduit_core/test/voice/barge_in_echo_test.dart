@@ -5,11 +5,11 @@ import 'package:test/test.dart';
 
 void main() {
   const assistant =
-      "Good morning, Dean! I'm doing great. Your day has two meetings.";
+      "Good morning, Sam! I'm doing great. Your day has two meetings.";
 
   test('the assistant\'s own words are echo', () {
     check(isBargeInEcho('Good', assistant)).isTrue();
-    check(isBargeInEcho('Good morning Dean.', assistant)).isTrue();
+    check(isBargeInEcho('Good morning Sam.', assistant)).isTrue();
     check(isBargeInEcho('two meetings', assistant)).isTrue();
   });
 

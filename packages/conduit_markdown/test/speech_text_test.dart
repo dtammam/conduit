@@ -78,7 +78,7 @@ void main() {
   });
 
   group('splitIntoVoiceUnits', () {
-    const first = "That's awesome, Dean!";
+    const first = "That's awesome, Sam!";
     const long =
         'Chocolate is made from roasted cocoa beans, ground into a paste, '
         'then mixed with sugar and milk; the bar is tempered and set.';
@@ -117,8 +117,8 @@ void main() {
     });
 
     test('a short first sentence stands alone in a reply', () {
-      expect(getVoiceContentParts("That's awesome, Dean! It's good."), [
-        "That's awesome, Dean!",
+      expect(getVoiceContentParts("That's awesome, Sam! It's good."), [
+        "That's awesome, Sam!",
         "It's good.",
       ]);
     });
