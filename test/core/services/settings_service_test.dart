@@ -132,11 +132,19 @@ void main() {
         check(settings.quickReplyReactionsEnabled).equals(true);
       });
 
+      test('voiceProviderForAllChats defaults to on in this build', () {
+        check(settings.voiceProviderForAllChats).equals(true);
+        check(
+          settings
+              .copyWith(voiceProviderForAllChats: false)
+              .voiceProviderForAllChats,
+        ).equals(false);
+      });
+
       test('voiceCallKitEnabled defaults to off in this build', () {
         check(settings.voiceCallKitEnabled).equals(false);
-        check(
-          settings.copyWith(voiceCallKitEnabled: true).voiceCallKitEnabled,
-        ).equals(true);
+        check(settings.copyWith(voiceCallKitEnabled: true).voiceCallKitEnabled)
+            .equals(true);
       });
 
       test('toolActivityInAvatar defaults to true and needs the avatar', () {

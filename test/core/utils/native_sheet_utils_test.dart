@@ -177,7 +177,7 @@ void main() {
         'voice-provider-speech-model': 'tts-1',
         'voice-provider-speech-voice': 'alloy',
         'voice-provider-stream-speech': false,
-        'voice-provider-all-chats': false,
+        'voice-provider-all-chats': true,
         'voice-provider-realtime-model': 'gpt-realtime-2.1-mini',
         'voice-provider-realtime-voice': 'marin',
         'voice-provider-realtime-instructions': '',

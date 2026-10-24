@@ -205,8 +205,8 @@ void main() {
       return c;
     }
 
-    test('is off by default', () {
-      check(const AppSettings().voiceProviderForAllChats).isFalse();
+    test('is on by default in this build', () {
+      check(const AppSettings().voiceProviderForAllChats).isTrue();
     });
 
     test('off, an Open WebUI chat keeps the server audio', () {
