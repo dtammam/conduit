@@ -118,13 +118,20 @@ Future<void> runQueuedCompletion(
   final isTemporary =
       isTemporaryChat(activeConversation.id) ||
       ref.read(temporaryChatEnabledProvider);
-  final requestMessages = await _buildCompletionRequestMessages(
-    api: api,
+  final requestMessages = _withOmniSession(
+    ref,
+    chatId: activeConversation.id,
     messages: messages,
-    chatParams: turnSettings.chatParams,
-    baseline: turnSettings.baseline,
-    conversationSystemPrompt: activeConversation.systemPrompt,
-    userSystemPrompt: userSystemPrompt,
+    requestMessages: await _buildCompletionRequestMessages(
+      api: api,
+      messages: messages,
+      chatParams: turnSettings.chatParams,
+      baseline: turnSettings.baseline,
+      conversationSystemPrompt: activeConversation.systemPrompt,
+      userSystemPrompt: userSystemPrompt,
+      isTemporary: isTemporary,
+    ),
+    mayStartSession: true,
     isTemporary: isTemporary,
   );
   requireActiveOwner();
@@ -433,13 +440,20 @@ Future<void> runHeadlessCompletion(
 
   // Build the request history from the PASSED messages (the target chat's DB
   // rows), never the globally-active chat's provider state.
-  final requestMessages = await _buildCompletionRequestMessages(
-    api: api,
+  final requestMessages = _withOmniSession(
+    ref,
+    chatId: chatId,
     messages: messages,
-    chatParams: turnSettings.chatParams,
-    baseline: turnSettings.baseline,
-    conversationSystemPrompt: conversation.systemPrompt,
-    userSystemPrompt: userSystemPrompt,
+    requestMessages: await _buildCompletionRequestMessages(
+      api: api,
+      messages: messages,
+      chatParams: turnSettings.chatParams,
+      baseline: turnSettings.baseline,
+      conversationSystemPrompt: conversation.systemPrompt,
+      userSystemPrompt: userSystemPrompt,
+      isTemporary: false,
+    ),
+    mayStartSession: true,
     isTemporary: false,
   );
   requireCurrentOwner();

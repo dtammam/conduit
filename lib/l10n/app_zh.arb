@@ -4421,5 +4421,11 @@
   "voiceProviderForAllChats": "用于所有聊天",
   "voiceProviderForAllChatsDescription": "Open WebUI 聊天也使用语音提供方。若它无法处理某个请求，该请求改用服务器自带的音频。",
   "voiceProviderStreamSpeech": "流式语音",
-  "voiceProviderStreamSpeechDescription": "请求提供方以流的方式传输音频，并在每句话仍在到达时开始播放。如果服务器不支持流式语音，请关闭。"
+  "voiceProviderStreamSpeechDescription": "请求提供方以流的方式传输音频，并在每句话仍在到达时开始播放。如果服务器不支持流式语音，请关闭。",
+  "omniFreshStart": "重新开始",
+  "omniFreshStartDone": "下一条消息将开始新的会话。",
+  "omniSessionDividerLabel": "新会话",
+  "omniSessionIdle": "新会话间隔",
+  "omniSessionIdleDescription": "模型只看到当前会话；超过这段时间没有消息后开始新会话。",
+  "omniSessionIdleMinutes": "{minutes} 分钟"
 }

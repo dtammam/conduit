@@ -9385,5 +9385,34 @@
   "voiceProviderStreamSpeechDescription": "Ask the provider to stream audio and start playing each sentence while it is still arriving. Turn off if the server does not support streaming speech.",
   "@voiceProviderStreamSpeechDescription": {
     "description": "Explains the toggle that streams speech from the Voice provider."
+  },
+  "omniFreshStart": "Fresh start",
+  "@omniFreshStart": {
+    "description": "Omni chat menu action: the next message starts a new session the model sees on its own."
+  },
+  "omniFreshStartDone": "The next message starts a new session.",
+  "@omniFreshStartDone": {
+    "description": "Confirmation after choosing Fresh start in the Omni chat."
+  },
+  "omniSessionDividerLabel": "New session",
+  "@omniSessionDividerLabel": {
+    "description": "Accessibility label of the wavy divider where a new Omni session begins."
+  },
+  "omniSessionIdle": "New session after",
+  "@omniSessionIdle": {
+    "description": "Setting title: how long without a message before the Omni chat starts a new session."
+  },
+  "omniSessionIdleDescription": "The model sees only the current session; a new one starts after this long without a message.",
+  "@omniSessionIdleDescription": {
+    "description": "Explains the Omni session idle setting."
+  },
+  "omniSessionIdleMinutes": "{minutes} min",
+  "@omniSessionIdleMinutes": {
+    "description": "A duration in minutes for the Omni session idle setting.",
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
   }
 }

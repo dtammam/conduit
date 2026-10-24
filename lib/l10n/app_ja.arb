@@ -6024,5 +6024,11 @@
   "voiceProviderForAllChats": "すべてのチャットで使う",
   "voiceProviderForAllChatsDescription": "Open WebUI のチャットでも音声プロバイダーを使います。リクエストに応えられない場合は、そのリクエストにサーバー自身の音声を使います。",
   "voiceProviderStreamSpeech": "音声をストリーミング",
-  "voiceProviderStreamSpeechDescription": "プロバイダーに音声のストリーミングを依頼し、各文が届いている途中から再生します。サーバーが音声のストリーミングに対応していない場合はオフにしてください。"
+  "voiceProviderStreamSpeechDescription": "プロバイダーに音声のストリーミングを依頼し、各文が届いている途中から再生します。サーバーが音声のストリーミングに対応していない場合はオフにしてください。",
+  "omniFreshStart": "新しく始める",
+  "omniFreshStartDone": "次のメッセージから新しいセッションになります。",
+  "omniSessionDividerLabel": "新しいセッション",
+  "omniSessionIdle": "新しいセッションまでの時間",
+  "omniSessionIdleDescription": "モデルには現在のセッションだけが見えます。メッセージがこの時間なければ新しいセッションになります。",
+  "omniSessionIdleMinutes": "{minutes}分"
 }

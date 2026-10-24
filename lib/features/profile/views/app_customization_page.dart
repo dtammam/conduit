@@ -616,6 +616,32 @@ class AppCustomizationPage extends ConsumerWidget {
               .read(appSettingsProvider.notifier)
               .setOmniChatEnabled(!settings.omniChatEnabled),
         ),
+        if (settings.omniChatEnabled) ...[
+          const SizedBox(height: Spacing.sm),
+          CustomizationTile(
+            leading: _buildIconBadge(
+              context,
+              Platform.isIOS ? CupertinoIcons.clock : Icons.schedule,
+              color: theme.buttonPrimary,
+            ),
+            title: l10n.omniSessionIdle,
+            subtitle:
+                '${l10n.omniSessionIdleMinutes(settings.omniSessionIdleMinutes)}'
+                ' · ${l10n.omniSessionIdleDescription}',
+            showChevron: false,
+            // Each tap moves to the next choice, wrapping around.
+            onTap: () {
+              const choices = omniSessionIdleMinuteChoices;
+              final next =
+                  choices[(choices.indexOf(settings.omniSessionIdleMinutes) +
+                          1) %
+                      choices.length];
+              ref
+                  .read(appSettingsProvider.notifier)
+                  .setOmniSessionIdleMinutes(next);
+            },
+          ),
+        ],
         const SizedBox(height: Spacing.sm),
         CustomizationTile(
           leading: _buildIconBadge(

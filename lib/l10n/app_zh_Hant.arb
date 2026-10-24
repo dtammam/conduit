@@ -4421,5 +4421,11 @@
   "voiceProviderForAllChats": "用於所有聊天",
   "voiceProviderForAllChatsDescription": "Open WebUI 聊天也使用語音提供者。若它無法處理某個請求，該請求改用伺服器本身的音訊。",
   "voiceProviderStreamSpeech": "串流語音",
-  "voiceProviderStreamSpeechDescription": "請求提供者以串流方式傳送音訊，並在每句話仍在抵達時開始播放。如果伺服器不支援串流語音，請關閉。"
+  "voiceProviderStreamSpeechDescription": "請求提供者以串流方式傳送音訊，並在每句話仍在抵達時開始播放。如果伺服器不支援串流語音，請關閉。",
+  "omniFreshStart": "重新開始",
+  "omniFreshStartDone": "下一則訊息將開始新的工作階段。",
+  "omniSessionDividerLabel": "新工作階段",
+  "omniSessionIdle": "新工作階段間隔",
+  "omniSessionIdleDescription": "模型只看得到目前的工作階段；超過這段時間沒有訊息後開始新的工作階段。",
+  "omniSessionIdleMinutes": "{minutes} 分鐘"
 }

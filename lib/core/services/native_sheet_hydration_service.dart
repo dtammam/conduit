@@ -1643,6 +1643,22 @@ class NativeSheetHydrationService {
         kind: NativeSheetItemKind.toggle,
         value: appSettings.omniChatEnabled,
       ),
+      if (appSettings.omniChatEnabled)
+        NativeSheetItemConfig(
+          id: nativeOmniSessionIdleId,
+          title: l10n.omniSessionIdle,
+          subtitle: l10n.omniSessionIdleDescription,
+          sfSymbol: 'clock.arrow.circlepath',
+          kind: NativeSheetItemKind.segment,
+          value: '${appSettings.omniSessionIdleMinutes}',
+          options: [
+            for (final minutes in omniSessionIdleMinuteChoices)
+              NativeSheetOptionConfig(
+                id: '$minutes',
+                label: l10n.omniSessionIdleMinutes(minutes),
+              ),
+          ],
+        ),
       NativeSheetItemConfig(
         id: nativeToolActivityInAvatarId,
         title: l10n.toolActivityInAvatar,

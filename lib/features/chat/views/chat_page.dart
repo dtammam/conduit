@@ -48,6 +48,8 @@ import 'package:conduit_core/features/direct_connections/services/direct_model_r
 
 import '../../direct_connections/widgets/direct_mcp_message_interactions.dart';
 
+import 'package:conduit_core/features/chat/omni/omni_chat.dart';
+import 'package:conduit_core/features/chat/omni/omni_session.dart';
 import 'package:conduit_core/features/chat/providers/chat_providers.dart';
 import 'package:conduit_core/features/chat/composer/openwebui_prompt_answers.dart';
 import 'package:conduit_core/features/chat/providers/openwebui_chat_prompt_provider.dart';
@@ -122,6 +124,7 @@ import '../../../shared/widgets/themed_sheets.dart';
 import '../../../shared/widgets/measure_size.dart';
 import '../providers/context_usage_providers.dart';
 import '../widgets/context_usage_ring.dart';
+import '../widgets/omni_session_divider.dart';
 import '../../../shared/widgets/server_version_warning_card.dart';
 import '../../../shared/widgets/adaptive_toolbar_components.dart';
 import '../../../shared/widgets/chrome_gradient_fade.dart';
@@ -3284,7 +3287,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
           suppressStreamingHaptics: suppressStreamingHaptics,
         );
       }
-      return _buildHistoryRow(
+      final row = _buildHistoryRow(
         timeline: timeline,
         layoutMetadata: layoutMetadata,
         requestedMessageId: renderedMessageId,
@@ -3293,6 +3296,13 @@ class _ChatPageState extends ConsumerState<ChatPage> {
         layoutRowByMessageId: layoutRowByMessageId,
         suppressStreamingHaptics: suppressStreamingHaptics,
       );
+      // In the Omni chat a message that started a session gets the divider
+      // above it; the gate only rebuilds when the session starts change.
+      if (renderIndex == 0 ||
+          !isOmniChatId(ref.read(activeConversationProvider)?.id)) {
+        return row;
+      }
+      return OmniSessionDividerGate(messageId: renderedMessageId, child: row);
     }
 
     _rowBuilderTimeline = timeline;
@@ -4773,6 +4783,28 @@ class _ChatPageState extends ConsumerState<ChatPage> {
         onSelected: () async {
           action.onBeforeClose?.call();
           await action.onSelected();
+        },
+      );
+    }
+
+    // The Omni chat's fresh start leads: the next message begins a session.
+    if (isOmniChatId(activeConversation?.id)) {
+      final l10n = AppLocalizations.of(context)!;
+      addItem(
+        label: l10n.omniFreshStart,
+        icon: conduitAdaptivePopupMenuIcon(
+          iosSymbol: 'sparkles',
+          materialIcon: Icons.auto_awesome_outlined,
+        ),
+        iosSymbol: 'sparkles',
+        onSelected: () async {
+          await ref.read(omniSessionProvider.notifier).startFresh();
+          if (!context.mounted) return;
+          AdaptiveSnackBar.show(
+            context,
+            message: l10n.omniFreshStartDone,
+            type: AdaptiveSnackBarType.success,
+          );
         },
       );
     }

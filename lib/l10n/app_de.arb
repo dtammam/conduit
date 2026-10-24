@@ -4421,5 +4421,11 @@
   "voiceProviderForAllChats": "Für alle Chats verwenden",
   "voiceProviderForAllChatsDescription": "Den Sprachanbieter auch für Open-WebUI-Chats verwenden. Kann er eine Anfrage nicht bedienen, wird dafür das Audio des Servers genutzt.",
   "voiceProviderStreamSpeech": "Sprache streamen",
-  "voiceProviderStreamSpeechDescription": "Den Anbieter bitten, Audio zu streamen, und jeden Satz abspielen, während er noch ankommt. Ausschalten, wenn der Server kein Streaming von Sprache unterstützt."
+  "voiceProviderStreamSpeechDescription": "Den Anbieter bitten, Audio zu streamen, und jeden Satz abspielen, während er noch ankommt. Ausschalten, wenn der Server kein Streaming von Sprache unterstützt.",
+  "omniFreshStart": "Neu beginnen",
+  "omniFreshStartDone": "Die nächste Nachricht beginnt eine neue Sitzung.",
+  "omniSessionDividerLabel": "Neue Sitzung",
+  "omniSessionIdle": "Neue Sitzung nach",
+  "omniSessionIdleDescription": "Das Modell sieht nur die aktuelle Sitzung; eine neue beginnt nach so langer Zeit ohne Nachricht.",
+  "omniSessionIdleMinutes": "{minutes} Min."
 }

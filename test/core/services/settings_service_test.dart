@@ -160,6 +160,13 @@ void main() {
       test('omniChatEnabled defaults to true', () {
         check(settings.omniChatEnabled).equals(true);
       });
+
+      test('the Omni session idle gap defaults to 15 minutes', () {
+        check(settings.omniSessionIdleMinutes).equals(15);
+        check(normalizeOmniSessionIdleMinutes(30)).equals(30);
+        check(normalizeOmniSessionIdleMinutes(7)).equals(15);
+        check(normalizeOmniSessionIdleMinutes(null)).equals(15);
+      });
     });
 
     group('copyWith', () {

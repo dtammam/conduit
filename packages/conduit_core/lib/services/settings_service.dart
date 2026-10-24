@@ -42,6 +42,19 @@ extension AndroidAssistantTriggerStorage on AndroidAssistantTrigger {
   }
 }
 
+/// The idle gaps the Omni chat offers, in minutes.
+const List<int> omniSessionIdleMinuteChoices = <int>[5, 15, 30, 60];
+
+/// The Omni chat's idle gap until the person picks one.
+const int defaultOmniSessionIdleMinutes = 15;
+
+/// [minutes] when it is one of [omniSessionIdleMinuteChoices], otherwise the
+/// default.
+int normalizeOmniSessionIdleMinutes(int? minutes) =>
+    omniSessionIdleMinuteChoices.contains(minutes)
+    ? minutes!
+    : defaultOmniSessionIdleMinutes;
+
 /// Service for managing app-wide settings including accessibility preferences
 class SettingsService {
   /// Persisted marker for following the current Android system locale.
@@ -309,6 +322,7 @@ class SettingsService {
       PreferenceKeys.deliveryReceiptsEnabled: settings.deliveryReceiptsEnabled,
       PreferenceKeys.compactToolSummaries: settings.compactToolSummaries,
       PreferenceKeys.omniChatEnabled: settings.omniChatEnabled,
+      PreferenceKeys.omniSessionIdleMinutes: settings.omniSessionIdleMinutes,
       PreferenceKeys.toolActivityInAvatar: settings.toolActivityInAvatar,
       PreferenceKeys.waveTypingIndicator: settings.waveTypingIndicator,
       PreferenceKeys.chatDragToFolder: settings.chatDragToFolder,
@@ -784,6 +798,9 @@ class SettingsService {
       compactToolSummaries:
           get<bool>(PreferenceKeys.compactToolSummaries) ?? false,
       omniChatEnabled: get<bool>(PreferenceKeys.omniChatEnabled) ?? true,
+      omniSessionIdleMinutes: normalizeOmniSessionIdleMinutes(
+        get<int>(PreferenceKeys.omniSessionIdleMinutes),
+      ),
       toolActivityInAvatar:
           get<bool>(PreferenceKeys.toolActivityInAvatar) ?? true,
       waveTypingIndicator:
@@ -947,6 +964,11 @@ class AppSettings {
   /// drawer and opened at launch. See `omni_chat.dart`.
   final bool omniChatEnabled;
 
+  /// Minutes without a message after which the next Omni chat message starts
+  /// a new session (the model sees only the current session). One of
+  /// [omniSessionIdleMinuteChoices].
+  final int omniSessionIdleMinutes;
+
   /// Whether tool calls leave the transcript and show in the assistant
   /// avatar's sheet instead. Only takes effect while [assistantAvatarEnabled]
   /// is on; see [toolActivityInAvatarActive].
@@ -1050,6 +1072,7 @@ class AppSettings {
     this.assistantAvatarBubbleColor = assistantAvatarBubbleColorAuto,
     this.compactToolSummaries = false,
     this.omniChatEnabled = true,
+    this.omniSessionIdleMinutes = defaultOmniSessionIdleMinutes,
     this.toolActivityInAvatar = true,
     this.waveTypingIndicator = false,
     this.chatDragToFolder = true,
@@ -1113,6 +1136,7 @@ class AppSettings {
     bool? deliveryReceiptsEnabled,
     bool? compactToolSummaries,
     bool? omniChatEnabled,
+    int? omniSessionIdleMinutes,
     bool? toolActivityInAvatar,
     bool? waveTypingIndicator,
     bool? chatDragToFolder,
@@ -1180,6 +1204,8 @@ class AppSettings {
           deliveryReceiptsEnabled ?? this.deliveryReceiptsEnabled,
       compactToolSummaries: compactToolSummaries ?? this.compactToolSummaries,
       omniChatEnabled: omniChatEnabled ?? this.omniChatEnabled,
+      omniSessionIdleMinutes:
+          omniSessionIdleMinutes ?? this.omniSessionIdleMinutes,
       toolActivityInAvatar: toolActivityInAvatar ?? this.toolActivityInAvatar,
       waveTypingIndicator: waveTypingIndicator ?? this.waveTypingIndicator,
       chatDragToFolder: chatDragToFolder ?? this.chatDragToFolder,
@@ -1277,6 +1303,7 @@ class AppSettings {
         other.deliveryReceiptsEnabled == deliveryReceiptsEnabled &&
         other.compactToolSummaries == compactToolSummaries &&
         other.omniChatEnabled == omniChatEnabled &&
+        other.omniSessionIdleMinutes == omniSessionIdleMinutes &&
         other.toolActivityInAvatar == toolActivityInAvatar &&
         other.waveTypingIndicator == waveTypingIndicator &&
         other.chatDragToFolder == chatDragToFolder &&
@@ -1344,6 +1371,7 @@ class AppSettings {
       deliveryReceiptsEnabled,
       compactToolSummaries,
       omniChatEnabled,
+      omniSessionIdleMinutes,
       toolActivityInAvatar,
       waveTypingIndicator,
       chatDragToFolder,
@@ -1512,6 +1540,15 @@ class AppSettingsNotifier extends _$AppSettingsNotifier {
   Future<void> setOmniChatEnabled(bool value) async {
     state = state.copyWith(omniChatEnabled: value);
     await SettingsService._putPreference(PreferenceKeys.omniChatEnabled, value);
+  }
+
+  Future<void> setOmniSessionIdleMinutes(int minutes) async {
+    final value = normalizeOmniSessionIdleMinutes(minutes);
+    state = state.copyWith(omniSessionIdleMinutes: value);
+    await SettingsService._putPreference(
+      PreferenceKeys.omniSessionIdleMinutes,
+      value,
+    );
   }
 
   Future<void> setCompactToolSummaries(bool value) async {

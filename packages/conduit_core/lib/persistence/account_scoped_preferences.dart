@@ -71,6 +71,8 @@ const Set<String> accountScopedPreferenceKeys = <String>{
   PreferenceKeys.contextWindowOverrides,
   // The Omni chat is one of this account's chats.
   PreferenceKeys.omniChatId,
+  // Its session boundaries are message ids of that chat.
+  PreferenceKeys.omniSession,
   // The tool call log names this account's chats.
   PreferenceKeys.assistantActionLog,
   PreferenceKeys.assistantActionLogSeen,

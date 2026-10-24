@@ -4459,5 +4459,11 @@
   "voiceProviderForAllChats": "Использовать для всех чатов",
   "voiceProviderForAllChatsDescription": "Использовать провайдера голоса и для чатов Open WebUI. Если он не может обработать запрос, для этого запроса используется звук сервера.",
   "voiceProviderStreamSpeech": "Потоковая речь",
-  "voiceProviderStreamSpeechDescription": "Просить провайдера передавать звук потоком и воспроизводить каждое предложение, пока оно ещё приходит. Отключите, если сервер не поддерживает потоковую речь."
+  "voiceProviderStreamSpeechDescription": "Просить провайдера передавать звук потоком и воспроизводить каждое предложение, пока оно ещё приходит. Отключите, если сервер не поддерживает потоковую речь.",
+  "omniFreshStart": "Начать заново",
+  "omniFreshStartDone": "Следующее сообщение начнёт новый сеанс.",
+  "omniSessionDividerLabel": "Новый сеанс",
+  "omniSessionIdle": "Новый сеанс через",
+  "omniSessionIdleDescription": "Модель видит только текущий сеанс; новый начинается после такого перерыва без сообщений.",
+  "omniSessionIdleMinutes": "{minutes} мин"
 }

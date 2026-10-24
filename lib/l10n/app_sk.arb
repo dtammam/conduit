@@ -6330,5 +6330,11 @@
   "voiceProviderForAllChats": "Použiť pre všetky chaty",
   "voiceProviderForAllChatsDescription": "Použiť poskytovateľa hlasu aj pre chaty Open WebUI. Ak požiadavku nezvládne, použije sa pre ňu zvuk servera.",
   "voiceProviderStreamSpeech": "Streamovať reč",
-  "voiceProviderStreamSpeechDescription": "Požiada poskytovateľa o streamovanie zvuku a každú vetu prehrá, kým ešte prichádza. Vypnite, ak server streamovanie reči nepodporuje."
+  "voiceProviderStreamSpeechDescription": "Požiada poskytovateľa o streamovanie zvuku a každú vetu prehrá, kým ešte prichádza. Vypnite, ak server streamovanie reči nepodporuje.",
+  "omniFreshStart": "Začať odznova",
+  "omniFreshStartDone": "Ďalšia správa začne novú reláciu.",
+  "omniSessionDividerLabel": "Nová relácia",
+  "omniSessionIdle": "Nová relácia po",
+  "omniSessionIdleDescription": "Model vidí len aktuálnu reláciu; nová začne po takom čase bez správy.",
+  "omniSessionIdleMinutes": "{minutes} min"
 }

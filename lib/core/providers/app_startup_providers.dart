@@ -59,6 +59,7 @@ import 'package:conduit_core/models/server_config.dart';
 import 'package:conduit_core/features/tools/providers/tools_providers.dart';
 
 import 'package:conduit_core/features/chat/omni/omni_chat.dart';
+import 'package:conduit_core/features/chat/omni/omni_session.dart';
 import 'package:conduit_core/features/chat/providers/attached_files_provider.dart';
 import 'package:conduit_core/services/settings_service.dart';
 import 'package:conduit_core/features/chat/providers/chat_providers.dart';
@@ -1217,6 +1218,9 @@ class AppStartupFlow extends _$AppStartupFlow {
     if (_omniLaunchHandled) return;
     _omniLaunchHandled = true;
     if (!ref.read(appSettingsProvider).omniChatEnabled) return;
+    // A cold start begins a new Omni session: the model sees the chat from
+    // the next message on.
+    unawaited(ref.read(omniSessionProvider.notifier).startFresh());
     unawaited(
       afterLaunchTap
           .catchError((Object _) {})

@@ -391,6 +391,7 @@ void main() {
         'message-bubbles',
         'compact-tool-summaries',
         'omni-chat',
+        'omni-session-idle',
         'tool-activity-in-avatar',
         'wave-typing-indicator',
         'chat-drag-to-folder',

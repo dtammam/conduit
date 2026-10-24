@@ -4421,5 +4421,11 @@
   "voiceProviderForAllChats": "Usar en todos los chats",
   "voiceProviderForAllChatsDescription": "Usa también el proveedor de voz en los chats de Open WebUI. Si no puede atender una solicitud, se usa el audio del servidor para esa solicitud.",
   "voiceProviderStreamSpeech": "Transmitir voz",
-  "voiceProviderStreamSpeechDescription": "Pide al proveedor que transmita el audio y reproduce cada frase mientras sigue llegando. Desactívalo si el servidor no admite voz en streaming."
+  "voiceProviderStreamSpeechDescription": "Pide al proveedor que transmita el audio y reproduce cada frase mientras sigue llegando. Desactívalo si el servidor no admite voz en streaming.",
+  "omniFreshStart": "Empezar de cero",
+  "omniFreshStartDone": "El próximo mensaje inicia una sesión nueva.",
+  "omniSessionDividerLabel": "Sesión nueva",
+  "omniSessionIdle": "Sesión nueva tras",
+  "omniSessionIdleDescription": "El modelo solo ve la sesión actual; empieza una nueva tras este tiempo sin mensajes.",
+  "omniSessionIdleMinutes": "{minutes} min"
 }

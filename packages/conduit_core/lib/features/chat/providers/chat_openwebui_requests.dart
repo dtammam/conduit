@@ -655,6 +655,33 @@ bool _modelUsesReasoning(String modelId) {
       m.contains('think');
 }
 
+/// [requestMessages] with the Omni session marker when [chatId] is the Omni
+/// chat (see `omni_session.dart`); unchanged otherwise. [mayStartSession] is
+/// true for a new message, false for a regeneration.
+List<Map<String, dynamic>> _withOmniSession(
+  dynamic ref, {
+  required String? chatId,
+  required List<ChatMessage> messages,
+  required List<Map<String, dynamic>> requestMessages,
+  required bool mayStartSession,
+  required bool isTemporary,
+}) {
+  if (isTemporary || chatId == null || !isOmniChatId(chatId)) {
+    return requestMessages;
+  }
+  final settings = ref.read(appSettingsProvider) as AppSettings;
+  final notifier =
+      ref.read(omniSessionProvider.notifier) as OmniSessionNotifier;
+  final turns = notifier.planTurn(
+    chatId: chatId,
+    messages: messages,
+    idleGap: Duration(minutes: settings.omniSessionIdleMinutes),
+    mayStartSession: mayStartSession,
+  );
+  if (turns == null) return requestMessages;
+  return withOmniSessionMarker(requestMessages, turns);
+}
+
 List<Map<String, dynamic>> _buildChatCompletionMessages({
   required List<Map<String, dynamic>> conversationMessages,
   required bool isTemporary,

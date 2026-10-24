@@ -18,6 +18,8 @@ final class PreferenceKeys {
   static const String compactToolSummaries = 'compact_tool_summaries';
   static const String omniChatEnabled = 'omni_chat_enabled';
   static const String omniChatId = 'omni_chat_id';
+  static const String omniSessionIdleMinutes = 'omni_session_idle_minutes';
+  static const String omniSession = 'omni_session_v1';
   static const String toolActivityInAvatar = 'tool_activity_in_avatar';
   static const String assistantActionLog = 'assistant_action_log_v1';
   static const String assistantActionLogSeen = 'assistant_action_log_seen_v1';

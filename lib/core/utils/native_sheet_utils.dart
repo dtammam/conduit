@@ -608,6 +608,10 @@ const nativeCompactToolSummariesId = 'compact-tool-summaries';
 /// Control id of the "Omni chat" toggle in the native Chats page.
 const nativeOmniChatId = 'omni-chat';
 
+/// Control id of the Omni chat's "New session after" choice in the native
+/// Chats page.
+const nativeOmniSessionIdleId = 'omni-session-idle';
+
 /// Control id of the "Tool activity in avatar" toggle in the native Chats page.
 const nativeToolActivityInAvatarId = 'tool-activity-in-avatar';
 

@@ -104,6 +104,7 @@ import 'core/utils/native_sheet_utils.dart'
         nativeMessageBubblesId,
         nativeCompactToolSummariesId,
         nativeOmniChatId,
+        nativeOmniSessionIdleId,
         nativeToolActivityInAvatarId,
         nativeWaveTypingIndicatorId,
         nativeChatDragToFolderId,
@@ -1225,6 +1226,13 @@ class _ConduitAppState extends ConsumerState<ConduitApp> {
             await ref
                 .read(appSettingsProvider.notifier)
                 .setOmniChatEnabled(value);
+          }
+        case nativeOmniSessionIdleId:
+          final minutes = int.tryParse('$value');
+          if (minutes != null) {
+            await ref
+                .read(appSettingsProvider.notifier)
+                .setOmniSessionIdleMinutes(minutes);
           }
         case nativeToolActivityInAvatarId:
           if (value is bool) {

@@ -903,8 +903,15 @@ Future<void> regenerateMessage(
     final isTemporary =
         isTemporaryChat(activeConversation.id) ||
         ref.read(temporaryChatEnabledProvider);
-    final requestMessages = _buildChatCompletionMessages(
-      conversationMessages: conversationMessages,
+    final requestMessages = _withOmniSession(
+      ref,
+      chatId: activeConversation.id,
+      messages: messages,
+      requestMessages: _buildChatCompletionMessages(
+        conversationMessages: conversationMessages,
+        isTemporary: isTemporary,
+      ),
+      mayStartSession: false,
       isTemporary: isTemporary,
     );
     if (!ownsCurrentPreparationState()) return;
