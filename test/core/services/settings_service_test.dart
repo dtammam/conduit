@@ -132,11 +132,11 @@ void main() {
         check(settings.quickReplyReactionsEnabled).equals(true);
       });
 
-      test('voiceCallKitEnabled keeps the phone call by default', () {
-        check(settings.voiceCallKitEnabled).equals(true);
+      test('voiceCallKitEnabled defaults to off in this build', () {
+        check(settings.voiceCallKitEnabled).equals(false);
         check(
-          settings.copyWith(voiceCallKitEnabled: false).voiceCallKitEnabled,
-        ).equals(false);
+          settings.copyWith(voiceCallKitEnabled: true).voiceCallKitEnabled,
+        ).equals(true);
       });
 
       test('toolActivityInAvatar defaults to true and needs the avatar', () {

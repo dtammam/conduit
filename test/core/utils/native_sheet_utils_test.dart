@@ -98,7 +98,7 @@ void main() {
     check(bargeIn.value).equals(false);
   });
 
-  test('native phone call toggle is on by default and follows the setting', () {
+  test('native phone call toggle follows the setting', () {
     for (final enabled in [true, false]) {
       final parts = buildNativeAudioSheetParts(
         l10n,
@@ -112,7 +112,7 @@ void main() {
       check(item.title).equals(l10n.voiceShowAsPhoneCall);
       check(item.value).equals(enabled);
     }
-    check(const AppSettings().voiceCallKitEnabled).equals(true);
+    check(const AppSettings().voiceCallKitEnabled).equals(false);
   });
 
   for (final stt in SttPreference.values) {

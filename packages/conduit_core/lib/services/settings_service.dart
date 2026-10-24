@@ -806,7 +806,7 @@ class SettingsService {
           get<bool>(PreferenceKeys.voiceBargeInEnabled) ??
           false,
       voiceCallKitEnabled:
-          get<bool>(PreferenceKeys.voiceCallKitEnabled) ?? true,
+          get<bool>(PreferenceKeys.voiceCallKitEnabled) ?? false,
       voiceCallMode: VoiceCallMode.values.firstWhere(
         (mode) => mode.name == get<String>(PreferenceKeys.voiceCallMode),
         orElse: () => VoiceCallMode.auto,
@@ -1055,7 +1055,7 @@ class AppSettings {
     this.voiceHoldToTalk = false,
     this.voiceAutoSendFinal = false,
     this.voiceBargeInEnabled = false,
-    this.voiceCallKitEnabled = true,
+    this.voiceCallKitEnabled = false,
     this.voiceCallMode = VoiceCallMode.auto,
     this.socketTransportMode = 'ws',
     this.quickPills = const [],
