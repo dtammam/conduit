@@ -14,7 +14,17 @@ import AVFoundation
 ///
 /// Items are the caller's clips (sentences) in queue order. Pieces of an item
 /// are scheduled as they come; the next item's pieces wait until the item
-/// before it is finished. Host-agnostic: no Flutter types.
+/// before it is finished.
+///
+/// The graph (player, time-pitch, main mixer) is wired once, in [format], and
+/// every decoded buffer is converted to that format, so nothing is connected
+/// while audio runs. AVAudioEngine reports misuse by raising Objective-C
+/// exceptions, which would end the app; every engine call goes through
+/// [ConduitObjCTry] and surfaces as a thrown [EngineError] instead, so the
+/// caller can fall back to another player. (2026-10-24: `play` before the
+/// first piece prepared an engine with no output connected, "required
+/// condition is false: inputNode != nullptr || outputNode != nullptr", and
+/// the app crashed.)
 final class SpeechEngineQueue {
   struct PieceTrim {
     var leading: AVAudioFrameCount
@@ -33,11 +43,22 @@ final class SpeechEngineQueue {
     case drained
   }
 
+  struct EngineError: LocalizedError {
+    let message: String
+    var errorDescription: String? { message }
+  }
+
+  /// The format the graph runs in; decoded audio is converted to it.
+  let format: AVAudioFormat
   let engine: AVAudioEngine
   private let player = AVAudioPlayerNode()
   private let timePitch = AVAudioUnitTimePitch()
-  private var connectedFormat: AVAudioFormat?
+  private var wired = false
   private let queue = DispatchQueue(label: "app.cogwheel.conduit.speech-engine")
+
+  /// When a scheduled buffer counts as done. Played back on a device; offline
+  /// rendering (tests) only reports buffers as rendered.
+  private let completionType: AVAudioPlayerNodeCompletionCallbackType
 
   private struct Item {
     var buffers: [AVAudioPCMBuffer] = []
@@ -53,20 +74,24 @@ final class SpeechEngineQueue {
   private var outstanding = 0
   private var generation = 0
   private var lastStartedItem: Int?
+  /// Items waiting to be reported as started, with how many buffers must play
+  /// back first.
+  private var pendingStarts: [(item: Int, ahead: Int)] = []
   private(set) var wantsPlayback = false
 
   /// Called on the engine's queue.
   var onEvent: ((Event) -> Void)?
 
-  /// When a scheduled buffer counts as done. Played back on a device; offline
-  /// rendering (tests) only reports buffers as rendered.
-  private let completionType: AVAudioPlayerNodeCompletionCallbackType
-
   init(
     engine: AVAudioEngine = AVAudioEngine(),
+    format: AVAudioFormat = AVAudioFormat(
+      standardFormatWithSampleRate: 24000,
+      channels: 1
+    )!,
     completionType: AVAudioPlayerNodeCompletionCallbackType = .dataPlayedBack
   ) {
     self.engine = engine
+    self.format = format
     self.completionType = completionType
     engine.attach(player)
     engine.attach(timePitch)
@@ -76,10 +101,10 @@ final class SpeechEngineQueue {
   // MARK: - Queue
 
   /// Clears every item and stops playback.
-  func reset() {
-    queue.sync {
+  func reset() throws {
+    try queue.sync {
       generation += 1
-      player.stop()
+      try Self.objc { self.player.stop() }
       items.removeAll()
       scheduleItem = 0
       scheduledInItem = 0
@@ -91,71 +116,72 @@ final class SpeechEngineQueue {
 
   /// Decodes [data] (an encoded audio file) and adds it to item [index].
   func appendPiece(item index: Int, data: Data, trim: PieceTrim) throws {
-    let buffer = try Self.decode(data, trim: trim)
-    queue.sync {
+    let buffer = try Self.decode(data, trim: trim, to: format)
+    try queue.sync {
       ensureItem(index)
       if let buffer { items[index].buffers.append(buffer) }
-      scheduleReady()
+      try scheduleReady()
     }
   }
 
-  /// Adds already decoded PCM to item [index] (tests, and hosts that decode
-  /// elsewhere).
-  func appendBuffer(item index: Int, buffer: AVAudioPCMBuffer) {
-    queue.sync {
+  /// Adds PCM to item [index]; converted to [format] when it differs.
+  func appendBuffer(item index: Int, buffer: AVAudioPCMBuffer) throws {
+    let converted = try Self.convert(buffer, to: format)
+    try queue.sync {
       ensureItem(index)
-      items[index].buffers.append(buffer)
-      scheduleReady()
+      if let converted { items[index].buffers.append(converted) }
+      try scheduleReady()
     }
   }
 
   /// No more pieces will come for item [index].
-  func finishItem(_ index: Int) {
-    queue.sync {
+  func finishItem(_ index: Int) throws {
+    try queue.sync {
       ensureItem(index)
       items[index].finished = true
-      scheduleReady()
+      try scheduleReady()
       reportIfIdle()
     }
   }
 
   /// Plays from the start of item [index] (a replay or a skip).
-  func seek(toItem index: Int) {
-    queue.sync {
+  func seek(toItem index: Int) throws {
+    try queue.sync {
       generation += 1
-      player.stop()
+      try Self.objc { self.player.stop() }
       outstanding = 0
       scheduleItem = max(0, index)
       scheduledInItem = 0
       lastStartedItem = nil
       pendingStarts.removeAll()
-      scheduleReady()
-      if wantsPlayback { startPlayerIfNeeded() }
+      try scheduleReady()
+      if wantsPlayback { try startPlayerIfNeeded() }
     }
   }
 
   // MARK: - Transport
 
   func play() throws {
-    try startEngineIfNeeded()
-    queue.sync {
+    try queue.sync {
+      try wireIfNeeded()
+      try startEngineIfNeeded()
       wantsPlayback = true
-      startPlayerIfNeeded()
+      try startPlayerIfNeeded()
     }
   }
 
-  func pause() {
-    queue.sync {
+  func pause() throws {
+    try queue.sync {
       wantsPlayback = false
-      player.pause()
+      try Self.objc { self.player.pause() }
     }
   }
 
-  func stop() {
-    queue.sync {
+  func stop() throws {
+    try queue.sync {
       wantsPlayback = false
       generation += 1
-      player.stop()
+      try Self.objc { self.player.stop() }
       outstanding = 0
       scheduledInItem = 0
       lastStartedItem = nil
@@ -172,45 +198,80 @@ final class SpeechEngineQueue {
   /// After the engine stopped for a route or format change: start it again
   /// and replay the current item from its start (the player's schedule does
   /// not survive the stop).
-  func recoverAfterConfigurationChange() {
+  func recoverAfterConfigurationChange() throws {
     let (wants, resumeItem) = queue.sync {
       (wantsPlayback, lastStartedItem ?? scheduleItem)
     }
     guard wants else { return }
-    try? startEngineIfNeeded()
-    seek(toItem: resumeItem)
+    try queue.sync { try startEngineIfNeeded() }
+    try seek(toItem: resumeItem)
   }
 
   func shutDown() {
-    stop()
-    engine.stop()
+    try? stop()
+    _ = try? Self.objc { self.engine.stop() }
   }
 
   // MARK: - Internals
+
+  /// Runs [body], turning an Objective-C exception into [EngineError].
+  @discardableResult
+  static func objc<T>(_ body: () throws -> T) throws -> T {
+    var value: T?
+    var thrown: Error?
+    var objcError: NSError?
+    let ok = ConduitObjCTry({
+      do { value = try body() } catch { thrown = error }
+    }, &objcError)
+    if !ok {
+      throw EngineError(message: objcError?.localizedDescription ?? "audio engine error")
+    }
+    if let thrown { throw thrown }
+    return value!
+  }
 
   private func ensureItem(_ index: Int) {
     while items.count <= index { items.append(Item()) }
   }
 
+  private func wireIfNeeded() throws {
+    guard !wired else { return }
+    try Self.objc {
+      self.engine.connect(self.player, to: self.timePitch, format: self.format)
+      self.engine.connect(
+        self.timePitch,
+        to: self.engine.mainMixerNode,
+        format: self.format
+      )
+    }
+    wired = true
+  }
+
   private func startEngineIfNeeded() throws {
-    if !engine.isRunning {
-      engine.prepare()
-      try engine.start()
+    try wireIfNeeded()
+    if engine.isRunning { return }
+    try Self.objc {
+      self.engine.prepare()
+      try self.engine.start()
     }
   }
 
-  private func startPlayerIfNeeded() {
+  private func startPlayerIfNeeded() throws {
     guard engine.isRunning, wantsPlayback, !player.isPlaying else { return }
-    player.play()
+    try Self.objc { self.player.play() }
   }
 
   /// Schedules every buffer that may play now, in order. On [queue].
-  private func scheduleReady() {
+  private func scheduleReady() throws {
+    try wireIfNeeded()
     while scheduleItem < items.count {
       let item = items[scheduleItem]
       while scheduledInItem < item.buffers.count {
-        schedule(item.buffers[scheduledInItem], item: scheduleItem,
-                 first: scheduledInItem == 0)
+        try schedule(
+          item.buffers[scheduledInItem],
+          item: scheduleItem,
+          first: scheduledInItem == 0
+        )
         scheduledInItem += 1
       }
       guard item.finished else { return }
@@ -219,34 +280,33 @@ final class SpeechEngineQueue {
     }
   }
 
-  private func schedule(_ buffer: AVAudioPCMBuffer, item: Int, first: Bool) {
-    connect(format: buffer.format)
+  private func schedule(_ buffer: AVAudioPCMBuffer, item: Int, first: Bool) throws {
     let scheduledGeneration = generation
+    try Self.objc {
+      self.player.scheduleBuffer(
+        buffer,
+        completionCallbackType: self.completionType
+      ) { [weak self] _ in
+        guard let self else { return }
+        self.queue.async {
+          guard scheduledGeneration == self.generation else { return }
+          self.outstanding -= 1
+          self.advancePendingStarts()
+          self.reportIfIdle()
+        }
+      }
+    }
     outstanding += 1
     if first {
-      // The item starts when everything scheduled before it has played; a
-      // zero-length marker would be dropped, so the start is reported from
-      // the previous buffer's completion, or now when nothing is ahead.
-      if outstanding == 1 { reportStarted(item) } else {
+      // The item starts when everything scheduled before it has played.
+      if outstanding == 1 {
+        reportStarted(item)
+      } else {
         pendingStarts.append((item, outstanding - 1))
       }
     }
-    player.scheduleBuffer(buffer, completionCallbackType: completionType) {
-      [weak self] _ in
-      guard let self else { return }
-      self.queue.async {
-        guard scheduledGeneration == self.generation else { return }
-        self.outstanding -= 1
-        self.advancePendingStarts()
-        self.reportIfIdle()
-      }
-    }
-    if wantsPlayback { startPlayerIfNeeded() }
+    if wantsPlayback { try startPlayerIfNeeded() }
   }
-
-  /// Items waiting to be reported as started, with how many buffers must play
-  /// back first.
-  private var pendingStarts: [(item: Int, ahead: Int)] = []
 
   private func advancePendingStarts() {
     pendingStarts = pendingStarts.compactMap { entry in
@@ -273,47 +333,88 @@ final class SpeechEngineQueue {
     onEvent?(allDone ? .drained : .starved)
   }
 
-  private func connect(format: AVAudioFormat) {
-    if let connected = connectedFormat, connected == format { return }
-    engine.disconnectNodeOutput(player)
-    engine.disconnectNodeOutput(timePitch)
-    engine.connect(player, to: timePitch, format: format)
-    engine.connect(timePitch, to: engine.mainMixerNode, format: format)
-    connectedFormat = format
-  }
-
-  /// Decodes an encoded audio file in memory to PCM and cuts [trim] from its
-  /// ends; nil when nothing is left.
-  static func decode(_ data: Data, trim: PieceTrim) throws -> AVAudioPCMBuffer? {
+  /// Decodes an encoded audio file in memory to PCM in [format], cutting
+  /// [trim] from its ends; nil when nothing is left (a piece shorter than
+  /// the trim).
+  static func decode(
+    _ data: Data,
+    trim: PieceTrim,
+    to format: AVAudioFormat
+  ) throws -> AVAudioPCMBuffer? {
     let url = FileManager.default.temporaryDirectory
       .appendingPathComponent("speech-piece-\(UUID().uuidString).mp3")
     try data.write(to: url)
     defer { try? FileManager.default.removeItem(at: url) }
-    let file = try AVAudioFile(forReading: url)
-    let total = AVAudioFrameCount(file.length)
-    guard total > 0,
-          let whole = AVAudioPCMBuffer(pcmFormat: file.processingFormat,
-                                       frameCapacity: total)
-    else { return nil }
-    try file.read(into: whole)
-    let start = min(trim.leading, whole.frameLength)
-    let end = whole.frameLength > trim.trailing + start
-      ? whole.frameLength - trim.trailing : start
-    let length = end - start
-    guard length > 0,
-          let out = AVAudioPCMBuffer(pcmFormat: whole.format, frameCapacity: length)
+    let whole: AVAudioPCMBuffer = try objc {
+      let file = try AVAudioFile(forReading: url)
+      let total = AVAudioFrameCount(max(0, file.length))
+      guard total > 0,
+            let buffer = AVAudioPCMBuffer(
+              pcmFormat: file.processingFormat,
+              frameCapacity: total
+            )
+      else { throw EngineError(message: "empty audio") }
+      try file.read(into: buffer)
+      return buffer
+    }
+    guard let trimmed = cut(whole, trim: trim) else { return nil }
+    return try convert(trimmed, to: format)
+  }
+
+  /// [buffer] without [trim]'s frames at either end; nil when nothing is left.
+  static func cut(_ buffer: AVAudioPCMBuffer, trim: PieceTrim) -> AVAudioPCMBuffer? {
+    let total = buffer.frameLength
+    guard total > trim.leading + trim.trailing else { return nil }
+    let start = trim.leading
+    let length = total - trim.leading - trim.trailing
+    guard let out = AVAudioPCMBuffer(pcmFormat: buffer.format, frameCapacity: length)
     else { return nil }
     out.frameLength = length
-    let channels = Int(whole.format.channelCount)
-    if let src = whole.floatChannelData, let dst = out.floatChannelData {
+    let channels = Int(buffer.format.channelCount)
+    if let src = buffer.floatChannelData, let dst = out.floatChannelData {
       for c in 0..<channels {
         dst[c].update(from: src[c].advanced(by: Int(start)), count: Int(length))
       }
-    } else if let src = whole.int16ChannelData, let dst = out.int16ChannelData {
+    } else if let src = buffer.int16ChannelData, let dst = out.int16ChannelData {
       for c in 0..<channels {
         dst[c].update(from: src[c].advanced(by: Int(start)), count: Int(length))
       }
+    } else {
+      return nil
     }
     return out
+  }
+
+  /// [buffer] in [format] (sample rate, channels, sample type); itself when
+  /// it already is.
+  static func convert(
+    _ buffer: AVAudioPCMBuffer,
+    to format: AVAudioFormat
+  ) throws -> AVAudioPCMBuffer? {
+    if buffer.format == format { return buffer }
+    guard buffer.frameLength > 0 else { return nil }
+    guard let converter = AVAudioConverter(from: buffer.format, to: format) else {
+      throw EngineError(message: "cannot convert \(buffer.format) to \(format)")
+    }
+    let ratio = format.sampleRate / buffer.format.sampleRate
+    let capacity = AVAudioFrameCount(Double(buffer.frameLength) * ratio) + 1024
+    guard let out = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: capacity) else {
+      return nil
+    }
+    var fed = false
+    var error: NSError?
+    let status = converter.convert(to: out, error: &error) { _, outStatus in
+      if fed {
+        outStatus.pointee = .endOfStream
+        return nil
+      }
+      fed = true
+      outStatus.pointee = .haveData
+      return buffer
+    }
+    if status == .error {
+      throw EngineError(message: error?.localizedDescription ?? "conversion failed")
+    }
+    return out.frameLength > 0 ? out : nil
   }
 }

@@ -18,6 +18,7 @@ Uint8List _piece(int frames) {
 
 class _Files implements AudioPlaybackPort {
   final calls = <String>[];
+  List<AudioClip> lastClips = const [];
   @override
   Stream<AudioPlaybackState> get stateChanges => const Stream.empty();
   @override
@@ -31,7 +32,10 @@ class _Files implements AudioPlaybackPort {
     List<AudioClip> clips, {
     int initialIndex = 0,
     Duration initialPosition = Duration.zero,
-  }) async => calls.add('setClips ${clips.length}');
+  }) async {
+    lastClips = clips;
+    calls.add('setClips ${clips.length}');
+  }
   @override
   Future<void> addClip(AudioClip clip) async => calls.add('addClip');
   @override
@@ -126,6 +130,42 @@ void main() {
     calls.clear();
     await engine.seek(Duration.zero, index: 1);
     check(calls).isEmpty();
+  });
+
+  test('an engine failure moves the queue to just_audio as whole clips', () async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          calls.add(call.method);
+          if (call.method == 'play') {
+            throw PlatformException(code: 'speech_engine', message: 'probe');
+          }
+          return true;
+        });
+    final files = _Files();
+    final hybrid = HybridSpeechPlayback(files: files);
+    final audio = ProgressiveAudio(mimeType: 'audio/mp3')
+      ..add(_piece(2))
+      ..close();
+    await hybrid.setClips([
+      AudioClip(uri: Uri.parse('x:0'), progressive: audio),
+    ]);
+    await hybrid.play();
+    await settle();
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    // just_audio was stopped when the engine took the queue, then got it
+    // back as a whole file and went on playing.
+    check(files.calls).deepEquals(['stop', 'setClips 1', 'play']);
+    check(files.lastClips.single.progressive).isNull();
+    check(files.lastClips.single.uri.scheme).equals('file');
+
+    // From then on streamed clips go to just_audio whole.
+    final next = ProgressiveAudio(mimeType: 'audio/mp3')
+      ..add(_piece(1))
+      ..close();
+    await hybrid.setClips([
+      AudioClip(uri: Uri.parse('x:1'), progressive: next),
+    ]);
+    check(files.lastClips.single.progressive).isNull();
   });
 
   test('the hybrid player picks the engine only for streamed queues', () async {

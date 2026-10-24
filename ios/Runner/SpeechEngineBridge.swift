@@ -54,7 +54,13 @@ final class SpeechEngineBridge: ConduitBridge {
       queue: nil
     ) { [weak self] _ in
       // A route or format change stops the engine; carry on where it was.
-      self?.work.async { created.recoverAfterConfigurationChange() }
+      self?.work.async {
+        do {
+          try created.recoverAfterConfigurationChange()
+        } catch {
+          self?.sendFailure(error)
+        }
+      }
     }
     speech = created
     return created
@@ -64,7 +70,7 @@ final class SpeechEngineBridge: ConduitBridge {
     let speech = queue()
     switch method {
     case "reset":
-      speech.reset()
+      try speech.reset()
     case "appendPiece":
       guard let item = args["item"] as? Int,
             let bytes = args["bytes"] as? FlutterStandardTypedData
@@ -75,17 +81,17 @@ final class SpeechEngineBridge: ConduitBridge {
       try speech.appendPiece(item: item, data: bytes.data, trim: trim)
     case "finishItem":
       guard let item = args["item"] as? Int else { return false }
-      speech.finishItem(item)
+      try speech.finishItem(item)
     case "play":
       try? AVAudioSession.sharedInstance().setActive(true)
       try speech.play()
     case "pause":
-      speech.pause()
+      try speech.pause()
     case "stop":
-      speech.stop()
+      try speech.stop()
     case "seek":
       guard let item = args["item"] as? Int else { return false }
-      speech.seek(toItem: item)
+      try speech.seek(toItem: item)
     case "setRate":
       speech.setRate(Float(args["rate"] as? Double ?? 1))
     case "dispose":
@@ -94,6 +100,16 @@ final class SpeechEngineBridge: ConduitBridge {
       return FlutterMethodNotImplemented
     }
     return true
+  }
+
+  /// The engine failed outside a call (a route change); Dart falls back.
+  private func sendFailure(_ error: Error) {
+    DispatchQueue.main.async { [weak self] in
+      self?.methodChannel?.invokeMethod(
+        "event",
+        arguments: ["type": "failed", "message": error.localizedDescription]
+      )
+    }
   }
 
   private func send(_ event: SpeechEngineQueue.Event) {

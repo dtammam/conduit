@@ -11,6 +11,7 @@
 		2F1DB9013AE6D6840DAEDF65 /* SpeechEngineBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEE957AC198F5541B6DA13E7 /* SpeechEngineBridge.swift */; };
 		331C808B294A63AB00263BE5 /* RunnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 331C807B294A618700263BE5 /* RunnerTests.swift */; };
 		5392225773208F91BA90683B /* SpeechEngineQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E5AB5F21F0375D57CB097B6 /* SpeechEngineQueue.swift */; };
+		56A577DF855E0142104F99D7 /* ConduitObjCTry.m in Sources */ = {isa = PBXBuildFile; fileRef = 57AA3E89E09FC918E6164B60 /* ConduitObjCTry.m */; };
 		74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74858FAE1ED2DC5600515810 /* AppDelegate.swift */; };
 		78A318202AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage in Frameworks */ = {isa = PBXBuildFile; productRef = 78A3181F2AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage */; };
 		97C146FC1CF9000F007C117D /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FA1CF9000F007C117D /* Main.storyboard */; };
@@ -114,6 +115,7 @@
 		39A7D52A9D5DD70C376EABF2 /* RealtimeAudioBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealtimeAudioBridge.swift; sourceTree = "<group>"; };
 		3B3967151E833CAA004F5970 /* AppFrameworkInfo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = AppFrameworkInfo.plist; path = Flutter/AppFrameworkInfo.plist; sourceTree = "<group>"; };
 		42FA90454A654BE3B4EA8A89 /* Pods_RunnerTests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_RunnerTests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		57AA3E89E09FC918E6164B60 /* ConduitObjCTry.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = ConduitObjCTry.m; sourceTree = "<group>"; };
 		606D3073E5BC84DF85E7D8C2 /* Pods-RunnerTests.profile.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.profile.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.profile.xcconfig"; sourceTree = "<group>"; };
 		6DEBCC1D4A97BA7E06B4F749 /* Pods-Runner.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.debug.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.debug.xcconfig"; sourceTree = "<group>"; };
 		74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "Runner-Bridging-Header.h"; sourceTree = "<group>"; };
@@ -158,6 +160,7 @@
 		D2A0B3022F5E4D6C7B8A9012 /* ShareExtension.debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = ShareExtension/ShareExtension.debug.xcconfig; sourceTree = "<group>"; };
 		D2A0B3032F5E4D6C7B8A9012 /* ShareExtension.release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = ShareExtension/ShareExtension.release.xcconfig; sourceTree = "<group>"; };
 		D2A0B3042F5E4D6C7B8A9012 /* ShareExtension.profile.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = ShareExtension/ShareExtension.profile.xcconfig; sourceTree = "<group>"; };
+		D40CF293CCEBF2FC4E21EC07 /* ConduitObjCTry.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ConduitObjCTry.h; sourceTree = "<group>"; };
 		E590F0BC5DD9A3EFB1FDDDBF /* Pods-RunnerTests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.release.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.release.xcconfig"; sourceTree = "<group>"; };
 		E6C41A0B2F9E4D6C7B8A9012 /* NativeImageViewerBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeImageViewerBridge.swift; sourceTree = "<group>"; };
 		E952EFF81F1FEABA348FE2CC /* Pods_Runner.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Runner.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -377,6 +380,8 @@
 				C0700E3C1D3E25D23C2D9095 /* AppIntentInvocationStore.swift */,
 				C07E41E507BC83CDF6A2F806 /* NativeIosTtsBridge.swift */,
 				C0748D3BCA6CB2E7D24C8438 /* VoiceAudioRouteBridge.swift */,
+				57AA3E89E09FC918E6164B60 /* ConduitObjCTry.m */,
+				D40CF293CCEBF2FC4E21EC07 /* ConduitObjCTry.h */,
 				FEE957AC198F5541B6DA13E7 /* SpeechEngineBridge.swift */,
 				8E5AB5F21F0375D57CB097B6 /* SpeechEngineQueue.swift */,
 				39A7D52A9D5DD70C376EABF2 /* RealtimeAudioBridge.swift */,
@@ -705,6 +710,7 @@
 				C07A1ABDC1D26441C3348E00 /* AppIntentInvocationStore.swift in Sources */,
 				C073CCD19D2508BCAD536200 /* NativeIosTtsBridge.swift in Sources */,
 				C079094EC8D3F2DCA002F300 /* VoiceAudioRouteBridge.swift in Sources */,
+				56A577DF855E0142104F99D7 /* ConduitObjCTry.m in Sources */,
 				2F1DB9013AE6D6840DAEDF65 /* SpeechEngineBridge.swift in Sources */,
 				5392225773208F91BA90683B /* SpeechEngineQueue.swift in Sources */,
 				F5C6B3C410DE632B01B4234F /* RealtimeAudioBridge.swift in Sources */,

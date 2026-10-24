@@ -28,21 +28,43 @@ class HybridSpeechPlayback implements AudioPlaybackPort {
         _engine.currentIndexChanges.listen(
           (i) => _forward(_engine, i, _indices),
         ),
-      );
+      )
+      ..add(_engine.failures.listen((_) => unawaited(_fallBack())));
+  }
+
+  /// Moves the engine's queue to just_audio as whole clips, from the clip it
+  /// was playing, and keeps playing if it was.
+  Future<void> _fallBack() async {
+    if (_engineDisabled) return;
+    _engineDisabled = true;
+    if (!identical(_active, _engine)) return;
+    final resumeAt = _engine.currentIndex ?? 0;
+    final clips = await Future.wait(_engineClips.map(wholeSpeechClip));
+    _active = _files;
+    if (clips.isEmpty) return;
+    await _files.setClips(
+      clips,
+      initialIndex: resumeAt.clamp(0, clips.length - 1),
+    );
+    if (_playing) await _files.play();
   }
 
   final AudioPlaybackPort _files;
   final EngineSpeechPlayback _engine;
   late AudioPlaybackPort _active = _files;
+
+  /// The engine's queue, kept so a failure can hand it to just_audio.
+  final List<AudioClip> _engineClips = <AudioClip>[];
+  bool _playing = false;
+
+  /// Set after the engine failed once; streamed speech then plays whole
+  /// clips on just_audio for the rest of the run.
+  bool _engineDisabled = false;
   final _subs = <StreamSubscription<Object?>>[];
   final _states = StreamController<AudioPlaybackState>.broadcast();
   final _indices = StreamController<int?>.broadcast();
 
-  void _forward<T>(
-    AudioPlaybackPort from,
-    T value,
-    StreamController<T> into,
-  ) {
+  void _forward<T>(AudioPlaybackPort from, T value, StreamController<T> into) {
     if (identical(from, _active) && !into.isClosed) into.add(value);
   }
 
@@ -61,30 +83,58 @@ class HybridSpeechPlayback implements AudioPlaybackPort {
     int initialIndex = 0,
     Duration initialPosition = Duration.zero,
   }) async {
-    final next = clips.any((clip) => clip.progressive != null)
-        ? _engine
-        : _files;
+    final streamed = clips.any((clip) => clip.progressive != null);
+    final next = streamed && !_engineDisabled ? _engine : _files;
     if (!identical(next, _active)) {
       await _active.stop();
       _active = next;
     }
+    if (identical(next, _engine)) {
+      _engineClips
+        ..clear()
+        ..addAll(clips);
+    }
     await _active.setClips(
-      clips,
+      streamed && _engineDisabled
+          ? await Future.wait(clips.map(wholeSpeechClip))
+          : clips,
       initialIndex: initialIndex,
       initialPosition: initialPosition,
     );
   }
 
   @override
-  Future<void> addClip(AudioClip clip) => _active.addClip(clip);
+  Future<void> addClip(AudioClip clip) async {
+    if (identical(_active, _engine)) {
+      _engineClips.add(clip);
+      return _engine.addClip(clip);
+    }
+    if (_engineDisabled && clip.progressive != null) {
+      return _files.addClip(await wholeSpeechClip(clip));
+    }
+    return _files.addClip(clip);
+  }
+
   @override
   Future<void> clearClips() => _active.clearClips();
   @override
-  Future<void> play() => _active.play();
+  Future<void> play() {
+    _playing = true;
+    return _active.play();
+  }
+
   @override
-  Future<void> pause() => _active.pause();
+  Future<void> pause() {
+    _playing = false;
+    return _active.pause();
+  }
+
   @override
-  Future<void> stop() => _active.stop();
+  Future<void> stop() {
+    _playing = false;
+    return _active.stop();
+  }
+
   @override
   Future<void> seek(Duration? position, {int? index}) =>
       _active.seek(position, index: index);
@@ -122,6 +172,21 @@ class EngineSpeechPlayback implements AudioPlaybackPort {
   static const channelName = 'app.cogwheel.conduit/speech_engine';
 
   final MethodChannel _channel;
+  final _failures = StreamController<Object>.broadcast();
+
+  /// Errors from the native engine: a failed call or a failure it reported.
+  /// The engine stays unusable afterwards; [HybridSpeechPlayback] moves the
+  /// queue to just_audio.
+  Stream<Object> get failures => _failures.stream;
+  bool _failed = false;
+  bool get failed => _failed;
+
+  void _fail(Object error) {
+    if (_failed) return;
+    _failed = true;
+    if (!_failures.isClosed) _failures.add(error);
+  }
+
   final _states = StreamController<AudioPlaybackState>.broadcast();
   final _indices = StreamController<int?>.broadcast();
   final _feeds = <StreamSubscription<Uint8List>>[];
@@ -144,9 +209,13 @@ class EngineSpeechPlayback implements AudioPlaybackPort {
   AudioProcessingState get processingState => _processing;
 
   Future<void> _call(String method, [Map<String, Object?>? args]) {
-    final run = _serial.then((_) => _channel.invokeMethod<Object?>(method, args));
+    if (_failed) return Future<void>.value();
+    final run = _serial.then(
+      (_) => _channel.invokeMethod<Object?>(method, args),
+    );
     _serial = run.then((_) {}, onError: (Object _) {});
-    return run.then((_) {});
+    // A failing engine never throws into the caller: it reports on [failures].
+    return run.then((_) {}, onError: (Object error) => _fail(error));
   }
 
   void _emit(AudioProcessingState processing) {
@@ -163,6 +232,8 @@ class EngineSpeechPlayback implements AudioPlaybackPort {
     final args = call.arguments;
     if (args is! Map) return null;
     switch (args['type']) {
+      case 'failed':
+        _fail(StateError('${args['message'] ?? 'speech engine failed'}'));
       case 'started':
         final item = args['item'];
         if (item is int && item != _currentIndex) {
@@ -284,9 +355,11 @@ class EngineSpeechPlayback implements AudioPlaybackPort {
   Future<void> pause() async {
     _playing = false;
     await _call('pause');
-    _emit(_processing == AudioProcessingState.completed
-        ? _processing
-        : AudioProcessingState.ready);
+    _emit(
+      _processing == AudioProcessingState.completed
+          ? _processing
+          : AudioProcessingState.ready,
+    );
   }
 
   @override
@@ -315,5 +388,22 @@ class EngineSpeechPlayback implements AudioPlaybackPort {
     await _call('dispose');
     await _states.close();
     await _indices.close();
+    await _failures.close();
   }
+}
+
+/// [clip] as a whole file, waiting for a streamed body to end; the clip
+/// itself when it already is one.
+Future<AudioClip> wholeSpeechClip(AudioClip clip) async {
+  final progressive = clip.progressive;
+  if (progressive == null) return clip;
+  final builder = BytesBuilder(copy: false);
+  await for (final bytes in progressive.read()) {
+    builder.add(bytes);
+  }
+  final dir = await Directory.systemTemp.createTemp('conduit_speech_');
+  final extension = isMp3MimeType(progressive.mimeType) ? 'mp3' : 'wav';
+  final file = File('${dir.path}/clip.$extension');
+  await file.writeAsBytes(builder.takeBytes(), flush: true);
+  return AudioClip(uri: file.uri, tag: clip.tag);
 }
