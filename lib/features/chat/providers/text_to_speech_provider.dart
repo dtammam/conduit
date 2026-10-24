@@ -1,4 +1,7 @@
 import 'dart:async';
+import 'dart:io' show Platform;
+
+import 'package:audio_session/audio_session.dart';
 
 import 'package:riverpod/riverpod.dart';
 
@@ -7,6 +10,7 @@ import 'package:conduit_core/services/settings_service.dart';
 import 'package:conduit_core/features/chat/server_speech/server_speech_providers.dart';
 
 import 'package:conduit_core/providers/app_providers.dart';
+import 'package:conduit_core/features/chat/voice_mode/chat_voice_mode_controller.dart';
 
 import 'package:conduit_markdown/conduit_markdown.dart';
 
@@ -258,6 +262,10 @@ class TextToSpeechController extends Notifier<TextToSpeechState> {
         return;
       }
 
+      await _prepareReadAloudRoute();
+      if (!ref.mounted) {
+        return;
+      }
       await _service.speak(cleanText);
       if (!ref.mounted) {
         return;
@@ -297,6 +305,22 @@ class TextToSpeechController extends Notifier<TextToSpeechState> {
       }
     }
     return offsets;
+  }
+
+  /// Puts playback back on the loudspeaker (or the headphones) before a
+  /// message is read aloud, unless a voice call owns the audio session.
+  ///
+  /// A voice call leaves iOS in play-and-record, whose default output is the
+  /// earpiece; the call restores the idle configuration when it ends, but a
+  /// read-aloud that found the call configuration still in place came out of
+  /// the earpiece, very quietly (2026-10-24).
+  Future<void> _prepareReadAloudRoute() async {
+    if (ref.read(chatVoiceModeControllerProvider).isActive) return;
+    try {
+      await ref.read(readAloudAudioRouteProvider)();
+    } catch (_) {
+      // The route is a preference; reading aloud goes on without it.
+    }
   }
 
   Future<void> pause() async {
@@ -442,6 +466,17 @@ final textToSpeechServiceProvider = Provider<TextToSpeechService>((ref) {
   });
   return service;
 });
+
+/// Configures the shared audio session for reading a message aloud: media
+/// playback, which iOS sends to the loudspeaker, or to AirPods and other
+/// Bluetooth or AirPlay outputs when they are connected.
+final readAloudAudioRouteProvider = Provider<Future<void> Function()>(
+  (ref) => () async {
+    if (!Platform.isIOS) return;
+    final session = await AudioSession.instance;
+    await session.configure(const AudioSessionConfiguration.music());
+  },
+);
 
 final textToSpeechControllerProvider =
     NotifierProvider<TextToSpeechController, TextToSpeechState>(
