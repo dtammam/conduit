@@ -9,9 +9,11 @@
 /// that line and keeps the history from that message on. Without such a
 /// server the line reaches the model as a harmless system note.
 ///
-/// A session starts with the first message after a cold launch, after a
-/// manual fresh start, or after [AppSettings.omniSessionIdleMinutes] without
-/// a message. The ids of the messages that started sessions are stored per
+/// A session starts with a message sent more than
+/// [AppSettings.omniSessionIdleMinutes] after the one before it (by the
+/// messages' own timestamps, so it is the same whether the app stayed open,
+/// was in the background or was killed), or with the first message after a
+/// manual fresh start. The ids of the messages that started sessions are stored per
 /// account; the transcript draws a divider above each of them.
 library;
 
@@ -50,7 +52,7 @@ class OmniSessionState {
   /// Ids of the messages that started a session, oldest first.
   final List<String> boundaries;
 
-  /// Whether the next message starts a session (cold launch, fresh start).
+  /// Whether the next message starts a session (a fresh start).
   final bool pending;
 
   /// This state for chat [id]: the boundaries of another chat do not apply.
@@ -115,7 +117,7 @@ class OmniSessionTurn {
 ///
 /// With [mayStartSession] (a new message, not a regeneration) that message
 /// starts a session when one is pending, when none was ever started, or when
-/// the message before it is at least [idleGap] older.
+/// the message before it is more than [idleGap] older.
 OmniSessionTurn planOmniSessionTurn({
   required OmniSessionState state,
   required String chatId,
@@ -132,7 +134,7 @@ OmniSessionTurn planOmniSessionTurn({
     final previous = userIndex > 0 ? messages[userIndex - 1] : null;
     final idle =
         previous != null &&
-        user.timestamp.difference(previous.timestamp) >= idleGap;
+        user.timestamp.difference(previous.timestamp) > idleGap;
     if (next.pending || next.boundaries.isEmpty || idle) {
       final boundaries = [...next.boundaries, user.id];
       next = next.copyWith(

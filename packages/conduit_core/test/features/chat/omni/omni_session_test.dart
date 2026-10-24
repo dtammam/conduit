@@ -49,13 +49,22 @@ void main() {
       check(turn.state).equals(state);
     });
 
-    test('a gap of the idle time starts a session', () {
+    test('a gap longer than the idle time starts a session', () {
       final turn = _plan(
         const OmniSessionState(chatId: 'omni', boundaries: ['u1']),
-        [_m('u1', 'user', 0), _m('a1', 'assistant', 1), _m('u2', 'user', 16)],
+        [_m('u1', 'user', 0), _m('a1', 'assistant', 1), _m('u2', 'user', 17)],
       );
       check(turn.turns).equals(1);
       check(turn.state.boundaries).deepEquals(['u1', 'u2']);
+    });
+
+    test('a gap of exactly the idle time stays in the session', () {
+      final turn = _plan(
+        const OmniSessionState(chatId: 'omni', boundaries: ['u1']),
+        [_m('u1', 'user', 0), _m('a1', 'assistant', 0), _m('u2', 'user', 15)],
+      );
+      check(turn.turns).equals(2);
+      check(turn.state.boundaries).deepEquals(['u1']);
     });
 
     test('a pending fresh start makes the next message a session start', () {
