@@ -1303,7 +1303,8 @@ Future<void> _sendMessageInternal(
             .length;
         shouldGenerateTitle =
             (conv == null) ||
-            ((conv.title == 'New Chat' || (conv.title.isEmpty)) &&
+            (!isOmniChatId(conv.id) &&
+                (conv.title == 'New Chat' || (conv.title.isEmpty)) &&
                 nonSystemCount == 1);
       } catch (_) {}
     }

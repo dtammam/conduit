@@ -40,6 +40,7 @@ IconData? cupertinoIconForSFSymbol(String symbol) => switch (symbol) {
     CupertinoIcons.exclamationmark_triangle_fill,
   'wrench' => CupertinoIcons.wrench,
   'clock' => CupertinoIcons.clock,
+  'infinity' => CupertinoIcons.infinite,
   _ => null,
 };
 

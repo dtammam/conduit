@@ -2019,6 +2019,18 @@
   "@assistantAvatarPickFailed": {
     "description": "Error shown when a picked video or image could not be copied for the assistant avatar."
   },
+  "omniChat": "Czat Omni",
+  "@omniChat": {
+    "description": "Toggle title: one chat is the ongoing conversation, pinned in the drawer and opened at launch."
+  },
+  "omniChatDescription": "Jedna ciągła rozmowa, przypięta na górze i otwierana przy uruchomieniu.",
+  "@omniChatDescription": {
+    "description": "Subtitle for the Omni chat toggle."
+  },
+  "omniChatName": "Omni",
+  "@omniChatName": {
+    "description": "Name of the pinned Omni chat row in the drawer and of the chat itself."
+  },
   "compactToolSummaries": "Zwięzłe podsumowania narzędzi",
   "@compactToolSummaries": {
     "description": "Toggle title: the tool rows above a reply read \"Used tools\" instead of naming each tool."

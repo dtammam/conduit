@@ -854,6 +854,7 @@ Future<void> runComparisonCompletion(
       messages,
       assistantMessageId: primary.assistantMessageId,
       isTemporary: false,
+      conversationId: conversation?.id,
     ),
     webSearchEnabled: enableWebSearch,
     imageGenerationEnabled: enableImageGeneration,

@@ -308,6 +308,7 @@ class SettingsService {
           settings.assistantAvatarBubbleColor,
       PreferenceKeys.deliveryReceiptsEnabled: settings.deliveryReceiptsEnabled,
       PreferenceKeys.compactToolSummaries: settings.compactToolSummaries,
+      PreferenceKeys.omniChatEnabled: settings.omniChatEnabled,
       PreferenceKeys.toolActivityInAvatar: settings.toolActivityInAvatar,
       PreferenceKeys.waveTypingIndicator: settings.waveTypingIndicator,
       PreferenceKeys.chatDragToFolder: settings.chatDragToFolder,
@@ -780,6 +781,7 @@ class SettingsService {
           get<bool>(PreferenceKeys.deliveryReceiptsEnabled) ?? true,
       compactToolSummaries:
           get<bool>(PreferenceKeys.compactToolSummaries) ?? false,
+      omniChatEnabled: get<bool>(PreferenceKeys.omniChatEnabled) ?? false,
       toolActivityInAvatar:
           get<bool>(PreferenceKeys.toolActivityInAvatar) ?? true,
       waveTypingIndicator:
@@ -937,6 +939,10 @@ class AppSettings {
   /// naming each tool; the names stay one tap away.
   final bool compactToolSummaries;
 
+  /// Whether one chat is the ongoing conversation: pinned at the top of the
+  /// drawer and opened at launch. See `omni_chat.dart`.
+  final bool omniChatEnabled;
+
   /// Whether tool calls leave the transcript and show in the assistant
   /// avatar's sheet instead. Only takes effect while [assistantAvatarEnabled]
   /// is on; see [toolActivityInAvatarActive].
@@ -1034,6 +1040,7 @@ class AppSettings {
     this.messageBubbles = false,
     this.assistantAvatarBubbleColor = assistantAvatarBubbleColorAuto,
     this.compactToolSummaries = false,
+    this.omniChatEnabled = false,
     this.toolActivityInAvatar = true,
     this.waveTypingIndicator = false,
     this.chatDragToFolder = true,
@@ -1095,6 +1102,7 @@ class AppSettings {
     String? assistantAvatarBubbleColor,
     bool? deliveryReceiptsEnabled,
     bool? compactToolSummaries,
+    bool? omniChatEnabled,
     bool? toolActivityInAvatar,
     bool? waveTypingIndicator,
     bool? chatDragToFolder,
@@ -1160,6 +1168,7 @@ class AppSettings {
       deliveryReceiptsEnabled:
           deliveryReceiptsEnabled ?? this.deliveryReceiptsEnabled,
       compactToolSummaries: compactToolSummaries ?? this.compactToolSummaries,
+      omniChatEnabled: omniChatEnabled ?? this.omniChatEnabled,
       toolActivityInAvatar: toolActivityInAvatar ?? this.toolActivityInAvatar,
       waveTypingIndicator: waveTypingIndicator ?? this.waveTypingIndicator,
       chatDragToFolder: chatDragToFolder ?? this.chatDragToFolder,
@@ -1254,6 +1263,7 @@ class AppSettings {
         other.assistantAvatarBubbleColor == assistantAvatarBubbleColor &&
         other.deliveryReceiptsEnabled == deliveryReceiptsEnabled &&
         other.compactToolSummaries == compactToolSummaries &&
+        other.omniChatEnabled == omniChatEnabled &&
         other.toolActivityInAvatar == toolActivityInAvatar &&
         other.waveTypingIndicator == waveTypingIndicator &&
         other.chatDragToFolder == chatDragToFolder &&
@@ -1319,6 +1329,7 @@ class AppSettings {
       assistantAvatarBubbleColor,
       deliveryReceiptsEnabled,
       compactToolSummaries,
+      omniChatEnabled,
       toolActivityInAvatar,
       waveTypingIndicator,
       chatDragToFolder,
@@ -1481,6 +1492,11 @@ class AppSettingsNotifier extends _$AppSettingsNotifier {
       PreferenceKeys.toolActivityInAvatar,
       value,
     );
+  }
+
+  Future<void> setOmniChatEnabled(bool value) async {
+    state = state.copyWith(omniChatEnabled: value);
+    await SettingsService._putPreference(PreferenceKeys.omniChatEnabled, value);
   }
 
   Future<void> setCompactToolSummaries(bool value) async {

@@ -30,6 +30,7 @@ import '../../../shared/widgets/themed_sheets.dart';
 
 import 'package:conduit_core/models/conversation.dart';
 import 'package:conduit_core/models/folder.dart';
+import 'package:conduit_core/features/chat/omni/omni_chat.dart';
 
 import 'chat_folder_drag.dart';
 import 'chat_swipe_to_delete.dart';
@@ -40,6 +41,7 @@ import 'folder_tree_guides.dart';
 import 'package:conduit_core/features/navigation/providers/drawer_section_notifiers.dart';
 
 import 'folder_icon.dart';
+import 'omni_chat_row.dart';
 import '../providers/conversation_selection_provider.dart';
 import '../providers/sidebar_search_providers.dart';
 import '../providers/sidebar_tab_scroll_registry.dart';
@@ -807,7 +809,11 @@ class _ChatsDrawerState extends ConsumerState<ChatsDrawer>
         // pull-to-refresh style invalidations.)
         skipLoadingOnReload: true,
         data: (items) {
-          final list = items;
+          // The Omni chat has its own pinned row; it is not listed twice.
+          final omni = ref.watch(omniChatProvider).value;
+          final list = omni == null
+              ? items
+              : items.where((c) => c.id != omni.id).toList();
           final conversationsNotifier = ref.read(
             conversationsProvider.notifier,
           );
@@ -826,6 +832,7 @@ class _ChatsDrawerState extends ConsumerState<ChatsDrawer>
               .archivedChatCount();
 
           if (list.isEmpty &&
+              omni == null &&
               !hasVisibleFolders &&
               providerArchivedCount == 0) {
             return _buildEmptyState(
@@ -902,6 +909,7 @@ class _ChatsDrawerState extends ConsumerState<ChatsDrawer>
                   ));
 
           final slivers = <Widget>[
+            if (omni != null) SliverToBoxAdapter(child: _buildOmniRow(omni)),
             if (pinned.isNotEmpty) ...[
               SliverPadding(
                 padding: const EdgeInsets.symmetric(horizontal: Spacing.md),
@@ -2454,7 +2462,32 @@ class _ChatsDrawerState extends ConsumerState<ChatsDrawer>
     );
   }
 
-  Future<void> _selectConversation(Conversation conversation) async {
+  Widget _buildOmniRow(Conversation omni) {
+    final selected = ref.watch(
+      activeConversationProvider.select(
+        (active) => isSameStoredConversation(active, omni),
+      ),
+    );
+    final scopedId = conversationScopedId(omni);
+    final loading = ref.watch(
+      conversationSelectionProvider.select(
+        (selection) =>
+            selection.isLoading && selection.pendingConversationId == scopedId,
+      ),
+    );
+    return OmniChatRow(
+      key: const ValueKey<String>('drawer-omni-chat'),
+      title: AppLocalizations.of(context)!.omniChatName,
+      selected: selected,
+      isLoading: loading,
+      onTap: () => _selectConversation(omni, omni: true),
+    );
+  }
+
+  Future<void> _selectConversation(
+    Conversation conversation, {
+    bool omni = false,
+  }) async {
     final originRoute = NavigationService.currentRoute;
     final originRouteRevision = NavigationService.currentRouteRevision;
     final result = await ref
@@ -2474,6 +2507,8 @@ class _ChatsDrawerState extends ConsumerState<ChatsDrawer>
       case ConversationSelectionDisposition.canceled:
         return;
       case ConversationSelectionDisposition.failed:
+        // The Omni chat may have been deleted elsewhere; find or recreate it.
+        if (omni && mounted) ref.invalidate(omniChatProvider);
         if (!mounted ||
             result.error == null ||
             (NavigationService.currentRoute != originRoute ||
@@ -2485,7 +2520,9 @@ class _ChatsDrawerState extends ConsumerState<ChatsDrawer>
           context,
           result.error,
           onRetry: () {
-            if (mounted) unawaited(_selectConversation(conversation));
+            if (mounted) {
+              unawaited(_selectConversation(conversation, omni: omni));
+            }
           },
         );
     }

@@ -1636,6 +1636,14 @@ class NativeSheetHydrationService {
         value: appSettings.compactToolSummaries,
       ),
       NativeSheetItemConfig(
+        id: nativeOmniChatId,
+        title: l10n.omniChat,
+        subtitle: l10n.omniChatDescription,
+        sfSymbol: 'infinity',
+        kind: NativeSheetItemKind.toggle,
+        value: appSettings.omniChatEnabled,
+      ),
+      NativeSheetItemConfig(
         id: nativeToolActivityInAvatarId,
         title: l10n.toolActivityInAvatar,
         subtitle: l10n.toolActivityInAvatarDescription,

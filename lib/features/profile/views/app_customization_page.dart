@@ -599,6 +599,27 @@ class AppCustomizationPage extends ConsumerWidget {
         CustomizationTile(
           leading: _buildIconBadge(
             context,
+            Platform.isIOS ? CupertinoIcons.infinite : Icons.all_inclusive,
+            color: theme.buttonPrimary,
+          ),
+          title: l10n.omniChat,
+          subtitle: l10n.omniChatDescription,
+          toggled: settings.omniChatEnabled,
+          trailing: AdaptiveSwitch(
+            value: settings.omniChatEnabled,
+            onChanged: (value) => ref
+                .read(appSettingsProvider.notifier)
+                .setOmniChatEnabled(value),
+          ),
+          showChevron: false,
+          onTap: () => ref
+              .read(appSettingsProvider.notifier)
+              .setOmniChatEnabled(!settings.omniChatEnabled),
+        ),
+        const SizedBox(height: Spacing.sm),
+        CustomizationTile(
+          leading: _buildIconBadge(
+            context,
             Platform.isIOS
                 ? CupertinoIcons.list_bullet_below_rectangle
                 : Icons.checklist_rtl,

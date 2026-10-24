@@ -148,6 +148,10 @@ void main() {
               .toolActivityInAvatarActive,
         ).equals(true);
       });
+
+      test('omniChatEnabled defaults to false', () {
+        check(settings.omniChatEnabled).equals(false);
+      });
     });
 
     group('copyWith', () {

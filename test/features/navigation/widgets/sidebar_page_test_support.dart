@@ -40,6 +40,7 @@ import 'package:conduit/shared/widgets/legacy_design_compatibility.dart';
 import 'package:conduit/shared/widgets/sidebar_layout_contract.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mocktail/mocktail.dart';
@@ -145,6 +146,7 @@ Widget sidebarTestBuildHarness({
   bool persistentTabletSidebar = false,
   double textScale = 1,
   bool disableAnimations = false,
+  List<Override> extraOverrides = const [],
 }) {
   final availableTerminalServers =
       terminalServers ?? sidebarTestDefaultTerminalServers();
@@ -177,6 +179,7 @@ Widget sidebarTestBuildHarness({
 
   return ProviderScope(
     overrides: [
+      ...extraOverrides,
       ...openWebUiStorageOpenOverrides(open: openWebUiStorageOpen),
       if (syncStatus != null)
         syncEngineProvider.overrideWith(

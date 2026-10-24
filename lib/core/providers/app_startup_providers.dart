@@ -25,11 +25,13 @@ import 'package:conduit_core/services/interaction_activity.dart';
 
 import '../../shared/services/navigation_service.dart';
 import '../../features/navigation/providers/conversation_selection_provider.dart'
-    show conversationSelectionProvider;
+    show conversationSelectionProvider, ConversationSelectionDisposition;
+
 import 'package:conduit_core/features/notes/providers/notes_providers.dart'
     show activeNoteProvider;
 import 'package:conduit_core/features/prompts/providers/prompts_providers.dart'
     show activePromptCommandProvider;
+
 import '../../platform/app_intents_service.dart';
 import '../../platform/carplay_service.dart';
 import '../../platform/home_widget_service.dart';
@@ -56,6 +58,9 @@ import 'package:conduit_core/models/server_config.dart';
 
 import 'package:conduit_core/features/tools/providers/tools_providers.dart';
 
+import 'package:conduit_core/features/chat/omni/omni_chat.dart';
+import 'package:conduit_core/features/chat/providers/attached_files_provider.dart';
+import 'package:conduit_core/services/settings_service.dart';
 import 'package:conduit_core/features/chat/providers/chat_providers.dart';
 import 'package:conduit_core/features/chat/providers/context_attachments_provider.dart';
 import 'package:conduit_core/features/chat/providers/knowledge_cache_provider.dart';
@@ -1186,9 +1191,11 @@ class AppStartupFlow extends _$AppStartupFlow {
     // the NotificationRouter). The router gates on the master toggle, so this is
     // safe to run unconditionally. Then drain any cold-launch notification tap.
     ref.read(notificationSocketListenerProvider);
-    unawaited(
-      ref.read(notificationSocketListenerProvider.notifier).handleLaunchTap(),
-    );
+    final launchTap = ref
+        .read(notificationSocketListenerProvider.notifier)
+        .handleLaunchTap();
+    unawaited(launchTap);
+    _openOmniChatAtLaunch(afterLaunchTap: launchTap);
     // Scheduled task reminders resync from here on (or cancel themselves when
     // they are off).
     ref.read(scheduledTaskRemindersProvider);
@@ -1198,6 +1205,46 @@ class AppStartupFlow extends _$AppStartupFlow {
 
     // Kick background chat warmup now that we're authenticated
     _scheduleConversationWarmup(ref, force: true);
+  }
+
+  bool _omniLaunchHandled = false;
+
+  /// With the Omni chat setting on, a cold start opens that chat instead of
+  /// an empty new one. Only the first authenticated start of the process
+  /// counts, and a notification tap, a shared payload or a deep link that
+  /// already chose a chat wins.
+  void _openOmniChatAtLaunch({required Future<void> afterLaunchTap}) {
+    if (_omniLaunchHandled) return;
+    _omniLaunchHandled = true;
+    if (!ref.read(appSettingsProvider).omniChatEnabled) return;
+    unawaited(
+      afterLaunchTap
+          .catchError((Object _) {})
+          .then(
+            (_) => openOmniAtLaunch(
+              shouldOpen: () =>
+                  ref.mounted &&
+                  shouldOpenOmniAtLaunch(
+                    enabled: ref.read(appSettingsProvider).omniChatEnabled,
+                    hasPendingShare:
+                        ref.read(pendingSharedPayloadProvider) != null ||
+                        ref.read(attachedFilesProvider).isNotEmpty,
+                    hasActiveConversation:
+                        ref.read(activeConversationProvider) != null,
+                    hasMessages: ref.read(chatMessagesProvider).isNotEmpty,
+                  ) &&
+                  NavigationService.currentRoute == Routes.chat,
+              resolve: () => ref.read(omniChatProvider.future),
+              open: (omni) async {
+                final result = await ref
+                    .read(conversationSelectionProvider.notifier)
+                    .select(omni);
+                return result.disposition ==
+                    ConversationSelectionDisposition.committed;
+              },
+            ),
+          ),
+    );
   }
 
   /// Warm the API client's connection pool as soon as we're authenticated, so

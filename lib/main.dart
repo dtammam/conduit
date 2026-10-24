@@ -103,6 +103,7 @@ import 'core/utils/native_sheet_utils.dart'
         nativeAssistantAvatarId,
         nativeMessageBubblesId,
         nativeCompactToolSummariesId,
+        nativeOmniChatId,
         nativeToolActivityInAvatarId,
         nativeWaveTypingIndicatorId,
         nativeChatDragToFolderId,
@@ -1205,6 +1206,12 @@ class _ConduitAppState extends ConsumerState<ConduitApp> {
             await ref
                 .read(appSettingsProvider.notifier)
                 .setCompactToolSummaries(value);
+          }
+        case nativeOmniChatId:
+          if (value is bool) {
+            await ref
+                .read(appSettingsProvider.notifier)
+                .setOmniChatEnabled(value);
           }
         case nativeToolActivityInAvatarId:
           if (value is bool) {

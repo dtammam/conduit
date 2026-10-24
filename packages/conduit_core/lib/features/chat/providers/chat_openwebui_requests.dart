@@ -215,8 +215,11 @@ bool _shouldGenerateQueuedTitle(
   List<ChatMessage> messages, {
   required String assistantMessageId,
   required bool isTemporary,
+  String? conversationId,
 }) {
   if (isTemporary) return false;
+  // The Omni chat keeps its title.
+  if (isOmniChatId(conversationId)) return false;
   final assistantIndex = messages.indexWhere(
     (message) => message.id == assistantMessageId,
   );
@@ -234,11 +237,13 @@ bool shouldGenerateQueuedTitleForTest(
   List<ChatMessage> messages, {
   required String assistantMessageId,
   required bool isTemporary,
+  String? conversationId,
 }) {
   return _shouldGenerateQueuedTitle(
     messages,
     assistantMessageId: assistantMessageId,
     isTemporary: isTemporary,
+    conversationId: conversationId,
   );
 }
 
