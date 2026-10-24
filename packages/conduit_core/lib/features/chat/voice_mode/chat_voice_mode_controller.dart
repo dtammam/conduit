@@ -30,6 +30,7 @@ import 'package:conduit_core/services/socket_service.dart'
     show SocketBackgroundActivityLease, SocketService;
 
 import 'package:conduit_core/utils/debug_logger.dart';
+import 'package:conduit_core/voice/barge_in_echo.dart';
 import 'package:conduit_core/voice/barge_in_onset.dart';
 
 import 'package:conduit_core/features/chat/providers/chat_providers.dart';
@@ -186,6 +187,18 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
   /// and the detector judging them.
   StreamSubscription<VoiceCaptureLevel>? _bargeInLevelSub;
   BargeInOnsetDetector? _bargeInDetector;
+
+  /// Set while a server barge-in has paused the assistant and its take is
+  /// still being heard: the transcript decides whether it was the user
+  /// ([isBargeInEcho] false, the assistant stops) or the assistant's own
+  /// voice coming back through the microphone (playback resumes).
+  bool _bargeInProvisional = false;
+
+  /// The reply preview when a provisional barge-in began, restored on resume.
+  String _previewBeforeBargeIn = '';
+
+  /// The last take dropped as echo, so a second report of it is dropped too.
+  String? _ignoredEchoTranscript;
   DateTime? _assistantSpeechStartedAt;
   StreamSubscription<VoiceCallKitEvent>? _callKitSub;
   StreamSubscription<bool>? _speakerphoneRouteSub;
@@ -1663,7 +1676,11 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
         data: {'lookbackMs': lookback.inMilliseconds},
       );
       try {
-        await _interruptAssistantForBargeIn(token);
+        // Pause rather than stop: if the take turns out to be the
+        // assistant's own voice, playback carries on where it was.
+        _bargeInProvisional = true;
+        _previewBeforeBargeIn = state.assistantPreview;
+        await _textToSpeech!.pause();
         if (!_isCurrent(token)) return;
         _pendingFinalTranscripts.clear();
         _lastSubmittedTranscript = null;
@@ -1693,6 +1710,19 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
       return;
     }
 
+    if (_bargeInProvisional) {
+      if (isBargeInEcho(transcript, _previewBeforeBargeIn)) {
+        _ignoredEchoTranscript = transcript;
+        await _resumeAfterBargeInEcho(token, transcript);
+        return;
+      }
+      // Real words: the drain below stops the assistant and sends them.
+      _bargeInProvisional = false;
+    } else if (_awaitingAssistant && transcript == _ignoredEchoTranscript) {
+      // The same take reported a second time (final event and end of take).
+      return;
+    }
+
     if (_sendingTranscript) {
       _enqueuePendingFinalTranscript(transcript);
       return;
@@ -1711,6 +1741,10 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
         ? _currentTranscript.trim()
         : '';
     if (transcript.isEmpty) {
+      if (_bargeInProvisional) {
+        await _resumeAfterBargeInEcho(token, '');
+        return;
+      }
       await _restartAfterEmptyTranscript(token);
       return;
     }
@@ -1900,10 +1934,68 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
     }
   }
 
+  /// A provisional barge-in heard only the assistant (or nothing): drop the
+  /// take, hold the recorder for the response again and resume playback.
+  Future<void> _resumeAfterBargeInEcho(int token, String transcript) async {
+    if (!_isCurrent(token) || !_bargeInProvisional) return;
+    _bargeInProvisional = false;
+    DebugLogger.info(
+      'barge-in-echo-ignored',
+      scope: 'chat/voice_mode',
+      data: {'words': _wordsOf(transcript).length},
+    );
+    try {
+      final input = _voiceInput!;
+      var inputOwnsResponseCapture = false;
+      await _serviceLifecycleGate.runExclusive(() async {
+        if (!_isCurrent(token)) return;
+        await _detachListeningSubscriptions();
+        if (!_isCurrent(token)) return;
+        inputOwnsResponseCapture = await input.prepareResponseWaitHandoff();
+        if (!_isCurrent(token)) return;
+        if (_platform.isIOS) {
+          await _audioSessionCoordinator?.configureForBargeInSpeaking();
+        } else {
+          await _audioSessionCoordinator?.configureForSpeaking();
+        }
+        if (!_isCurrent(token)) return;
+        if (!inputOwnsResponseCapture) {
+          await _audioSessionCoordinator?.beginResponseWaitCapture(
+            callKitCallId: _activeCallId,
+          );
+        }
+      });
+      if (!_isCurrent(token)) return;
+      _pendingFinalTranscripts.clear();
+      _currentTranscript = '';
+      state = state.copyWith(
+        phase: ChatVoiceModePhase.speaking,
+        transcript: '',
+        assistantPreview: state.assistantPreview.isEmpty
+            ? _previewBeforeBargeIn
+            : state.assistantPreview,
+        intensity: 0,
+      );
+      await _textToSpeech!.resume();
+      if (!_isCurrent(token)) return;
+      if (inputOwnsResponseCapture) _watchForServerBargeIn(token, armNow: true);
+    } catch (error, stackTrace) {
+      if (!_isCurrent(token)) return;
+      DebugLogger.error(
+        'barge-in-echo-resume-failed',
+        scope: 'chat/voice_mode',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      await _fail(error.toString(), token, _errorKindOf(error));
+    }
+  }
+
   Future<void> _interruptAssistantForBargeIn(int token) async {
     if (!_isCurrent(token)) return;
 
     DebugLogger.info('barge-in', scope: 'chat/voice_mode');
+    _bargeInProvisional = false;
     final tts = _textToSpeech!;
     await tts.stopStreamingTts();
     await tts.stop();

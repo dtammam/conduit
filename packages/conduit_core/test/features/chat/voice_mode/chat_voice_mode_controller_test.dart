@@ -2155,9 +2155,10 @@ void main() {
         await input.emitLevels(-25, 10);
         await _until(() => input.beginCalls == 2);
 
-        check(tts.stopStreamingCalls).equals(1);
-        check(tts.stopCalls).equals(1);
-        check(call.stopGenerationCalls()).equals(1);
+        // The onset pauses the assistant; the words decide.
+        check(tts.pauseCalls).equals(1);
+        check(tts.stopCalls).equals(0);
+        check(call.stopGenerationCalls()).equals(0);
         check(input.heldLevels.hasListener).isFalse();
         // Onset after 8 frames above the floor (256 ms) plus 500 ms pre-roll.
         check(input.bargeInLookbacks).deepEquals(<Duration>[
@@ -2166,9 +2167,13 @@ void main() {
         check(call.container.read(chatVoiceModeControllerProvider).phase)
             .equals(ChatVoiceModePhase.listening);
 
-        // The take ends on the server path's own end of speech and is sent.
+        // The take ends on the server path's own end of speech: real words
+        // stop the assistant and are sent.
         await input.completeCurrent('actually, stop there');
         await _until(() => userTurns(call.container).length == 2);
+        check(tts.stopStreamingCalls).equals(1);
+        check(tts.stopCalls).equals(1);
+        check(call.stopGenerationCalls()).equals(1);
         check(userTurns(call.container)).deepEquals(<String>[
           'tell me a long story',
           'actually, stop there',
@@ -2176,6 +2181,54 @@ void main() {
         await call.controller.stop();
       },
     );
+
+    for (final heard in <String?>[null, 'Um.', '']) {
+      final kind = heard == null
+          ? 'echo'
+          : heard.isEmpty
+          ? 'empty'
+          : 'filler';
+      test('a take of the assistant\'s own voice resumes it ($kind)', () async {
+        final input = serverInput();
+        final tts = _FakeTextToSpeechService()..holdCompletion = true;
+        final call = setUpCall(input, tts, settings: serverBargeIn);
+
+        await call.controller.start(startNewConversation: false);
+        await input.completeCurrent('tell me a long story');
+        await _until(
+          () =>
+              call.container.read(chatVoiceModeControllerProvider).phase ==
+                  ChatVoiceModePhase.speaking &&
+              call.container
+                  .read(chatVoiceModeControllerProvider)
+                  .assistantPreview
+                  .isNotEmpty,
+        );
+        final preview = call.container
+            .read(chatVoiceModeControllerProvider)
+            .assistantPreview;
+        final echo = heard ?? preview.split(RegExp(r'\s+')).take(3).join(' ');
+
+        await input.emitLevels(-60, 20);
+        await input.emitLevels(-25, 10);
+        await _until(() => input.beginCalls == 2);
+        check(tts.pauseCalls).equals(1);
+
+        await input.completeCurrent(echo);
+        await _until(() => tts.resumeCalls == 1);
+        await _until(() => input.heldLevels.hasListener);
+
+        check(tts.stopCalls).equals(0);
+        check(call.stopGenerationCalls()).equals(0);
+        check(userTurns(call.container)).deepEquals(<String>[
+          'tell me a long story',
+        ]);
+        final state = call.container.read(chatVoiceModeControllerProvider);
+        check(state.phase).equals(ChatVoiceModePhase.speaking);
+        check(state.assistantPreview).equals(preview);
+        await call.controller.stop();
+      });
+    }
 
     test('the grace period and short blips do not interrupt', () async {
       final input = serverInput();
@@ -2208,10 +2261,10 @@ void main() {
       check(call.container.read(chatVoiceModeControllerProvider).phase)
           .equals(ChatVoiceModePhase.speaking);
 
-      // Still listening: sustained speech interrupts.
+      // Still listening: sustained speech pauses the assistant for its take.
       await input.emitLevels(-25, 10);
       await _until(() => input.beginCalls == 2);
-      check(tts.stopCalls).equals(1);
+      check(tts.pauseCalls).equals(1);
       await call.controller.stop();
     });
 
@@ -2238,7 +2291,7 @@ void main() {
       await input.emitLevels(-60, 20);
       await input.emitLevels(-25, 10);
       await _until(() => input.beginCalls == 2);
-      check(tts.stopCalls).equals(1);
+      check(tts.pauseCalls).equals(1);
       await call.controller.stop();
     });
 
