@@ -115,12 +115,47 @@ final class SpeechEngineQueue {
   }
 
   /// Decodes [data] (an encoded audio file) and adds it to item [index].
+  ///
+  /// The first piece of an item fades in over [fadeIn]; a piece shorter than
+  /// a full streamed piece is the clip's last, and fades out over [fadeOut],
+  /// so a clip never starts or stops on a full-scale sample step.
   func appendPiece(item index: Int, data: Data, trim: PieceTrim) throws {
-    let buffer = try Self.decode(data, trim: trim, to: format)
+    let decoded = try Self.decode(data, trim: trim, to: format)
     try queue.sync {
       ensureItem(index)
-      if let buffer { items[index].buffers.append(buffer) }
+      if let buffer = decoded {
+        if items[index].buffers.isEmpty {
+          Self.fade(buffer, in: true, seconds: Self.fadeIn)
+        }
+        if trim.leading > 0, buffer.frameLength < Self.fullPieceFrames(format) {
+          Self.fade(buffer, in: false, seconds: Self.fadeOut)
+        }
+        items[index].buffers.append(buffer)
+      }
       try scheduleReady()
+    }
+  }
+
+  static let fadeIn = 0.005
+  static let fadeOut = 0.010
+
+  /// Speech frames in a full streamed piece (0.48 s), in [format]'s rate.
+  static func fullPieceFrames(_ format: AVAudioFormat) -> AVAudioFrameCount {
+    AVAudioFrameCount(format.sampleRate * 0.48)
+  }
+
+  /// Ramps the first (or last) [seconds] of [buffer] from (or to) silence.
+  static func fade(_ buffer: AVAudioPCMBuffer, in fadeIn: Bool, seconds: Double) {
+    guard let data = buffer.floatChannelData else { return }
+    let total = Int(buffer.frameLength)
+    let n = min(total, Int(buffer.format.sampleRate * seconds))
+    guard n > 1 else { return }
+    for c in 0..<Int(buffer.format.channelCount) {
+      for i in 0..<n {
+        let gain = Float(i) / Float(n - 1)
+        let index = fadeIn ? i : total - 1 - i
+        data[c][index] *= gain
+      }
     }
   }
 
@@ -253,6 +288,20 @@ final class SpeechEngineQueue {
     try Self.objc {
       self.engine.prepare()
       try self.engine.start()
+    }
+    // 10 ms of silence first, so the hardware starts on zeros.
+    if outstanding == 0,
+       let lead = AVAudioPCMBuffer(
+         pcmFormat: format,
+         frameCapacity: AVAudioFrameCount(format.sampleRate * 0.01)
+       ) {
+      lead.frameLength = lead.frameCapacity
+      if let data = lead.floatChannelData {
+        for c in 0..<Int(format.channelCount) {
+          data[c].update(repeating: 0, count: Int(lead.frameLength))
+        }
+      }
+      try Self.objc { self.player.scheduleBuffer(lead, completionHandler: nil) }
     }
   }
 
