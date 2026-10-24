@@ -1270,6 +1270,16 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
           break;
         case TtsChunkStarted(:final chunkIndex):
           _handleTtsChunkStarted(chunkIndex);
+          // A chunk starting is speech playing, even when the player kept
+          // playing across a gap (a tool call mid-reply) and so never
+          // reported a fresh start: the panel must not stay on "Thinking".
+          if (_awaitingAssistant &&
+              chunkIndex >= 0 &&
+              state.phase == ChatVoiceModePhase.sending) {
+            _assistantSpeechStartedAt ??= DateTime.now();
+            _bargeInDetector?.arm();
+            state = state.copyWith(phase: ChatVoiceModePhase.speaking);
+          }
         case TtsWordProgress(:final start, :final end):
           _handleTtsWordProgress(start, end);
       }

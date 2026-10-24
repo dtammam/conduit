@@ -2230,6 +2230,28 @@ void main() {
       });
     }
 
+    test('a chunk starting moves the panel from Thinking to Speaking', () async {
+      final input = serverInput();
+      final tts = _FakeTextToSpeechService()
+        ..holdCompletion = true
+        ..suppressStarted = true;
+      final call = setUpCall(input, tts, settings: serverBargeIn);
+
+      await call.controller.start(startNewConversation: false);
+      await input.completeCurrent('tell me a long story');
+      await _until(() => tts.fedTexts.isNotEmpty);
+      check(call.container.read(chatVoiceModeControllerProvider).phase)
+          .equals(ChatVoiceModePhase.sending);
+
+      tts.emit(const TtsChunkStarted(0));
+      await _until(
+        () =>
+            call.container.read(chatVoiceModeControllerProvider).phase ==
+            ChatVoiceModePhase.speaking,
+      );
+      await call.controller.stop();
+    });
+
     test('the grace period and short blips do not interrupt', () async {
       final input = serverInput();
       final tts = _FakeTextToSpeechService()..holdCompletion = true;
@@ -3845,6 +3867,12 @@ class _FakeTextToSpeechService implements VoiceModeSpeech {
   final voiceCallFlags = <bool>[];
   bool startedStreaming = false;
   bool holdCompletion = false;
+
+  /// Never reports [TtsStarted], like a player that kept playing across a
+  /// gap; chunk starts still come through [emit].
+  bool suppressStarted = false;
+
+  void emit(TtsEvent event) => _events.add(event);
   int pauseCalls = 0;
   int resumeCalls = 0;
   int stopStreamingCalls = 0;
@@ -3892,7 +3920,9 @@ class _FakeTextToSpeechService implements VoiceModeSpeech {
   @override
   Future<void> feedStreamingText(String accumulatedText) async {
     fedTexts.add(accumulatedText);
-    if (!_didStart && accumulatedText.trim().isNotEmpty) {
+    if (!suppressStarted &&
+        !_didStart &&
+        accumulatedText.trim().isNotEmpty) {
       _didStart = true;
       _events.add(const TtsStarted());
     }

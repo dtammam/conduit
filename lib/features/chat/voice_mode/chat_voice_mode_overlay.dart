@@ -107,7 +107,8 @@ class _ExpandedVoicePanel extends ConsumerWidget {
     return DecoratedBox(
       key: const ValueKey('voice-overlay-expanded'),
       decoration: BoxDecoration(
-        color: theme.cardBackground.withValues(alpha: 0.96),
+        // Opaque: the transcript under the panel must never show through.
+        color: theme.cardBackground.withValues(alpha: 1),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: theme.cardBorder),
         boxShadow: ConduitShadows.messageBubble(context),
@@ -251,7 +252,7 @@ class _CollapsedVoicePill extends ConsumerWidget {
         constraints: const BoxConstraints(minHeight: 52),
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color: theme.cardBackground.withValues(alpha: 0.96),
+            color: theme.cardBackground.withValues(alpha: 1),
             borderRadius: BorderRadius.circular(28),
             border: Border.all(color: theme.cardBorder),
             boxShadow: ConduitShadows.messageBubble(context),

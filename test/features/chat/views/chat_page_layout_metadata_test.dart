@@ -479,6 +479,17 @@ void main() {
     ).isFalse();
   });
 
+  test('latest button gives way to the voice panel', () {
+    check(
+      debugShouldRenderScrollToLatestForTesting(
+        requested: true,
+        hasScrollableContent: true,
+        hasMessages: true,
+        voicePanelShown: true,
+      ),
+    ).isFalse();
+  });
+
   test('only the first turn settles its pin without animation', () {
     expect(
       debugShouldSettlePinImmediatelyForTesting(transcriptWasEmpty: true),

@@ -4401,10 +4401,23 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                         final hasMessages = scrollButtonRef.watch(
                           hasChatMessagesProvider,
                         );
+                        // The voice panel sits where this button does. The
+                        // button is a native view on iOS 26, and Flutter
+                        // content drawn over a native view is cut into
+                        // overlay tiles there, which left the panel see-
+                        // through in vertical strips (2026-10-24).
+                        final voicePanelShown = scrollButtonRef.watch(
+                          chatVoiceModeControllerProvider.select(
+                            (call) =>
+                                call.isActive ||
+                                call.phase == ChatVoiceModePhase.error,
+                          ),
+                        );
                         return debugShouldRenderScrollToLatestForTesting(
                               requested: _showScrollToBottom,
                               hasScrollableContent: canScroll,
                               hasMessages: hasMessages,
+                              voicePanelShown: voicePanelShown,
                             )
                             ? Center(
                                 key: const ValueKey('scroll_to_bottom_visible'),
@@ -5650,7 +5663,8 @@ bool debugShouldRenderScrollToLatestForTesting({
   required bool requested,
   required bool hasScrollableContent,
   required bool hasMessages,
-}) => requested && hasScrollableContent && hasMessages;
+  bool voicePanelShown = false,
+}) => requested && hasScrollableContent && hasMessages && !voicePanelShown;
 
 @visibleForTesting
 bool debugShouldSettlePinImmediatelyForTesting({
