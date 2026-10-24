@@ -6326,5 +6326,9 @@
   "assistantToolFailureNoReason": "Nepodarilo sa dokončiť {tool}",
   "assistantToolFailureMany": "{count, plural, =1{Nepodarilo sa dokončiť 1 akciu} few{Nepodarilo sa dokončiť {count} akcie} many{Nepodarilo sa dokončiť {count} akcie} other{Nepodarilo sa dokončiť {count} akcií}}",
   "voiceShowAsPhoneCall": "Zobraziť hlasový režim ako telefonický hovor",
-  "voiceShowAsPhoneCallDescription": "Nahlási hlasový režim systému iOS ako telefonický hovor, s bannerom hovoru a ovládaním na uzamknutej obrazovke. Keď je vypnuté, hlasový režim beží vnútri aplikácie a AirPods aj reproduktor fungujú ako v iných hlasových aplikáciách."
+  "voiceShowAsPhoneCallDescription": "Nahlási hlasový režim systému iOS ako telefonický hovor, s bannerom hovoru a ovládaním na uzamknutej obrazovke. Keď je vypnuté, hlasový režim beží vnútri aplikácie a AirPods aj reproduktor fungujú ako v iných hlasových aplikáciách.",
+  "voiceProviderForAllChats": "Použiť pre všetky chaty",
+  "voiceProviderForAllChatsDescription": "Použiť poskytovateľa hlasu aj pre chaty Open WebUI. Ak požiadavku nezvládne, použije sa pre ňu zvuk servera.",
+  "voiceProviderStreamSpeech": "Streamovať reč",
+  "voiceProviderStreamSpeechDescription": "Požiada poskytovateľa o streamovanie zvuku a každú vetu prehrá, kým ešte prichádza. Vypnite, ak server streamovanie reči nepodporuje."
 }

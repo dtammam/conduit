@@ -13,6 +13,7 @@ import 'package:conduit_core/features/hermes/services/hermes_desktop_api_service
 
 import 'direct_server_speech.dart';
 import 'direct_voice_provider_settings.dart';
+import 'fallback_server_speech.dart';
 import 'hermes_server_speech.dart';
 import 'openwebui_server_speech.dart';
 import 'server_speech.dart';
@@ -42,7 +43,9 @@ final directVoiceProviderProvider = Provider<DirectVoiceProvider?>((ref) {
 ///
 /// Hermes chats use their gateway's audio relay, which only the Desktop
 /// Gateway serves. Direct and Apple chats use the Voice provider. Every other
-/// model belongs to the Open WebUI server. Audio is never sent to a backend
+/// model belongs to the Open WebUI server, unless the user sends all chats
+/// through the Voice provider, which then falls back to the server's audio
+/// when it cannot serve a request. Audio is never sent to a backend
 /// the chat does not belong to; without one the device engines are used.
 final serverSpeechProviderProvider = Provider<ServerSpeechProvider?>((ref) {
   final model = ref.watch(selectedModelProvider);
@@ -67,7 +70,23 @@ final serverSpeechProviderProvider = Provider<ServerSpeechProvider?>((ref) {
     );
   }
   final api = ref.watch(apiServiceProvider);
-  return api == null ? null : OpenWebUiServerSpeech(api);
+  final openWebUi = api == null ? null : OpenWebUiServerSpeech(api);
+  if (ref.watch(
+    appSettingsProvider.select((settings) => settings.voiceProviderForAllChats),
+  )) {
+    final voice = ref.watch(directVoiceProviderProvider);
+    if (voice != null) {
+      final direct = DirectServerSpeech(
+        profile: voice.profile,
+        settings: voice.settings,
+        clientPool: ref.watch(directHttpClientPoolProvider),
+      );
+      return openWebUi == null
+          ? direct
+          : FallbackServerSpeech(primary: direct, fallback: openWebUi);
+    }
+  }
+  return openWebUi;
 });
 
 /// Whether [model] is a Direct or Apple model run from this device, rather

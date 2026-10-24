@@ -9369,5 +9369,21 @@
   "voiceShowAsPhoneCall": "Show voice mode as a phone call",
   "@voiceShowAsPhoneCall": {"description":"Setting that reports voice mode to iOS as a phone call (CallKit)."},
   "voiceShowAsPhoneCallDescription": "Report voice mode to iOS as a phone call, with the call banner and lock screen controls. Off, voice mode runs inside the app and AirPods and the speaker work as in other voice apps.",
-  "@voiceShowAsPhoneCallDescription": {"description":"Explains the setting that shows voice mode as a phone call."}
+  "@voiceShowAsPhoneCallDescription": {"description":"Explains the setting that shows voice mode as a phone call."},
+  "voiceProviderForAllChats": "Use for all chats",
+  "@voiceProviderForAllChats": {
+    "description": "Toggle that sends Open WebUI chats' speech through the Voice provider."
+  },
+  "voiceProviderForAllChatsDescription": "Also use the Voice provider for Open WebUI chats. If it cannot serve a request, the server's own audio is used for that request.",
+  "@voiceProviderForAllChatsDescription": {
+    "description": "Explains the toggle that uses the Voice provider for all chats."
+  },
+  "voiceProviderStreamSpeech": "Stream speech",
+  "@voiceProviderStreamSpeech": {
+    "description": "Toggle that asks the Voice provider to stream speech audio."
+  },
+  "voiceProviderStreamSpeechDescription": "Ask the provider to stream audio and start playing each sentence while it is still arriving. Turn off if the server does not support streaming speech.",
+  "@voiceProviderStreamSpeechDescription": {
+    "description": "Explains the toggle that streams speech from the Voice provider."
+  }
 }

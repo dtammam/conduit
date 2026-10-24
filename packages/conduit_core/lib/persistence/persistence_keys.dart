@@ -36,6 +36,7 @@ final class PreferenceKeys {
   static const String voiceAutoSendFinal = 'voice_auto_send_final';
   static const String voiceBargeInEnabled = 'voice_barge_in_enabled';
   static const String voiceCallKitEnabled = 'voice_callkit_enabled';
+  static const String voiceProviderForAllChats = 'voice_provider_for_all_chats';
   static const String voiceCallMode = 'voice_call_mode';
   static const String voiceSttPreference = 'voice_stt_preference';
   static const String voiceSttLanguageCode = 'voice_stt_language_code';
@@ -50,6 +51,7 @@ final class PreferenceKeys {
   static const String webSearchRegion = 'web_search_region_v1';
   static const String directVoiceProvider = 'direct_voice_provider_v1';
   static const String sendOnEnterKey = 'send_on_enter';
+
   /// Holds the active Open WebUI *account* id. The key predates accounts:
   /// an account's id is the id its server config always had.
   static const String activeServerId = 'active_server_id';

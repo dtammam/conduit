@@ -235,6 +235,14 @@ class TtsManager {
   int _serverLastFetchScheduledIndex = -1;
   final Set<int> _serverFetchingIndices = <int>{};
   final List<File> _serverTempFiles = <File>[];
+
+  /// Speech still arriving from a streaming backend, for every clip not yet
+  /// finished. Stopping cancels them so no request outlives the playback.
+  final List<ProgressiveAudio> _serverProgressive = <ProgressiveAudio>[];
+
+  /// Bumped whenever playback state is reset, so a request that was in flight
+  /// can tell its session is over once it answers.
+  int _serverEpoch = 0;
   String? _serverBackgroundLeaseId;
 
   // Event stream
@@ -575,6 +583,7 @@ class TtsManager {
     if (session == null) return;
 
     _activeSession = null;
+    _cancelServerProgressive();
 
     try {
       if (session.useServerTts) {
@@ -1119,6 +1128,32 @@ class TtsManager {
     double? speed,
   }) async {
     if (speech == null) throw StateError('Server TTS is not available');
+    if (speech is StreamingServerSpeech && speech.streamsSpeech) {
+      final epoch = _serverEpoch;
+      final clip = await speech.synthesizeClip(
+        text,
+        preferredVoice: voice,
+        speed: speed,
+      );
+      final progressive = clip.progressive;
+      if (progressive != null) {
+        if (epoch != _serverEpoch) {
+          // Playback was stopped while this request was being answered.
+          progressive.cancel();
+        } else {
+          _serverProgressive
+            ..removeWhere((stream) => stream.isDone)
+            ..add(progressive);
+        }
+        return _AudioChunk(
+          bytes: Uint8List(0),
+          mimeType: progressive.mimeType,
+          progressive: progressive,
+        );
+      }
+      final whole = clip.whole!;
+      return _AudioChunk(bytes: whole.bytes, mimeType: whole.mimeType);
+    }
     final result = await speech.synthesize(
       text,
       preferredVoice: voice,
@@ -1332,6 +1367,15 @@ class TtsManager {
     int index,
     _AudioChunk chunk,
   ) async {
+    final progressive = chunk.progressive;
+    if (progressive != null) {
+      // Nothing to write: the player reads the clip as it arrives.
+      return AudioClip(
+        uri: Uri.parse('conduit-tts://$sessionId/$index'),
+        tag: index,
+        progressive: progressive,
+      );
+    }
     final tempDir = await getTemporaryDirectory();
     final dir = Directory(p.join(tempDir.path, 'conduit_tts', '$sessionId'));
     await dir.create(recursive: true);
@@ -1443,8 +1487,18 @@ class TtsManager {
     _deviceWaitingForStreamingChunk = false;
     _serverLastFetchScheduledIndex = -1;
     _serverFetchingIndices.clear();
+    _cancelServerProgressive();
     unawaited(_stopServerBackgroundLease());
     unawaited(_cleanupServerTempFiles());
+  }
+
+  void _cancelServerProgressive() {
+    _serverEpoch++;
+    final streams = List<ProgressiveAudio>.of(_serverProgressive);
+    _serverProgressive.clear();
+    for (final stream in streams) {
+      stream.cancel();
+    }
   }
 
   void _setBufferedServerChunk(int index, _AudioChunk chunk) {
@@ -1485,7 +1539,14 @@ class TtsManager {
 // =============================================================================
 
 class _AudioChunk {
-  const _AudioChunk({required this.bytes, required this.mimeType});
+  const _AudioChunk({
+    required this.bytes,
+    required this.mimeType,
+    this.progressive,
+  });
   final Uint8List bytes;
   final String mimeType;
+
+  /// Set when the clip is still arriving; [bytes] is then empty.
+  final ProgressiveAudio? progressive;
 }

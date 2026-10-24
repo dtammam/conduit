@@ -4417,5 +4417,9 @@
   "assistantToolFailureNoReason": "Impossible de terminer {tool}",
   "assistantToolFailureMany": "{count, plural, =1{Impossible de terminer 1 action} other{Impossible de terminer {count} actions}}",
   "voiceShowAsPhoneCall": "Afficher le mode vocal comme un appel téléphonique",
-  "voiceShowAsPhoneCallDescription": "Déclare le mode vocal à iOS comme un appel téléphonique, avec la bannière d'appel et les commandes de l'écran verrouillé. Désactivé, le mode vocal fonctionne dans l'app et les AirPods et le haut-parleur se comportent comme dans les autres apps vocales."
+  "voiceShowAsPhoneCallDescription": "Déclare le mode vocal à iOS comme un appel téléphonique, avec la bannière d'appel et les commandes de l'écran verrouillé. Désactivé, le mode vocal fonctionne dans l'app et les AirPods et le haut-parleur se comportent comme dans les autres apps vocales.",
+  "voiceProviderForAllChats": "Utiliser pour tous les chats",
+  "voiceProviderForAllChatsDescription": "Utilise aussi le fournisseur vocal pour les chats Open WebUI. S'il ne peut pas traiter une requête, l'audio du serveur est utilisé pour cette requête.",
+  "voiceProviderStreamSpeech": "Diffuser la voix en continu",
+  "voiceProviderStreamSpeechDescription": "Demande au fournisseur de diffuser l'audio et lit chaque phrase pendant qu'elle arrive. À désactiver si le serveur ne prend pas en charge la voix en continu."
 }

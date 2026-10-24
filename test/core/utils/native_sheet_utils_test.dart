@@ -155,9 +155,8 @@ void main() {
         const AppSettings(),
         voiceProviderCandidates: [openAi],
       );
-      check(
-        items(none.voiceProviderDetail).map((item) => item.id),
-      ).deepEquals(['voice-provider-connection']);
+      check(items(none.voiceProviderDetail).map((item) => item.id))
+          .deepEquals(['voice-provider-connection']);
 
       final chosen = buildNativeAudioSheetParts(
         l10n,
@@ -177,13 +176,20 @@ void main() {
         'voice-provider-transcription-model': 'whisper-1',
         'voice-provider-speech-model': 'tts-1',
         'voice-provider-speech-voice': 'alloy',
+        'voice-provider-stream-speech': false,
+        'voice-provider-all-chats': false,
         'voice-provider-realtime-model': 'gpt-realtime-2.1-mini',
         'voice-provider-realtime-voice': 'marin',
         'voice-provider-realtime-instructions': '',
       });
-      check(
-        nativeVoiceProviderFieldIds.keys.toSet(),
-      ).deepEquals(fields.keys.toSet()..remove('voice-provider-connection'));
+      check(nativeVoiceProviderFieldIds.keys.toSet()).deepEquals(
+        fields.keys.toSet()..removeAll([
+          'voice-provider-connection',
+          // Toggles, not text fields.
+          'voice-provider-stream-speech',
+          'voice-provider-all-chats',
+        ]),
+      );
     });
 
     test('a removed connection reads as none', () {
@@ -199,9 +205,8 @@ void main() {
           .expand((section) => section.items)
           .singleWhere((item) => item.id == NativeSheetRoutes.voiceProvider);
       check(row.subtitle).equals(l10n.voiceProviderNone);
-      check(
-        items(parts.voiceProviderDetail).map((item) => item.id),
-      ).deepEquals(['voice-provider-connection']);
+      check(items(parts.voiceProviderDetail).map((item) => item.id))
+          .deepEquals(['voice-provider-connection']);
     });
 
     test('server voices are offered only where the backend lists them', () {

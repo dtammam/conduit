@@ -4417,5 +4417,9 @@
   "assistantToolFailureNoReason": "未能完成{tool}",
   "assistantToolFailureMany": "{count, plural, other{未能完成 {count} 项操作}}",
   "voiceShowAsPhoneCall": "将语音模式显示为电话",
-  "voiceShowAsPhoneCallDescription": "向 iOS 报告语音模式为一通电话，并显示通话横幅和锁屏控件。关闭后，语音模式在应用内运行，AirPods 和扬声器的表现与其他语音应用一致。"
+  "voiceShowAsPhoneCallDescription": "向 iOS 报告语音模式为一通电话，并显示通话横幅和锁屏控件。关闭后，语音模式在应用内运行，AirPods 和扬声器的表现与其他语音应用一致。",
+  "voiceProviderForAllChats": "用于所有聊天",
+  "voiceProviderForAllChatsDescription": "Open WebUI 聊天也使用语音提供方。若它无法处理某个请求，该请求改用服务器自带的音频。",
+  "voiceProviderStreamSpeech": "流式语音",
+  "voiceProviderStreamSpeechDescription": "请求提供方以流的方式传输音频，并在每句话仍在到达时开始播放。如果服务器不支持流式语音，请关闭。"
 }

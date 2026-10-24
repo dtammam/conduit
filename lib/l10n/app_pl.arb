@@ -8461,5 +8461,21 @@
   "voiceShowAsPhoneCallDescription": "Zgłaszaj tryb głosowy w iOS jako rozmowę telefoniczną, z paskiem rozmowy i przyciskami na ekranie blokady. Po wyłączeniu tryb głosowy działa w aplikacji, a AirPods i głośnik działają jak w innych aplikacjach głosowych.",
   "@voiceShowAsPhoneCallDescription": {
     "description": "Explains the setting that shows voice mode as a phone call."
+  },
+  "voiceProviderForAllChats": "Używaj we wszystkich czatach",
+  "@voiceProviderForAllChats": {
+    "description": "Toggle that sends Open WebUI chats' speech through the Voice provider."
+  },
+  "voiceProviderForAllChatsDescription": "Używaj dostawcy głosu także w czatach Open WebUI. Gdy nie obsłuży żądania, dla tego żądania użyte zostanie audio serwera.",
+  "@voiceProviderForAllChatsDescription": {
+    "description": "Explains the toggle that uses the Voice provider for all chats."
+  },
+  "voiceProviderStreamSpeech": "Strumieniuj mowę",
+  "@voiceProviderStreamSpeech": {
+    "description": "Toggle that asks the Voice provider to stream speech audio."
+  },
+  "voiceProviderStreamSpeechDescription": "Poproś dostawcę o strumieniowanie dźwięku i odtwarzaj każde zdanie, gdy jeszcze nadchodzi. Wyłącz, jeśli serwer nie obsługuje strumieniowania mowy.",
+  "@voiceProviderStreamSpeechDescription": {
+    "description": "Explains the toggle that streams speech from the Voice provider."
   }
 }

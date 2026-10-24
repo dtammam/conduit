@@ -1,6 +1,7 @@
 import 'package:checks/checks.dart';
 import 'package:conduit_core/features/chat/server_speech/direct_server_speech.dart';
 import 'package:conduit_core/features/chat/server_speech/direct_voice_provider_settings.dart';
+import 'package:conduit_core/features/chat/server_speech/fallback_server_speech.dart';
 import 'package:conduit_core/features/chat/server_speech/hermes_server_speech.dart';
 import 'package:conduit_core/features/chat/server_speech/openwebui_server_speech.dart';
 import 'package:conduit_core/features/chat/server_speech/server_speech_providers.dart';
@@ -165,6 +166,78 @@ void main() {
 
       check(c.read(serverSpeechProviderProvider)).isNull();
     });
+  });
+
+  group('Voice provider for all chats', () {
+    const llama = Model(id: 'llama3', name: 'Llama 3');
+    final voice = (
+      profile: _openAi,
+      settings: const DirectVoiceProviderSettings(
+        profileId: 'voice',
+        transcriptionModel: 'whisper-1',
+        speechModel: 'tts-model',
+        speechVoice: 'a-voice',
+      ),
+    );
+
+    ProviderContainer allChats({
+      required bool on,
+      ApiService? api,
+      DirectVoiceProvider? provider,
+    }) {
+      final pool = DirectHttpClientPool();
+      addTearDown(pool.dispose);
+      final c = ProviderContainer(
+        overrides: [
+          selectedModelProvider.overrideWithValue(llama),
+          apiServiceProvider.overrideWithValue(api),
+          directModelRegistryProvider.overrideWithValue(DirectModelRegistry()),
+          directModelDiscoveryProvider.overrideWith(_Discovery.new),
+          directVoiceProviderProvider.overrideWithValue(provider),
+          directHttpClientPoolProvider.overrideWithValue(pool),
+          hermesApiServiceProvider.overrideWithValue(null),
+          appSettingsProvider.overrideWithValue(
+            AppSettings(voiceProviderForAllChats: on),
+          ),
+        ],
+      );
+      addTearDown(c.dispose);
+      return c;
+    }
+
+    test('is off by default', () {
+      check(const AppSettings().voiceProviderForAllChats).isFalse();
+    });
+
+    test('off, an Open WebUI chat keeps the server audio', () {
+      final c = allChats(on: false, api: openWebUi(), provider: voice);
+
+      check(c.read(serverSpeechProviderProvider)).isA<OpenWebUiServerSpeech>();
+    });
+
+    test('on, an Open WebUI chat speaks through the Voice provider', () {
+      final c = allChats(on: true, api: openWebUi(), provider: voice);
+
+      final speech = c.read(serverSpeechProviderProvider);
+      check(speech).isA<FallbackServerSpeech>()
+        ..has((it) => it.primary, 'primary').isA<DirectServerSpeech>()
+        ..has((it) => it.fallback, 'fallback').isA<OpenWebUiServerSpeech>();
+    });
+
+    test('on without a Voice provider, the server audio is used', () {
+      final c = allChats(on: true, api: openWebUi());
+
+      check(c.read(serverSpeechProviderProvider)).isA<OpenWebUiServerSpeech>();
+    });
+
+    test(
+      'on without an Open WebUI server, the Voice provider stands alone',
+      () {
+        final c = allChats(on: true, provider: voice);
+
+        check(c.read(serverSpeechProviderProvider)).isA<DirectServerSpeech>();
+      },
+    );
   });
 
   group('directVoiceProvider', () {

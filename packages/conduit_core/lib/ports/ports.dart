@@ -21,6 +21,7 @@ export 'database_opener.dart';
 export 'external_url_port.dart';
 export 'audio_capture_port.dart';
 export 'audio_playback_port.dart';
+export 'progressive_audio.dart';
 export 'display_boost_port.dart';
 export 'flush_scheduler.dart';
 export 'post_frame_scheduler.dart';

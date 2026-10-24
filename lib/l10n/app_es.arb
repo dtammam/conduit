@@ -4417,5 +4417,9 @@
   "assistantToolFailureNoReason": "No se pudo completar {tool}",
   "assistantToolFailureMany": "{count, plural, =1{No se pudo completar 1 acción} other{No se pudieron completar {count} acciones}}",
   "voiceShowAsPhoneCall": "Mostrar el modo de voz como una llamada telefónica",
-  "voiceShowAsPhoneCallDescription": "Informa a iOS del modo de voz como una llamada telefónica, con el banner de llamada y los controles de la pantalla de bloqueo. Desactivado, el modo de voz funciona dentro de la app y los AirPods y el altavoz se comportan como en otras apps de voz."
+  "voiceShowAsPhoneCallDescription": "Informa a iOS del modo de voz como una llamada telefónica, con el banner de llamada y los controles de la pantalla de bloqueo. Desactivado, el modo de voz funciona dentro de la app y los AirPods y el altavoz se comportan como en otras apps de voz.",
+  "voiceProviderForAllChats": "Usar en todos los chats",
+  "voiceProviderForAllChatsDescription": "Usa también el proveedor de voz en los chats de Open WebUI. Si no puede atender una solicitud, se usa el audio del servidor para esa solicitud.",
+  "voiceProviderStreamSpeech": "Transmitir voz",
+  "voiceProviderStreamSpeechDescription": "Pide al proveedor que transmita el audio y reproduce cada frase mientras sigue llegando. Desactívalo si el servidor no admite voz en streaming."
 }

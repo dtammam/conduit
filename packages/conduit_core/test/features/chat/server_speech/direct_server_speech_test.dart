@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -37,7 +38,7 @@ const _settings = DirectVoiceProviderSettings(
 );
 
 DirectServerSpeech _speech(
-  _Adapter adapter, {
+  HttpClientAdapter adapter, {
   DirectConnectionProfile? profile,
   DirectVoiceProviderSettings settings = _settings,
 }) {
@@ -67,6 +68,8 @@ DirectServerSpeech _speech(
 }
 
 void main() {
+  streamingTests();
+
   test('transcribes through audio/transcriptions with the model', () async {
     final adapter = _Adapter(
       () => ResponseBody.fromString(
@@ -231,5 +234,163 @@ void main() {
     ).equals(settings);
     check(DirectVoiceProviderSettings.fromJson({'profile_id': ' '})).isNull();
     check(DirectVoiceProviderSettings.fromJson('garbage')).isNull();
+  });
+}
+
+/// A server whose audio body is held open by the test, so what the client does
+/// before the body ends can be seen.
+final class _StreamingAdapter implements HttpClientAdapter {
+  final body = StreamController<Uint8List>();
+  final List<RequestOptions> requests = [];
+  bool cancelled = false;
+
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelOnError,
+  ) async {
+    requests.add(options);
+    unawaited(
+      cancelOnError?.then((_) {
+        cancelled = true;
+        if (!body.isClosed) body.close();
+      }),
+    );
+    return ResponseBody(
+      body.stream,
+      200,
+      headers: {
+        Headers.contentTypeHeader: ['audio/mpeg'],
+      },
+    );
+  }
+
+  @override
+  void close({bool force = false}) {}
+}
+
+const _streamingSettings = DirectVoiceProviderSettings(
+  profileId: 'voice',
+  speechModel: 'tts-model',
+  speechVoice: 'a-voice',
+  streamSpeech: true,
+);
+
+void streamingTests() {
+  group('streamed speech', () {
+    test('asks for a stream and plays before the body ends', () async {
+      final adapter = _StreamingAdapter();
+      final speech = _speech(adapter, settings: _streamingSettings);
+      check(speech.streamsSpeech).isTrue();
+
+      final pending = speech.synthesizeClip('Hi there.');
+      adapter.body.add(Uint8List.fromList([1, 2, 3]));
+      final clip = await pending;
+
+      // The body has not ended, yet the clip is already handed over.
+      final audio = clip.progressive!;
+      check(audio.isDone).isFalse();
+      check(audio.length).equals(3);
+      check(audio.mimeType).equals('audio/mpeg');
+      check(adapter.requests.single.data)
+          .isA<Map<String, dynamic>>()
+          .deepEquals({
+            'model': 'tts-model',
+            'input': 'Hi there.',
+            'voice': 'a-voice',
+            'response_format': 'mp3',
+            'stream': true,
+            'streaming_interval': 0.5,
+          });
+
+      final heard = <int>[];
+      final reading = audio.read().listen(heard.addAll);
+      adapter.body.add(Uint8List.fromList([4, 5]));
+      await adapter.body.close();
+      await reading.asFuture<void>();
+      check(heard).deepEquals([1, 2, 3, 4, 5]);
+      check(audio.isDone).isTrue();
+    });
+
+    test('cancelling the clip cancels the request', () async {
+      final adapter = _StreamingAdapter();
+      final speech = _speech(adapter, settings: _streamingSettings);
+      final pending = speech.synthesizeClip('Hi there.');
+      adapter.body.add(Uint8List.fromList([1]));
+      final audio = (await pending).progressive!;
+
+      audio.cancel();
+      await pumpEventQueue();
+
+      check(adapter.cancelled).isTrue();
+      check(audio.isDone).isTrue();
+    });
+
+    test('a response with no audio fails so the caller can retry', () async {
+      final adapter = _StreamingAdapter();
+      final speech = _speech(adapter, settings: _streamingSettings);
+      final pending = speech.synthesizeClip('Hi there.');
+      final outcome = check(pending).throws<StateError>();
+      await adapter.body.close();
+      await outcome;
+    });
+
+    test('streaming off asks for a whole clip with no stream fields', () async {
+      final adapter = _Adapter(
+        () => ResponseBody.fromBytes(
+          [7, 7],
+          200,
+          headers: {
+            Headers.contentTypeHeader: ['audio/mpeg'],
+          },
+        ),
+      );
+      final speech = _speech(
+        adapter,
+        settings: _streamingSettings.withStreamSpeech(false),
+      );
+
+      check(speech.streamsSpeech).isFalse();
+      final clip = await speech.synthesizeClip('Hi.');
+
+      check(clip.progressive).isNull();
+      check(clip.whole!.bytes).deepEquals([7, 7]);
+      check(adapter.requests.single.data as Map)
+          .not((it) => it.containsKey('stream'));
+    });
+
+    test('a body that is not chunked plays the same', () async {
+      final adapter = _Adapter(
+        () => ResponseBody.fromBytes(
+          [1, 2, 3, 4],
+          200,
+          headers: {
+            Headers.contentTypeHeader: ['audio/mpeg'],
+          },
+        ),
+      );
+      final clip = await _speech(
+        adapter,
+        settings: _streamingSettings,
+      ).synthesizeClip('Hi.');
+
+      final audio = clip.progressive!;
+      check(await audio.read().expand((piece) => piece).toList())
+          .deepEquals([1, 2, 3, 4]);
+    });
+
+    test('streaming is stored with the settings and off by default', () {
+      check(const DirectVoiceProviderSettings(profileId: 'voice').streamSpeech)
+          .isFalse();
+      final stored = _streamingSettings.toJson();
+      check(stored['stream_speech']).equals(true);
+      check(DirectVoiceProviderSettings.fromJson(stored))
+          .isNotNull()
+          .has((it) => it.streamSpeech, 'streamSpeech')
+          .isTrue();
+      check(const DirectVoiceProviderSettings(profileId: 'voice').toJson())
+          .not((it) => it.containsKey('stream_speech'));
+    });
   });
 }

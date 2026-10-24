@@ -1,5 +1,7 @@
 import 'dart:typed_data';
 
+import 'package:conduit_core/ports/progressive_audio.dart';
+
 /// The backend that turns speech into text and text into speech for a chat
 /// when the user picks the Server engine.
 enum ServerSpeechSource { openWebUi, hermes, direct }
@@ -37,6 +39,34 @@ abstract interface class ServerSpeechProvider {
   /// [text] spoken aloud. [preferredVoice] is the voice picked in Audio
   /// settings and is used only when [offersVoiceChoice] is true.
   Future<SynthesizedSpeech> synthesize(
+    String text, {
+    String? preferredVoice,
+    double? speed,
+  });
+}
+
+/// Speech that is either whole or still arriving.
+///
+/// Exactly one of [whole] and [progressive] is set.
+final class SpeechClip {
+  const SpeechClip.whole(SynthesizedSpeech this.whole) : progressive = null;
+  const SpeechClip.progressive(ProgressiveAudio this.progressive)
+    : whole = null;
+
+  final SynthesizedSpeech? whole;
+  final ProgressiveAudio? progressive;
+}
+
+/// A backend that can hand speech over while it is still being synthesized.
+abstract interface class StreamingServerSpeech implements ServerSpeechProvider {
+  /// Whether [synthesizeClip] may return progressive audio.
+  bool get streamsSpeech;
+
+  /// [text] spoken aloud, as [ServerSpeechProvider.synthesize], but progressive
+  /// when [streamsSpeech] is on: it returns once the first audio bytes are in,
+  /// with the rest still arriving. A body that is not chunked arrives whole and
+  /// plays the same. [cancel], when given, stops the request.
+  Future<SpeechClip> synthesizeClip(
     String text, {
     String? preferredVoice,
     double? speed,

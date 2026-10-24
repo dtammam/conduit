@@ -6020,5 +6020,9 @@
   "assistantToolFailureNoReason": "{tool} を完了できませんでした",
   "assistantToolFailureMany": "{count, plural, other{{count} 件の操作を完了できませんでした}}",
   "voiceShowAsPhoneCall": "音声モードを通話として表示",
-  "voiceShowAsPhoneCallDescription": "音声モードを iOS に通話として通知し、通話バナーとロック画面の操作を表示します。オフにすると音声モードはアプリ内で動作し、AirPods とスピーカーは他の音声アプリと同じように動作します。"
+  "voiceShowAsPhoneCallDescription": "音声モードを iOS に通話として通知し、通話バナーとロック画面の操作を表示します。オフにすると音声モードはアプリ内で動作し、AirPods とスピーカーは他の音声アプリと同じように動作します。",
+  "voiceProviderForAllChats": "すべてのチャットで使う",
+  "voiceProviderForAllChatsDescription": "Open WebUI のチャットでも音声プロバイダーを使います。リクエストに応えられない場合は、そのリクエストにサーバー自身の音声を使います。",
+  "voiceProviderStreamSpeech": "音声をストリーミング",
+  "voiceProviderStreamSpeechDescription": "プロバイダーに音声のストリーミングを依頼し、各文が届いている途中から再生します。サーバーが音声のストリーミングに対応していない場合はオフにしてください。"
 }

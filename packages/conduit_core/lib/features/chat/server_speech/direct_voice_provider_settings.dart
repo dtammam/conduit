@@ -32,6 +32,7 @@ final class DirectVoiceProviderSettings {
     this.realtimeModel,
     this.realtimeVoice,
     this.realtimeInstructions,
+    this.streamSpeech = false,
   });
 
   /// The Direct connection profile the requests go to.
@@ -54,6 +55,11 @@ final class DirectVoiceProviderSettings {
 
   /// Instructions that replace Conduit's own for a realtime call, or null.
   final String? realtimeInstructions;
+
+  /// Whether speech is requested as a stream (`"stream": true` with a short
+  /// `streaming_interval`) and played while it arrives. Off by default: a
+  /// server that does not know the fields may reject them.
+  final bool streamSpeech;
 
   /// [current] moved to [profile]. Settings that already name [profile] are
   /// kept. For OpenAI itself the models start at the ones Open WebUI defaults
@@ -104,8 +110,22 @@ final class DirectVoiceProviderSettings {
           field == DirectVoiceProviderField.realtimeInstructions
           ? (value == null || value.trim().isEmpty ? null : value)
           : realtimeInstructions,
+      streamSpeech: streamSpeech,
     );
   }
+
+  /// A copy with streamed speech turned on or off.
+  DirectVoiceProviderSettings withStreamSpeech(bool value) =>
+      DirectVoiceProviderSettings(
+        profileId: profileId,
+        transcriptionModel: transcriptionModel,
+        speechModel: speechModel,
+        speechVoice: speechVoice,
+        realtimeModel: realtimeModel,
+        realtimeVoice: realtimeVoice,
+        realtimeInstructions: realtimeInstructions,
+        streamSpeech: value,
+      );
 
   bool get canTranscribe => _isSet(transcriptionModel);
 
@@ -121,6 +141,7 @@ final class DirectVoiceProviderSettings {
     'realtime_model': ?realtimeModel,
     'realtime_voice': ?realtimeVoice,
     'realtime_instructions': ?realtimeInstructions,
+    if (streamSpeech) 'stream_speech': true,
   };
 
   /// The settings stored in [json], or null when they name no connection.
@@ -146,6 +167,7 @@ final class DirectVoiceProviderSettings {
           instructions is String && instructions.trim().isNotEmpty
           ? instructions
           : null,
+      streamSpeech: json['stream_speech'] == true,
     );
   }
 
@@ -158,7 +180,8 @@ final class DirectVoiceProviderSettings {
       other.speechVoice == speechVoice &&
       other.realtimeModel == realtimeModel &&
       other.realtimeVoice == realtimeVoice &&
-      other.realtimeInstructions == realtimeInstructions;
+      other.realtimeInstructions == realtimeInstructions &&
+      other.streamSpeech == streamSpeech;
 
   @override
   int get hashCode => Object.hash(
@@ -169,5 +192,6 @@ final class DirectVoiceProviderSettings {
     realtimeModel,
     realtimeVoice,
     realtimeInstructions,
+    streamSpeech,
   );
 }

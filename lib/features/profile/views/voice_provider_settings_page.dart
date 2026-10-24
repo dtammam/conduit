@@ -4,6 +4,7 @@ import 'package:conduit_core/features/chat/server_speech/direct_voice_provider_s
 import 'package:conduit_core/features/direct_connections/models/direct_connection_profile.dart';
 import 'package:conduit_core/features/direct_connections/providers/direct_connection_providers.dart';
 import 'package:conduit_core/services/settings_service.dart';
+import 'package:conduit/shared/widgets/platform_ui/platform_ui.dart';
 import 'package:conduit/shared/widgets/platform_ui/vocabulary.dart';
 import 'package:flutter/services.dart' show TextInputAction;
 import 'package:flutter/widgets.dart';
@@ -106,6 +107,32 @@ class _VoiceProviderSettingsPageState
         .setDirectVoiceProvider(current.withField(field, value));
   }
 
+  Future<void> _setStreamSpeech(bool value) async {
+    final current = ref.read(appSettingsProvider).directVoiceProvider;
+    if (current == null) return;
+    await ref
+        .read(appSettingsProvider.notifier)
+        .setDirectVoiceProvider(current.withStreamSpeech(value));
+  }
+
+  Widget _toggleTile({
+    required String title,
+    required String subtitle,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+    required IconData icon,
+  }) => CustomizationTile(
+    leading: SettingsIconBadge(
+      icon: icon,
+      color: context.conduitTheme.buttonPrimary,
+    ),
+    title: title,
+    subtitle: subtitle,
+    trailing: AdaptiveSwitch(value: value, onChanged: onChanged),
+    showChevron: false,
+    onTap: () => onChanged(!value),
+  );
+
   Future<void> _showConnectionPicker(
     List<DirectConnectionProfile> candidates,
     String selectedId,
@@ -187,6 +214,9 @@ class _VoiceProviderSettingsPageState
     final settings = ref.watch(
       appSettingsProvider.select((settings) => settings.directVoiceProvider),
     );
+    final forAllChats = ref.watch(
+      appSettingsProvider.select((s) => s.voiceProviderForAllChats),
+    );
     final candidates = voiceProviderCandidates(ref);
     final chosen = candidates.any(
       (profile) => profile.id == settings?.profileId,
@@ -244,7 +274,32 @@ class _VoiceProviderSettingsPageState
                   label: l10n.voice,
                   hint: 'alloy',
                 ),
+                _toggleTile(
+                  title: l10n.voiceProviderStreamSpeech,
+                  subtitle: l10n.voiceProviderStreamSpeechDescription,
+                  value: settings?.streamSpeech ?? false,
+                  onChanged: _setStreamSpeech,
+                  icon: UiUtils.platformIcon(
+                    ios: CupertinoIcons.waveform_path,
+                    android: Icons.stream,
+                  ),
+                ),
               ],
+            ),
+          ),
+          settingsSectionGap,
+          InsetGroupedSection(
+            child: _toggleTile(
+              title: l10n.voiceProviderForAllChats,
+              subtitle: l10n.voiceProviderForAllChatsDescription,
+              value: forAllChats,
+              onChanged: ref
+                  .read(appSettingsProvider.notifier)
+                  .setVoiceProviderForAllChats,
+              icon: UiUtils.platformIcon(
+                ios: CupertinoIcons.chat_bubble_2,
+                android: Icons.forum_outlined,
+              ),
             ),
           ),
           settingsSectionGap,

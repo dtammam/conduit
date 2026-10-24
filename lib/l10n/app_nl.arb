@@ -4417,5 +4417,9 @@
   "assistantToolFailureNoReason": "{tool} kon niet worden voltooid",
   "assistantToolFailureMany": "{count, plural, =1{1 actie kon niet worden voltooid} other{{count} acties konden niet worden voltooid}}",
   "voiceShowAsPhoneCall": "Spraakmodus als telefoongesprek tonen",
-  "voiceShowAsPhoneCallDescription": "Meldt de spraakmodus bij iOS als telefoongesprek, met de gespreksbanner en bediening op het vergrendelscherm. Uit draait de spraakmodus binnen de app en werken AirPods en luidspreker zoals in andere spraak-apps."
+  "voiceShowAsPhoneCallDescription": "Meldt de spraakmodus bij iOS als telefoongesprek, met de gespreksbanner en bediening op het vergrendelscherm. Uit draait de spraakmodus binnen de app en werken AirPods en luidspreker zoals in andere spraak-apps.",
+  "voiceProviderForAllChats": "Voor alle chats gebruiken",
+  "voiceProviderForAllChatsDescription": "Gebruik de stemprovider ook voor Open WebUI-chats. Kan hij een verzoek niet afhandelen, dan wordt voor dat verzoek de audio van de server gebruikt.",
+  "voiceProviderStreamSpeech": "Spraak streamen",
+  "voiceProviderStreamSpeechDescription": "Vraag de provider om audio te streamen en speel elke zin af terwijl die nog binnenkomt. Zet uit als de server geen streaming van spraak ondersteunt."
 }

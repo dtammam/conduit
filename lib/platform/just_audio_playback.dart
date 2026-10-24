@@ -1,3 +1,7 @@
+// StreamAudioSource is marked experimental by just_audio; it is the only way
+// to hand the player audio that is still arriving.
+// ignore_for_file: experimental_member_use
+
 import 'package:conduit_core/conduit_core.dart';
 import 'package:just_audio/just_audio.dart';
 
@@ -66,8 +70,13 @@ class JustAudioPlayback implements AudioPlaybackPort {
   @override
   Future<void> dispose() => _player.dispose();
 
-  AudioSource _toSource(AudioClip clip) =>
-      AudioSource.uri(clip.uri, tag: clip.tag);
+  AudioSource _toSource(AudioClip clip) {
+    final progressive = clip.progressive;
+    if (progressive != null) {
+      return _ProgressiveAudioSource(progressive, tag: clip.tag);
+    }
+    return AudioSource.uri(clip.uri, tag: clip.tag);
+  }
 
   static AudioProcessingState _mapProcessingState(ProcessingState state) =>
       switch (state) {
@@ -77,4 +86,28 @@ class JustAudioPlayback implements AudioPlaybackPort {
         ProcessingState.ready => AudioProcessingState.ready,
         ProcessingState.completed => AudioProcessingState.completed,
       };
+}
+
+/// Plays audio that is still arriving, through `just_audio`'s local proxy.
+///
+/// The length is unknown while it streams, so every request is answered with
+/// the whole clip from its first byte as a chunked body, with no range support.
+/// The player then plays what has arrived and waits for the rest instead of
+/// needing the finished file.
+class _ProgressiveAudioSource extends StreamAudioSource {
+  _ProgressiveAudioSource(this._audio, {super.tag});
+
+  final ProgressiveAudio _audio;
+
+  @override
+  Future<StreamAudioResponse> request([int? start, int? end]) async {
+    return StreamAudioResponse(
+      rangeRequestsSupported: false,
+      sourceLength: null,
+      contentLength: null,
+      offset: null,
+      stream: _audio.read(),
+      contentType: _audio.mimeType,
+    );
+  }
 }

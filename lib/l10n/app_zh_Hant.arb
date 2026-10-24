@@ -4417,5 +4417,9 @@
   "assistantToolFailureNoReason": "無法完成{tool}",
   "assistantToolFailureMany": "{count, plural, other{無法完成 {count} 項操作}}",
   "voiceShowAsPhoneCall": "將語音模式顯示為電話",
-  "voiceShowAsPhoneCallDescription": "向 iOS 回報語音模式為一通電話，並顯示通話橫幅和鎖定畫面控制項。關閉後，語音模式在 App 內執行，AirPods 和喇叭的表現與其他語音 App 一致。"
+  "voiceShowAsPhoneCallDescription": "向 iOS 回報語音模式為一通電話，並顯示通話橫幅和鎖定畫面控制項。關閉後，語音模式在 App 內執行，AirPods 和喇叭的表現與其他語音 App 一致。",
+  "voiceProviderForAllChats": "用於所有聊天",
+  "voiceProviderForAllChatsDescription": "Open WebUI 聊天也使用語音提供者。若它無法處理某個請求，該請求改用伺服器本身的音訊。",
+  "voiceProviderStreamSpeech": "串流語音",
+  "voiceProviderStreamSpeechDescription": "請求提供者以串流方式傳送音訊，並在每句話仍在抵達時開始播放。如果伺服器不支援串流語音，請關閉。"
 }

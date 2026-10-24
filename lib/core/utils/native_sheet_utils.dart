@@ -1050,6 +1050,26 @@ NativeAudioSheetParts buildNativeAudioSheetParts(
               voiceProvider?.speechVoice,
               'alloy',
             ),
+            NativeSheetItemConfig(
+              id: 'voice-provider-stream-speech',
+              title: l10n.voiceProviderStreamSpeech,
+              subtitle: l10n.voiceProviderStreamSpeechDescription,
+              sfSymbol: 'waveform.path',
+              kind: NativeSheetItemKind.toggle,
+              value: voiceProvider?.streamSpeech ?? false,
+            ),
+          ],
+        ),
+        NativeSheetSectionConfig(
+          items: [
+            NativeSheetItemConfig(
+              id: 'voice-provider-all-chats',
+              title: l10n.voiceProviderForAllChats,
+              subtitle: l10n.voiceProviderForAllChatsDescription,
+              sfSymbol: 'bubble.left.and.bubble.right',
+              kind: NativeSheetItemKind.toggle,
+              value: appSettings.voiceProviderForAllChats,
+            ),
           ],
         ),
         NativeSheetSectionConfig(

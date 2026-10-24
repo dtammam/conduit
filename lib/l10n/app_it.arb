@@ -4417,5 +4417,9 @@
   "assistantToolFailureNoReason": "Impossibile completare {tool}",
   "assistantToolFailureMany": "{count, plural, =1{Impossibile completare 1 azione} other{Impossibile completare {count} azioni}}",
   "voiceShowAsPhoneCall": "Mostra la modalità vocale come una telefonata",
-  "voiceShowAsPhoneCallDescription": "Segnala la modalità vocale a iOS come una telefonata, con il banner della chiamata e i comandi nella schermata di blocco. Disattivata, la modalità vocale funziona dentro l'app e gli AirPods e l'altoparlante si comportano come nelle altre app vocali."
+  "voiceShowAsPhoneCallDescription": "Segnala la modalità vocale a iOS come una telefonata, con il banner della chiamata e i comandi nella schermata di blocco. Disattivata, la modalità vocale funziona dentro l'app e gli AirPods e l'altoparlante si comportano come nelle altre app vocali.",
+  "voiceProviderForAllChats": "Usa per tutte le chat",
+  "voiceProviderForAllChatsDescription": "Usa il provider vocale anche per le chat Open WebUI. Se non riesce a gestire una richiesta, per quella richiesta si usa l'audio del server.",
+  "voiceProviderStreamSpeech": "Streaming della voce",
+  "voiceProviderStreamSpeechDescription": "Chiede al provider di inviare l'audio in streaming e riproduce ogni frase mentre arriva. Disattiva se il server non supporta la voce in streaming."
 }

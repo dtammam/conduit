@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:meta/meta.dart';
 
+import 'progressive_audio.dart';
+
 /// Plays a queue of audio clips.
 ///
 /// Spoken assistant replies arrive as a sequence of chunks that must play
@@ -127,11 +129,15 @@ class NullAudioPlayback implements AudioPlaybackPort {
 /// One item in the playback queue.
 @immutable
 class AudioClip {
-  const AudioClip({required this.uri, this.tag});
+  const AudioClip({required this.uri, this.tag, this.progressive});
 
   /// Where the audio lives. The mobile host writes chunks to temporary files
-  /// and passes their `file:` URIs.
+  /// and passes their `file:` URIs. A clip with [progressive] audio ignores it.
   final Uri uri;
+
+  /// Audio that is still arriving. A host that can play it begins before the
+  /// last byte is in; the clip's [uri] is then only a label.
+  final ProgressiveAudio? progressive;
 
   /// Carried through untouched so the caller can identify the clip when it
   /// comes back on [AudioPlaybackPort.currentIndexChanges].

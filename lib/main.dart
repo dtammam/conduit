@@ -1109,6 +1109,19 @@ class _ConduitAppState extends ConsumerState<ConduitApp> {
             await ref.read(appSettingsProvider.notifier).setVoiceCallMode(mode);
             await _refreshNativeVoiceDetail();
           }
+        case 'voice-provider-stream-speech':
+          final current = ref.read(appSettingsProvider).directVoiceProvider;
+          if (value is bool && current != null) {
+            await ref
+                .read(appSettingsProvider.notifier)
+                .setDirectVoiceProvider(current.withStreamSpeech(value));
+          }
+        case 'voice-provider-all-chats':
+          if (value is bool) {
+            await ref
+                .read(appSettingsProvider.notifier)
+                .setVoiceProviderForAllChats(value);
+          }
         case 'voice-provider-connection':
           if (value is String) {
             await _chooseNativeVoiceProvider(value);

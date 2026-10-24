@@ -4417,5 +4417,9 @@
   "assistantToolFailureNoReason": "{tool} konnte nicht abgeschlossen werden",
   "assistantToolFailureMany": "{count, plural, =1{1 Aktion konnte nicht abgeschlossen werden} other{{count} Aktionen konnten nicht abgeschlossen werden}}",
   "voiceShowAsPhoneCall": "Sprachmodus als Telefonanruf anzeigen",
-  "voiceShowAsPhoneCallDescription": "Meldet den Sprachmodus bei iOS als Telefonanruf, mit Anrufbanner und Bedienelementen auf dem Sperrbildschirm. Aus, läuft der Sprachmodus in der App, und AirPods und Lautsprecher funktionieren wie in anderen Sprach-Apps."
+  "voiceShowAsPhoneCallDescription": "Meldet den Sprachmodus bei iOS als Telefonanruf, mit Anrufbanner und Bedienelementen auf dem Sperrbildschirm. Aus, läuft der Sprachmodus in der App, und AirPods und Lautsprecher funktionieren wie in anderen Sprach-Apps.",
+  "voiceProviderForAllChats": "Für alle Chats verwenden",
+  "voiceProviderForAllChatsDescription": "Den Sprachanbieter auch für Open-WebUI-Chats verwenden. Kann er eine Anfrage nicht bedienen, wird dafür das Audio des Servers genutzt.",
+  "voiceProviderStreamSpeech": "Sprache streamen",
+  "voiceProviderStreamSpeechDescription": "Den Anbieter bitten, Audio zu streamen, und jeden Satz abspielen, während er noch ankommt. Ausschalten, wenn der Server kein Streaming von Sprache unterstützt."
 }

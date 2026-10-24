@@ -321,6 +321,8 @@ class SettingsService {
       _voiceAutoSendKey: settings.voiceAutoSendFinal,
       PreferenceKeys.voiceBargeInEnabled: settings.voiceBargeInEnabled,
       PreferenceKeys.voiceCallKitEnabled: settings.voiceCallKitEnabled,
+      PreferenceKeys.voiceProviderForAllChats:
+          settings.voiceProviderForAllChats,
       PreferenceKeys.voiceCallMode: settings.voiceCallMode.name,
       _socketTransportModeKey: settings.socketTransportMode,
       _quickPillsKey: settings.quickPills.toList(),
@@ -807,6 +809,8 @@ class SettingsService {
           false,
       voiceCallKitEnabled:
           get<bool>(PreferenceKeys.voiceCallKitEnabled) ?? false,
+      voiceProviderForAllChats:
+          get<bool>(PreferenceKeys.voiceProviderForAllChats) ?? false,
       voiceCallMode: VoiceCallMode.values.firstWhere(
         (mode) => mode.name == get<String>(PreferenceKeys.voiceCallMode),
         orElse: () => VoiceCallMode.auto,
@@ -986,6 +990,11 @@ class AppSettings {
   /// the app owns the audio session for the whole call and handles
   /// interruptions itself. No effect elsewhere.
   final bool voiceCallKitEnabled;
+
+  /// Whether the Voice provider (see [directVoiceProvider]) also speaks and
+  /// listens for Open WebUI chats, instead of the server's own audio
+  /// endpoints. A request it cannot serve falls back to the server's.
+  final bool voiceProviderForAllChats;
   final VoiceCallMode voiceCallMode;
   final String socketTransportMode; // 'polling' or 'ws'
   final List<String> quickPills; // e.g., ['web','image']
@@ -1056,6 +1065,7 @@ class AppSettings {
     this.voiceAutoSendFinal = false,
     this.voiceBargeInEnabled = false,
     this.voiceCallKitEnabled = false,
+    this.voiceProviderForAllChats = false,
     this.voiceCallMode = VoiceCallMode.auto,
     this.socketTransportMode = 'ws',
     this.quickPills = const [],
@@ -1118,6 +1128,7 @@ class AppSettings {
     bool? voiceAutoSendFinal,
     bool? voiceBargeInEnabled,
     bool? voiceCallKitEnabled,
+    bool? voiceProviderForAllChats,
     VoiceCallMode? voiceCallMode,
     String? socketTransportMode,
     List<String>? quickPills,
@@ -1191,6 +1202,8 @@ class AppSettings {
       voiceAutoSendFinal: voiceAutoSendFinal ?? this.voiceAutoSendFinal,
       voiceBargeInEnabled: voiceBargeInEnabled ?? this.voiceBargeInEnabled,
       voiceCallKitEnabled: voiceCallKitEnabled ?? this.voiceCallKitEnabled,
+      voiceProviderForAllChats:
+          voiceProviderForAllChats ?? this.voiceProviderForAllChats,
       voiceCallMode: voiceCallMode ?? this.voiceCallMode,
       socketTransportMode: socketTransportMode ?? this.socketTransportMode,
       quickPills: quickPills ?? this.quickPills,
@@ -1280,6 +1293,7 @@ class AppSettings {
         other.voiceAutoSendFinal == voiceAutoSendFinal &&
         other.voiceBargeInEnabled == voiceBargeInEnabled &&
         other.voiceCallKitEnabled == voiceCallKitEnabled &&
+        other.voiceProviderForAllChats == voiceProviderForAllChats &&
         other.voiceCallMode == voiceCallMode &&
         other.chatWebSearchEnabled == chatWebSearchEnabled &&
         other.chatImageGenerationEnabled == chatImageGenerationEnabled &&
@@ -1345,6 +1359,7 @@ class AppSettings {
       voiceAutoSendFinal,
       voiceBargeInEnabled,
       voiceCallKitEnabled,
+      voiceProviderForAllChats,
       voiceCallMode,
       chatWebSearchEnabled,
       chatImageGenerationEnabled,
@@ -1825,6 +1840,11 @@ class AppSettingsNotifier extends _$AppSettingsNotifier {
 
   Future<void> setVoiceBargeInEnabled(bool value) async {
     state = state.copyWith(voiceBargeInEnabled: value);
+    await SettingsService.saveSettings(state);
+  }
+
+  Future<void> setVoiceProviderForAllChats(bool value) async {
+    state = state.copyWith(voiceProviderForAllChats: value);
     await SettingsService.saveSettings(state);
   }
 
