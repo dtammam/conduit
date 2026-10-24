@@ -129,7 +129,7 @@ void main() {
       check(item.title).equals(l10n.voiceEngineEchoCancel);
       check(item.value).equals(enabled);
     }
-    check(const AppSettings().voiceEngineEchoCancel).equals(false);
+    check(const AppSettings().voiceEngineEchoCancel).equals(true);
   });
 
   for (final stt in SttPreference.values) {

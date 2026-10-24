@@ -141,6 +141,13 @@ void main() {
         ).equals(false);
       });
 
+      test('voiceEngineEchoCancel defaults to on in this build', () {
+        check(settings.voiceEngineEchoCancel).equals(true);
+        check(
+          settings.copyWith(voiceEngineEchoCancel: false).voiceEngineEchoCancel,
+        ).equals(false);
+      });
+
       test('voiceCallKitEnabled defaults to off in this build', () {
         check(settings.voiceCallKitEnabled).equals(false);
         check(settings.copyWith(voiceCallKitEnabled: true).voiceCallKitEnabled)
