@@ -2,6 +2,7 @@
 // way to see what is plugged in without a second native bridge.
 // ignore_for_file: experimental_member_use
 
+import '../../../platform/engine_voice_capture.dart';
 import 'package:conduit_core/voice/voice_route.dart';
 
 import 'dart:async';
@@ -573,6 +574,7 @@ class ChatVoiceAudioSessionCoordinator implements VoiceAudioSessionPort {
       // down, so the teardown is not the thing that gets interleaved.
       await _routeSerial;
       await _clearIosVoiceRoute();
+      if (Platform.isIOS) await EngineVoiceCapture.endCall();
       if (session != null) {
         await _setActive(session, active: false, phase: phase);
       }

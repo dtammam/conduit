@@ -242,6 +242,101 @@ final class SpeechEngineQueue {
     try seek(toItem: resumeItem)
   }
 
+  // MARK: - Voice capture (one engine for the call's playback and microphone)
+
+  /// Whether the engine's input runs through the platform's voice processing
+  /// (echo cancellation with this engine's output as the reference, noise
+  /// suppression, gain control).
+  private(set) var voiceProcessing = false
+  private var captureConverter: AVAudioConverter?
+  private var captureFormat: AVAudioFormat?
+  private var capturing = false
+
+  /// Turns voice processing on or off. The engine restarts for it; a clip
+  /// that was playing goes on from its start.
+  func setVoiceProcessing(_ on: Bool) throws {
+    guard on != voiceProcessing else { return }
+    let (wasRunning, resumeItem) = queue.sync {
+      (engine.isRunning, lastStartedItem ?? scheduleItem)
+    }
+    if capturing { try stopCapture() }
+    try Self.objc {
+      if self.engine.isRunning { self.engine.stop() }
+      try self.engine.inputNode.setVoiceProcessingEnabled(on)
+    }
+    voiceProcessing = on
+    if wasRunning || wantsPlayback {
+      try queue.sync { try startEngineIfNeeded() }
+      if wantsPlayback { try seek(toItem: resumeItem) }
+    }
+  }
+
+  /// Taps the microphone and hands [onData] 16-bit little-endian mono PCM at
+  /// [sampleRate], the format the call's voice detection reads.
+  func startCapture(sampleRate: Double, onData: @escaping (Data) -> Void) throws {
+    if capturing { try stopCapture() }
+    let input = engine.inputNode
+    let inputFormat = input.outputFormat(forBus: 0)
+    guard inputFormat.channelCount > 0, inputFormat.sampleRate > 0 else {
+      throw EngineError(message: "no microphone input")
+    }
+    guard let target = AVAudioFormat(
+      commonFormat: .pcmFormatInt16,
+      sampleRate: sampleRate,
+      channels: 1,
+      interleaved: true
+    ), let converter = AVAudioConverter(from: inputFormat, to: target)
+    else { throw EngineError(message: "cannot convert microphone audio") }
+    captureConverter = converter
+    captureFormat = target
+    try Self.objc {
+      input.installTap(onBus: 0, bufferSize: 1024, format: inputFormat) {
+        [weak self] buffer, _ in
+        guard let self,
+              let data = Self.convertCapture(buffer, with: converter, to: target)
+        else { return }
+        onData(data)
+      }
+    }
+    capturing = true
+    try queue.sync { try startEngineIfNeeded() }
+  }
+
+  func stopCapture() throws {
+    guard capturing else { return }
+    capturing = false
+    try Self.objc { self.engine.inputNode.removeTap(onBus: 0) }
+    captureConverter = nil
+  }
+
+  /// One tap buffer as 16-bit mono PCM bytes in [format], through a
+  /// converter that keeps its state across buffers (no edge at each one).
+  static func convertCapture(
+    _ buffer: AVAudioPCMBuffer,
+    with converter: AVAudioConverter,
+    to format: AVAudioFormat
+  ) -> Data? {
+    let ratio = format.sampleRate / buffer.format.sampleRate
+    let capacity = AVAudioFrameCount(Double(buffer.frameLength) * ratio) + 64
+    guard let out = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: capacity)
+    else { return nil }
+    var fed = false
+    var error: NSError?
+    let status = converter.convert(to: out, error: &error) { _, outStatus in
+      if fed {
+        outStatus.pointee = .noDataNow
+        return nil
+      }
+      fed = true
+      outStatus.pointee = .haveData
+      return buffer
+    }
+    guard status != .error, out.frameLength > 0,
+          let samples = out.int16ChannelData
+    else { return nil }
+    return Data(bytes: samples[0], count: Int(out.frameLength) * 2)
+  }
+
   func shutDown() {
     try? stop()
     _ = try? Self.objc { self.engine.stop() }

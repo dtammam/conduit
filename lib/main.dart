@@ -37,6 +37,7 @@ import 'package:conduit_core/services/share_staging_cleanup.dart'
 
 import 'platform/ios_share_staging.dart';
 import 'platform/engine_speech_playback.dart';
+import 'platform/engine_voice_capture.dart';
 import 'platform/just_audio_playback.dart';
 import 'platform/record_audio_capture.dart';
 import 'platform/flutter_secure_key_value_store.dart';
@@ -273,7 +274,12 @@ void main() {
   ShareStagingPort.hostDefault = IosShareStaging(
     stagingDirectoryName: shareStagingDirectoryName,
   );
-  AudioCapturePort.hostFactory = RecordAudioCapture.new;
+  // iOS voice calls capture on the speech engine (echo cancelled against the
+  // assistant's own playback); everything else records through `record`.
+  AudioCapturePort.hostFactory =
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS
+      ? EngineVoiceCapture.new
+      : RecordAudioCapture.new;
   // The preference store is a host capability too; installed
   // before bootstrap awaits its first synchronous read.
   PreferencesStore.installLoader(FlutterKeyValueStore.load);

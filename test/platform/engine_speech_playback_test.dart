@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:checks/checks.dart';
 import 'package:conduit/platform/engine_speech_playback.dart';
+import 'package:conduit/platform/engine_voice_capture.dart';
 import 'package:conduit_core/conduit_core.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -185,5 +186,16 @@ void main() {
     check(files.calls.last).equals('stop');
     check(calls).contains('reset');
     check(calls).contains('play');
+  });
+
+  test('during a call on the engine, whole clips play there too', () async {
+    final files = _Files();
+    final hybrid = HybridSpeechPlayback(files: files);
+    EngineVoiceCapture.voiceProcessingActive = true;
+    addTearDown(() => EngineVoiceCapture.voiceProcessingActive = false);
+    await hybrid.setClips([AudioClip(uri: Uri.parse('file:///missing.mp3'))]);
+    await settle();
+    check(files.calls).deepEquals(['stop']);
+    check(calls).contains('reset');
   });
 }

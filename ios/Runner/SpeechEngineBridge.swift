@@ -2,6 +2,25 @@ import AVFoundation
 import Flutter
 
 private let conduitSpeechEngineChannelName = "app.cogwheel.conduit/speech_engine"
+private let conduitSpeechEngineCaptureChannelName =
+  "app.cogwheel.conduit/speech_engine_capture"
+
+/// Carries microphone PCM from the engine's tap to Dart.
+private final class CaptureStreamHandler: NSObject, FlutterStreamHandler {
+  var sink: FlutterEventSink?
+
+  func onListen(withArguments _: Any?, eventSink events: @escaping FlutterEventSink)
+    -> FlutterError?
+  {
+    sink = events
+    return nil
+  }
+
+  func onCancel(withArguments _: Any?) -> FlutterError? {
+    sink = nil
+    return nil
+  }
+}
 
 /// Dart's handle on [SpeechEngineQueue]: streamed speech played as one
 /// continuous waveform. Calls arrive in order from one Dart queue; decoding
@@ -13,6 +32,8 @@ final class SpeechEngineBridge: ConduitBridge {
   private var speech: SpeechEngineQueue?
   private let work = DispatchQueue(label: "app.cogwheel.conduit.speech-engine-bridge")
   private var configurationObserver: NSObjectProtocol?
+  private let capture = CaptureStreamHandler()
+  private var captureChannel: FlutterEventChannel?
 
   private init() {}
 
@@ -22,6 +43,12 @@ final class SpeechEngineBridge: ConduitBridge {
       binaryMessenger: host.messenger
     )
     methodChannel = channel
+    let events = FlutterEventChannel(
+      name: conduitSpeechEngineCaptureChannelName,
+      binaryMessenger: host.messenger
+    )
+    events.setStreamHandler(capture)
+    captureChannel = events
     channel.setMethodCallHandler { [weak self] call, result in
       guard let self else {
         result(nil)
@@ -94,6 +121,17 @@ final class SpeechEngineBridge: ConduitBridge {
       try speech.seek(toItem: item)
     case "setRate":
       speech.setRate(Float(args["rate"] as? Double ?? 1))
+    case "setVoiceProcessing":
+      try speech.setVoiceProcessing(args["on"] as? Bool ?? false)
+    case "startCapture":
+      let rate = args["sampleRate"] as? Double ?? 16000
+      try speech.startCapture(sampleRate: rate) { [weak self] data in
+        DispatchQueue.main.async {
+          self?.capture.sink?(FlutterStandardTypedData(bytes: data))
+        }
+      }
+    case "stopCapture":
+      try speech.stopCapture()
     case "dispose":
       speech.shutDown()
     default:

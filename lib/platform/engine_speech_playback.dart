@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:conduit_core/conduit_core.dart';
 import 'package:flutter/services.dart';
 
+import 'engine_voice_capture.dart';
 import 'just_audio_playback.dart';
 
 /// The iOS speech player: streamed clips on the native speech engine, all
@@ -84,7 +85,10 @@ class HybridSpeechPlayback implements AudioPlaybackPort {
     Duration initialPosition = Duration.zero,
   }) async {
     final streamed = clips.any((clip) => clip.progressive != null);
-    final next = streamed && !_engineDisabled ? _engine : _files;
+    // During a voice call whose microphone is on the engine, every clip plays
+    // there: the echo canceller needs the assistant's voice as its reference.
+    final onEngine = streamed || EngineVoiceCapture.voiceProcessingActive;
+    final next = onEngine && !_engineDisabled ? _engine : _files;
     if (!identical(next, _active)) {
       await _active.stop();
       _active = next;
