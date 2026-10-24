@@ -22,6 +22,9 @@ bool isBargeInEcho(
   final words = _words(transcript);
   if (words.isEmpty) return true;
   if (words.any(_commands.contains)) return false;
+  // Whisper's stock inventions for noise ("Thank you.", "Thanks for
+  // watching!", "Bye.") are never the user cutting in.
+  if (words.every(_noiseWords.contains)) return true;
   if (confidence != null && confidence.doubtful) return true;
   // Whisper turns the assistant's own audio into short invented words
   // ("Tinha", 2026-10-24 15:47) that no overlap check can match; while the
@@ -44,6 +47,46 @@ const int _minUserWordsWithConfidence = 2;
 
 /// Share of the take's words that must be the assistant's for it to be echo.
 const double _echoShare = 0.8;
+
+/// Words Whisper produces from noise, echo or silence. A take made only of
+/// these is echo.
+const Set<String> _noiseWords = {
+  'thank',
+  'thanks',
+  'you',
+  'for',
+  'watching',
+  'bye',
+  'okay',
+  'ok',
+  'uh',
+  'um',
+  'umm',
+  'uhh',
+  'hmm',
+  'hm',
+  'mm',
+  'mmm',
+  'mhm',
+  'ah',
+  'oh',
+  'er',
+  'eh',
+  'huh',
+  'so',
+  'the',
+  'a',
+  'and',
+  'subscribe',
+  'please',
+  'like',
+  'to',
+  'see',
+  'next',
+  'much',
+  'very',
+  'time',
+};
 
 const Set<String> _commands = {'stop', 'wait', 'pause', 'hold', 'cancel'};
 

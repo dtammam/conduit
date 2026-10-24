@@ -47,10 +47,14 @@ void main() {
     });
 
     test('a doubtful take is echo however many words', () {
-      const lowLogprob =
-          TranscriptionConfidence(avgLogprob: -1.4, noSpeechProb: 0.1);
-      const silence =
-          TranscriptionConfidence(avgLogprob: -0.3, noSpeechProb: 0.7);
+      const lowLogprob = TranscriptionConfidence(
+        avgLogprob: -1.4,
+        noSpeechProb: 0.1,
+      );
+      const silence = TranscriptionConfidence(
+        avgLogprob: -0.3,
+        noSpeechProb: 0.7,
+      );
       const take = 'what about the weather tomorrow';
       check(isBargeInEcho(take, assistant, confidence: lowLogprob)).isTrue();
       check(isBargeInEcho(take, assistant, confidence: silence)).isTrue();
@@ -58,8 +62,10 @@ void main() {
     });
 
     test('commands still count', () {
-      const silence =
-          TranscriptionConfidence(avgLogprob: -2, noSpeechProb: 0.9);
+      const silence = TranscriptionConfidence(
+        avgLogprob: -2,
+        noSpeechProb: 0.9,
+      );
       check(isBargeInEcho('stop', assistant, confidence: silence)).isFalse();
     });
   });
@@ -89,5 +95,26 @@ void main() {
           .isNull();
       log.clear();
     });
+  });
+
+  test('Whisper noise inventions are echo, even when confident', () {
+    const sure = TranscriptionConfidence(avgLogprob: -0.1, noSpeechProb: 0.0);
+    for (final take in [
+      'Thank you.',
+      'Thanks for watching!',
+      'thank you so much',
+      'Bye.',
+      'Okay.',
+      'Um, uh.',
+      '.',
+      'Please subscribe and see you next time',
+    ]) {
+      check(isBargeInEcho(take, assistant, confidence: sure)).isTrue();
+    }
+    // Commands still count; real words still count.
+    check(isBargeInEcho('okay stop', assistant, confidence: sure)).isFalse();
+    check(
+      isBargeInEcho('thank you, next question', assistant, confidence: sure),
+    ).isFalse();
   });
 }
