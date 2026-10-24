@@ -35,12 +35,17 @@ void main() {
     calls = <String>[];
     failOn = '';
     EngineVoiceCapture.disabled = false;
+    EngineVoiceCapture.engineEnabled = true;
+    EngineVoiceCapture.fallbacks = 0;
+    EngineVoiceCapture.callPath = null;
     EngineVoiceCapture.voiceProcessingActive = false;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
           final args = call.arguments as Map?;
           // Diagnostics are read-only and not part of the capture sequence.
-          if (call.method == 'diagnostics') return <String, Object?>{};
+          if (call.method == 'diagnostics' || call.method == 'log') {
+            return <String, Object?>{};
+          }
           calls.add(
             call.method == 'setVoiceProcessing'
                 ? 'vp ${args!['on']}'
@@ -85,17 +90,48 @@ void main() {
     check(calls).isEmpty();
   });
 
-  test('an engine error falls back to record, now and later', () async {
+  test(
+    'an engine error falls back to record for the rest of the call',
+    () async {
+      failOn = 'startCapture';
+      final record = _Record();
+      final capture = EngineVoiceCapture(fallback: record);
+      await capture.startStream(call);
+      check(record.calls).deepEquals(['record voiceCall']);
+      check(EngineVoiceCapture.disabled).isTrue();
+      check(EngineVoiceCapture.fallbacks).equals(1);
+      check(EngineVoiceCapture.voiceProcessingActive).isFalse();
+      calls.clear();
+      await capture.startStream(call);
+      check(calls).isEmpty();
+      check(record.calls.last).equals('record voiceCall');
+    },
+  );
+
+  test('the next call tries the engine again', () async {
     failOn = 'startCapture';
     final record = _Record();
-    final capture = EngineVoiceCapture(fallback: record);
-    await capture.startStream(call);
-    check(record.calls).deepEquals(['record voiceCall']);
+    await EngineVoiceCapture(fallback: record).startStream(call);
     check(EngineVoiceCapture.disabled).isTrue();
-    check(EngineVoiceCapture.voiceProcessingActive).isFalse();
+
+    await EngineVoiceCapture.endCall();
+    check(EngineVoiceCapture.disabled).isFalse();
+    check(EngineVoiceCapture.fallbacks).equals(0);
+
+    failOn = '';
     calls.clear();
-    await capture.startStream(call);
+    await EngineVoiceCapture(fallback: record).startStream(call);
+    check(calls).deepEquals(['vp true', 'capture 16000.0']);
+    check(EngineVoiceCapture.callPath).equals('engine');
+  });
+
+  test('with the setting off a call records through record', () async {
+    EngineVoiceCapture.engineEnabled = false;
+    final record = _Record();
+    await EngineVoiceCapture(fallback: record).startStream(call);
+    check(record.calls).deepEquals(['record voiceCall']);
     check(calls).isEmpty();
-    check(record.calls.last).equals('record voiceCall');
+    check(EngineVoiceCapture.voiceProcessingActive).isFalse();
+    check(EngineVoiceCapture.callPath).equals('record');
   });
 }

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io' show Platform;
 
 import 'package:conduit/core/services/haptic_service.dart';
+import 'package:conduit/platform/engine_voice_capture.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
@@ -1044,6 +1045,10 @@ class VoiceInputService implements VoiceModeInput {
     _serverVadRecorderSession = recorderSession;
     await _setupVadStreams(vad);
 
+    if (Platform.isIOS) {
+      EngineVoiceCapture.engineEnabled =
+          _ref?.read(appSettingsProvider).voiceEngineEchoCancel ?? true;
+    }
     try {
       await recorderSession.start(
         iosAudioSessionManagedExternally: iosAudioSessionManagedExternally,
@@ -1051,13 +1056,10 @@ class VoiceInputService implements VoiceModeInput {
         // from the profile; see RecordAudioCapture.
         config: AudioCaptureConfig(
           // A call's capture (the session is the call's). On iOS it runs on
-          // the speech engine with echo cancellation, unless that setting is
-          // off: then it records through `record`, as before the engine.
-          profile:
-              iosAudioSessionManagedExternally &&
-                  (Platform.isAndroid ||
-                      (_ref?.read(appSettingsProvider).voiceEngineEchoCancel ??
-                          false))
+          // the speech engine with echo cancellation, unless the setting is
+          // off: then [EngineVoiceCapture] records through `record`, as
+          // before the engine.
+          profile: iosAudioSessionManagedExternally
               ? AudioCaptureProfile.voiceCall
               : AudioCaptureProfile.dictation,
           sampleRate: _vadSampleRate,

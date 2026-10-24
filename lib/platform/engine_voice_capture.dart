@@ -17,8 +17,10 @@ import 'record_audio_capture.dart';
 /// in the car kept interrupting). While a call's capture runs here, the
 /// assistant's clips all play on that engine too ([HybridSpeechPlayback]).
 ///
-/// Only voice-call captures come here; dictation stays on `record`. Any
-/// engine error hands this capture, and every later one, to `record`.
+/// Only voice-call captures come here; dictation stays on `record`. An engine
+/// error hands this capture, and every later one in the same call, to
+/// `record`; the next call tries the engine again ([endCall] clears it).
+/// With [engineEnabled] off (the setting) every call records through `record`.
 class EngineVoiceCapture implements AudioCapturePort {
   EngineVoiceCapture({
     AudioCapturePort? fallback,
@@ -41,8 +43,22 @@ class EngineVoiceCapture implements AudioCapturePort {
   /// on; the assistant's playback then goes to the same engine.
   static bool voiceProcessingActive = false;
 
-  /// Set after the engine failed to capture; `record` from then on.
+  /// Set after the engine failed to capture; `record` for the rest of the
+  /// call. [endCall] clears it, so the next call tries the engine again.
   static bool disabled = false;
+
+  /// Whether voice calls may capture on the engine at all (the "Echo
+  /// cancellation on the speech engine" setting, set before a call's capture
+  /// starts). Off, a call records through `record` and the engine plays
+  /// without voice processing.
+  static bool engineEnabled = true;
+
+  /// Engine failures handed to `record` in this call, for the diagnostics.
+  static int fallbacks = 0;
+
+  /// Which path this call's capture took: `engine`, `record` (setting off)
+  /// or `record-fallback`; null until a call's capture starts.
+  static String? callPath;
 
   @override
   Future<bool> hasPermission() => _fallback.hasPermission();
@@ -53,10 +69,15 @@ class EngineVoiceCapture implements AudioCapturePort {
 
   @override
   Future<Stream<Uint8List>> startStream(AudioCaptureConfig config) async {
-    if (disabled ||
-        config.profile != AudioCaptureProfile.voiceCall ||
-        config.channels != 1 ||
-        config.bitRate != 16) {
+    final voiceCall =
+        config.profile == AudioCaptureProfile.voiceCall &&
+        config.channels == 1 &&
+        config.bitRate == 16;
+    if (!voiceCall) return _fallback.startStream(config);
+    if (disabled || !engineEnabled) {
+      final first = callPath == null;
+      callPath ??= disabled ? 'record-fallback' : 'record';
+      if (first) await _logDiagnostics(_channel, 'call-start');
       return _fallback.startStream(config);
     }
     try {
@@ -72,6 +93,7 @@ class EngineVoiceCapture implements AudioCapturePort {
         'sampleRate': config.sampleRate.toDouble(),
       });
       _usingEngine = true;
+      callPath = 'engine';
       await _logDiagnostics(_channel, 'call-start');
       DebugLogger.info(
         'voice-engine-capture',
@@ -85,8 +107,14 @@ class EngineVoiceCapture implements AudioCapturePort {
         scope: 'voice/engine',
         data: {'error': error.toString()},
       );
+      fallbacks += 1;
+      await _logNative(
+        _channel,
+        'capture fallback to record (#$fallbacks): $error',
+      );
+      await endCall(channel: _channel, endsCall: false);
       disabled = true;
-      await endCall(channel: _channel);
+      callPath = 'record-fallback';
       return _fallback.startStream(config);
     }
   }
@@ -104,14 +132,26 @@ class EngineVoiceCapture implements AudioCapturePort {
   Future<void> dispose() => _fallback.dispose();
 
   /// The call is over: microphone off the engine and voice processing off,
-  /// so other playback goes back to the plain media path.
-  static Future<void> endCall({MethodChannel? channel}) async {
+  /// so other playback goes back to the plain media path. The next call tries
+  /// the engine again. [endsCall] false only cleans up after a failed engine
+  /// capture inside a call.
+  static Future<void> endCall({
+    MethodChannel? channel,
+    bool endsCall = true,
+  }) async {
     final engine =
         channel ?? const MethodChannel(EngineSpeechPlayback.channelName);
     final wasActive = voiceProcessingActive;
     voiceProcessingActive = false;
+    if (endsCall) {
+      if (callPath != null) {
+        await _logDiagnostics(engine, 'call-end', reset: true);
+      }
+      disabled = false;
+      fallbacks = 0;
+      callPath = null;
+    }
     if (!wasActive) return;
-    await _logDiagnostics(engine, 'call-end', reset: true);
     try {
       await engine.invokeMethod<Object?>('stopCapture');
       await engine.invokeMethod<Object?>('setVoiceProcessing', {'on': false});
@@ -134,7 +174,15 @@ class EngineVoiceCapture implements AudioCapturePort {
     try {
       final result = await channel.invokeMapMethod<String, Object?>(
         'diagnostics',
-        {'reset': reset},
+        {
+          'reset': reset,
+          'extra': {
+            'phase': phase,
+            'capturePath': callPath ?? 'none',
+            'captureFallbacks': fallbacks,
+            'engineSettingOn': engineEnabled,
+          },
+        },
       );
       if (log) {
         DebugLogger.info(
@@ -143,6 +191,12 @@ class EngineVoiceCapture implements AudioCapturePort {
           data: {'phase': phase, ...?result},
         );
       }
+    } catch (_) {}
+  }
+
+  static Future<void> _logNative(MethodChannel channel, String message) async {
+    try {
+      await channel.invokeMethod<Object?>('log', {'message': message});
     } catch (_) {}
   }
 }

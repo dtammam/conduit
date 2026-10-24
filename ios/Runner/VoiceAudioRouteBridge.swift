@@ -1,5 +1,6 @@
 import AVFoundation
 import Flutter
+import os
 
 private let conduitVoiceAudioRouteChannelName = "app.cogwheel.conduit/voice_audio_route"
 
@@ -7,8 +8,55 @@ final class VoiceAudioRouteBridge: ConduitBridge {
     static let shared = VoiceAudioRouteBridge()
 
     private var methodChannel: FlutterMethodChannel?
+    private var routeObserver: NSObjectProtocol?
+    private let routeLog = Logger(
+        subsystem: "app.cogwheel.conduit",
+        category: "voice-engine"
+    )
+
+    /// Whether the call asked for the loudspeaker (the last
+    /// `setSpeakerphoneEnabled`). Read from any thread.
+    private let wantsSpeakerLock = NSLock()
+    private var wantsSpeakerValue = false
+    private(set) var wantsSpeaker: Bool {
+        get {
+            wantsSpeakerLock.lock()
+            defer { wantsSpeakerLock.unlock() }
+            return wantsSpeakerValue
+        }
+        set {
+            wantsSpeakerLock.lock()
+            wantsSpeakerValue = newValue
+            wantsSpeakerLock.unlock()
+        }
+    }
 
     private init() {}
+
+    /// A call that asked for the loudspeaker but finds the session on the
+    /// receiver (another audio engine starting its own voice processing, a
+    /// category change) is put back on the loudspeaker. Returns whether it
+    /// moved the route. Never moves a call that did not ask for the speaker.
+    @discardableResult
+    func restoreSpeakerIfNeeded(reason: String) -> Bool {
+        guard wantsSpeaker else { return false }
+        let session = AVAudioSession.sharedInstance()
+        guard session.currentRoute.outputs.contains(where: {
+            $0.portType == .builtInReceiver
+        }) else { return false }
+        do {
+            try session.overrideOutputAudioPort(.speaker)
+            routeLog.notice(
+                "loudspeaker restored after \(reason, privacy: .public)"
+            )
+            return true
+        } catch {
+            routeLog.notice(
+                "loudspeaker restore failed: \(error.localizedDescription, privacy: .public)"
+            )
+            return false
+        }
+    }
 
     deinit {}
 
@@ -19,6 +67,17 @@ final class VoiceAudioRouteBridge: ConduitBridge {
             binaryMessenger: messenger
         )
         methodChannel = channel
+        if routeObserver == nil {
+            routeObserver = NotificationCenter.default.addObserver(
+                forName: AVAudioSession.routeChangeNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] note in
+                let raw = note.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt
+                let reason = raw.map { "route change \($0)" } ?? "route change"
+                self?.restoreSpeakerIfNeeded(reason: reason)
+            }
+        }
         channel.setMethodCallHandler { [weak self] call, result in
             guard let self else {
                 result(nil)
@@ -141,6 +200,7 @@ final class VoiceAudioRouteBridge: ConduitBridge {
         let session = AVAudioSession.sharedInstance()
         do {
             try session.overrideOutputAudioPort(enabled ? .speaker : .none)
+            wantsSpeaker = enabled
             var payload = currentRoutePayload(operation: "setSpeakerphoneEnabled")
             payload["enabled"] = enabled
             return payload

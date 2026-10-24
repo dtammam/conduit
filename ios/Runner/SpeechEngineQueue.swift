@@ -377,7 +377,7 @@ final class SpeechEngineQueue {
 
   /// Counters since the last reset, with the audio session and the engine's
   /// formats as they are now. Off the render thread (called from Dart).
-  func diagnostics(reset: Bool) -> [String: Any] {
+  func diagnostics(reset: Bool, extra: [String: Any] = [:]) -> [String: Any] {
     diagLock.lock()
     var out: [String: Any] = [
       "configChanges": configChanges,
@@ -386,6 +386,7 @@ final class SpeechEngineQueue {
       "voiceProcessingToggles": voiceProcessingToggles,
       "voiceProcessing": voiceProcessing,
     ]
+    out.merge(extra) { _, new in new }
     if reset {
       configChanges = 0
       configChangesDuringToggle = 0
@@ -423,6 +424,11 @@ final class SpeechEngineQueue {
       .map { "\($0.key)=\($0.value)" }.joined(separator: " ")
     Self.log.notice("\(text, privacy: .public)")
     return out
+  }
+
+  /// A line for the unified log from Dart (a capture fallback and why).
+  func logNotice(_ message: String) {
+    Self.log.notice("\(message, privacy: .public)")
   }
 
   func shutDown() {

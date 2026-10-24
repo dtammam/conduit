@@ -112,6 +112,7 @@ final class SpeechEngineBridge: ConduitBridge {
       try speech.finishItem(item)
     case "play":
       try? AVAudioSession.sharedInstance().setActive(true)
+      VoiceAudioRouteBridge.shared.restoreSpeakerIfNeeded(reason: "play")
       try speech.play()
     case "pause":
       try speech.pause()
@@ -134,7 +135,12 @@ final class SpeechEngineBridge: ConduitBridge {
     case "stopCapture":
       try speech.stopCapture()
     case "diagnostics":
-      return speech.diagnostics(reset: args["reset"] as? Bool ?? false)
+      return speech.diagnostics(
+        reset: args["reset"] as? Bool ?? false,
+        extra: args["extra"] as? [String: Any] ?? [:]
+      )
+    case "log":
+      speech.logNotice(args["message"] as? String ?? "")
     case "dispose":
       speech.shutDown()
     default:
