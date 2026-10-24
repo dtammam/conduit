@@ -4,6 +4,7 @@ import 'dart:async';
 
 import 'package:audio_session/audio_session.dart';
 import 'package:checks/checks.dart';
+import 'package:conduit_core/features/chat/voice_mode/voice_mode_ports.dart';
 import 'package:conduit/features/chat/voice_mode/chat_voice_audio_session_coordinator.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -48,6 +49,234 @@ void main() {
           ChatVoiceAudioSessionCoordinator.isExternalAudioAccessory(type),
         ).isFalse();
       }
+    });
+  });
+
+  group('ChatVoiceAudioSessionCoordinator.isPlayableAccessoryOn', () {
+    AudioDevice device(
+      AudioDeviceType type, {
+      bool input = false,
+      bool output = true,
+    }) => AudioDevice(
+      id: type.name,
+      name: type.name,
+      isInput: input,
+      isOutput: output,
+      type: type,
+    );
+
+    test('on iOS an A2DP output is where the call plays', () {
+      check(
+        ChatVoiceAudioSessionCoordinator.isPlayableAccessoryOn(
+          device(AudioDeviceType.bluetoothA2dp),
+          ios: true,
+        ),
+      ).isTrue();
+    });
+
+    test('on iOS AirPlay, USB and wired outputs count too', () {
+      for (final type in const [
+        AudioDeviceType.airPlay,
+        AudioDeviceType.usbAudio,
+        AudioDeviceType.wiredHeadphones,
+        AudioDeviceType.bluetoothSco,
+      ]) {
+        check(
+          because: '$type is not the phone itself',
+          ChatVoiceAudioSessionCoordinator.isPlayableAccessoryOn(
+            device(type),
+            ios: true,
+          ),
+        ).isTrue();
+      }
+    });
+
+    test('on iOS a headset known only by its HFP input counts', () {
+      // Before the call session is active iOS lists AirPods as an available
+      // input and nothing yet as an output.
+      check(
+        ChatVoiceAudioSessionCoordinator.isPlayableAccessoryOn(
+          device(AudioDeviceType.bluetoothSco, input: true, output: false),
+          ios: true,
+        ),
+      ).isTrue();
+    });
+
+    test('on iOS the phone itself is not an accessory', () {
+      for (final type in const [
+        AudioDeviceType.builtInSpeaker,
+        AudioDeviceType.builtInEarpiece,
+        AudioDeviceType.unknown,
+      ]) {
+        check(
+          ChatVoiceAudioSessionCoordinator.isPlayableAccessoryOn(
+            device(type),
+            ios: true,
+          ),
+        ).isFalse();
+      }
+      check(
+        ChatVoiceAudioSessionCoordinator.isPlayableAccessoryOn(
+          device(AudioDeviceType.builtInMic, input: true, output: false),
+          ios: true,
+        ),
+      ).isFalse();
+    });
+
+    test('on iOS no devices at all is no accessory', () {
+      final devices = <AudioDevice>{};
+      check(
+        devices.any(
+          (d) => ChatVoiceAudioSessionCoordinator.isPlayableAccessoryOn(
+            d,
+            ios: true,
+          ),
+        ),
+      ).isFalse();
+    });
+
+    test('Android still leaves A2DP and AirPlay out', () {
+      for (final type in const [
+        AudioDeviceType.bluetoothA2dp,
+        AudioDeviceType.airPlay,
+      ]) {
+        check(
+          ChatVoiceAudioSessionCoordinator.isPlayableAccessoryOn(
+            device(type),
+            ios: false,
+          ),
+        ).isFalse();
+      }
+      check(
+        ChatVoiceAudioSessionCoordinator.isPlayableAccessoryOn(
+          device(AudioDeviceType.bluetoothSco),
+          ios: false,
+        ),
+      ).isTrue();
+      // Android wants an output of its own.
+      check(
+        ChatVoiceAudioSessionCoordinator.isPlayableAccessoryOn(
+          device(AudioDeviceType.bluetoothSco, input: true, output: false),
+          ios: false,
+        ),
+      ).isFalse();
+    });
+  });
+
+  group('ChatVoiceAudioSessionCoordinator iOS routing', () {
+    late ChatVoiceAudioSessionCoordinator coordinator;
+    late List<bool> routeChanges;
+    late List<VoiceAudioSessionEvent> events;
+
+    setUp(() {
+      TestWidgetsFlutterBinding.ensureInitialized();
+      coordinator = ChatVoiceAudioSessionCoordinator()..debugTreatAsIos = true;
+      routeChanges = <bool>[];
+      events = <VoiceAudioSessionEvent>[];
+      coordinator.speakerphoneRouteChanges.listen(routeChanges.add);
+      coordinator.sessionEvents.listen(events.add);
+      addTearDown(coordinator.dispose);
+    });
+
+    Future<void> report(Set<AudioDevice> devices) async {
+      await coordinator.handleAudioDevicesChangedForTesting(devices);
+      await pumpEventQueue();
+    }
+
+    final speaker = _outputDevice(AudioDeviceType.builtInSpeaker);
+    final airPodsOutput = _outputDevice(AudioDeviceType.bluetoothA2dp);
+    final airPodsMic = AudioDevice(
+      id: 'airpods-hfp',
+      name: 'AirPods',
+      isInput: true,
+      isOutput: false,
+      type: AudioDeviceType.bluetoothSco,
+    );
+
+    test('AirPods seen as A2DP take the call off the loudspeaker', () async {
+      await report({speaker});
+      check(routeChanges).deepEquals(<bool>[true]);
+
+      await report({speaker, airPodsOutput});
+      check(routeChanges).deepEquals(<bool>[true, false]);
+
+      await report({speaker});
+      check(routeChanges).deepEquals(<bool>[true, false, true]);
+    });
+
+    test('AirPods seen only as an HFP input take the call too', () async {
+      await report({speaker});
+      await report({speaker, airPodsMic});
+
+      check(routeChanges).deepEquals(<bool>[true, false]);
+    });
+
+    test('nothing attached keeps the loudspeaker default', () async {
+      await report({speaker});
+      await report({speaker});
+
+      check(routeChanges).deepEquals(<bool>[true]);
+    });
+
+    test('with the app owning the session a lost headset is not moved to the '
+        'loudspeaker', () async {
+      await coordinator.setAppOwnsSession(true);
+      await report({speaker});
+      await report({speaker, airPodsOutput});
+      check(routeChanges).deepEquals(<bool>[true, false]);
+
+      await report({speaker});
+
+      check(
+        because: 'the call is paused instead of blasting the reply',
+        routeChanges,
+      ).deepEquals(<bool>[true, false]);
+      // Connecting again still moves the call back to the headset.
+      await report({speaker, airPodsOutput});
+      check(routeChanges).deepEquals(<bool>[true, false, false]);
+    });
+
+    test('maps system interruptions and a lost route to call events', () async {
+      await coordinator.setAppOwnsSession(true);
+
+      coordinator.handleInterruptionForTesting(
+        AudioInterruptionEvent(true, AudioInterruptionType.unknown),
+      );
+      coordinator.handleInterruptionForTesting(
+        AudioInterruptionEvent(true, AudioInterruptionType.duck),
+      );
+      coordinator.handleInterruptionForTesting(
+        AudioInterruptionEvent(false, AudioInterruptionType.pause),
+      );
+      coordinator.handleInterruptionForTesting(
+        AudioInterruptionEvent(false, AudioInterruptionType.unknown),
+      );
+      coordinator.handleBecomingNoisyForTesting();
+      await pumpEventQueue();
+
+      check(events).has((e) => e.length, 'length').equals(4);
+      check(events[0]).isA<VoiceAudioInterruptionBegan>();
+      check(events[1])
+          .isA<VoiceAudioInterruptionEnded>()
+          .has((e) => e.shouldResume, 'shouldResume')
+          .isTrue();
+      check(events[2])
+          .isA<VoiceAudioInterruptionEnded>()
+          .has((e) => e.shouldResume, 'shouldResume')
+          .isFalse();
+      check(events[3]).isA<VoiceAudioRouteLost>();
+    });
+
+    test('reports nothing while the system call UI owns the session', () async {
+      await coordinator.setAppOwnsSession(false);
+
+      coordinator.handleInterruptionForTesting(
+        AudioInterruptionEvent(true, AudioInterruptionType.unknown),
+      );
+      coordinator.handleBecomingNoisyForTesting();
+      await pumpEventQueue();
+
+      check(events).isEmpty();
     });
   });
 
@@ -502,6 +731,36 @@ void main() {
           .equals(AVAudioSessionCategory.playback);
       check(idle?.androidAudioAttributes?.usage)
           .equals(AndroidAudioUsage.media);
+    });
+
+    test('keeps one voice-chat mode through a call the app owns', () async {
+      final coordinator = ChatVoiceAudioSessionCoordinator();
+      addTearDown(coordinator.dispose);
+
+      await coordinator.setAppOwnsSession(true);
+      await coordinator.configureForListening();
+      check((await sessionConfiguration())?.avAudioSessionMode)
+          .equals(AVAudioSessionMode.voiceChat);
+      await coordinator.configureForSpeaking();
+      check((await sessionConfiguration())?.avAudioSessionMode)
+          .equals(AVAudioSessionMode.voiceChat);
+      check((await sessionConfiguration())?.avAudioSessionCategoryOptions)
+          .isNotNull()
+          .has((o) => o.contains(AVAudioSessionCategoryOptions.allowBluetooth),
+              'allowBluetooth')
+          .isTrue();
+    });
+
+    test('still switches to spoken audio for a call under CallKit', () async {
+      final coordinator = ChatVoiceAudioSessionCoordinator();
+      addTearDown(coordinator.dispose);
+
+      await coordinator.setAppOwnsSession(false);
+      await coordinator.configureForListening();
+      await coordinator.configureForSpeaking();
+
+      check((await sessionConfiguration())?.avAudioSessionMode)
+          .equals(AVAudioSessionMode.spokenAudio);
     });
 
     test('leaves alone a call configured while hanging up', () async {

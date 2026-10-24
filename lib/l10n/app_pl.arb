@@ -8441,5 +8441,13 @@
         "type": "int"
       }
     }
+  },
+  "voiceShowAsPhoneCall": "Pokaż tryb głosowy jako rozmowę telefoniczną",
+  "@voiceShowAsPhoneCall": {
+    "description": "Setting that reports voice mode to iOS as a phone call (CallKit)."
+  },
+  "voiceShowAsPhoneCallDescription": "Zgłaszaj tryb głosowy w iOS jako rozmowę telefoniczną, z paskiem rozmowy i przyciskami na ekranie blokady. Po wyłączeniu tryb głosowy działa w aplikacji, a AirPods i głośnik działają jak w innych aplikacjach głosowych.",
+  "@voiceShowAsPhoneCallDescription": {
+    "description": "Explains the setting that shows voice mode as a phone call."
   }
 }

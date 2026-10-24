@@ -4450,5 +4450,7 @@
   "assistantViewActions": "Показать действия",
   "assistantToolFailure": "Не удалось завершить {tool}: {reason}",
   "assistantToolFailureNoReason": "Не удалось завершить {tool}",
-  "assistantToolFailureMany": "{count, plural, =1{Не удалось завершить 1 действие} few{Не удалось завершить {count} действия} many{Не удалось завершить {count} действий} other{Не удалось завершить {count} действия}}"
+  "assistantToolFailureMany": "{count, plural, =1{Не удалось завершить 1 действие} few{Не удалось завершить {count} действия} many{Не удалось завершить {count} действий} other{Не удалось завершить {count} действия}}",
+  "voiceShowAsPhoneCall": "Показывать голосовой режим как телефонный звонок",
+  "voiceShowAsPhoneCallDescription": "Сообщает iOS о голосовом режиме как о телефонном звонке, с баннером вызова и кнопками на экране блокировки. Если выключено, голосовой режим работает внутри приложения, а AirPods и динамик ведут себя как в других голосовых приложениях."
 }

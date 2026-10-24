@@ -4412,5 +4412,7 @@
   "assistantViewActions": "Aktionen ansehen",
   "assistantToolFailure": "{tool} konnte nicht abgeschlossen werden: {reason}",
   "assistantToolFailureNoReason": "{tool} konnte nicht abgeschlossen werden",
-  "assistantToolFailureMany": "{count, plural, =1{1 Aktion konnte nicht abgeschlossen werden} other{{count} Aktionen konnten nicht abgeschlossen werden}}"
+  "assistantToolFailureMany": "{count, plural, =1{1 Aktion konnte nicht abgeschlossen werden} other{{count} Aktionen konnten nicht abgeschlossen werden}}",
+  "voiceShowAsPhoneCall": "Sprachmodus als Telefonanruf anzeigen",
+  "voiceShowAsPhoneCallDescription": "Meldet den Sprachmodus bei iOS als Telefonanruf, mit Anrufbanner und Bedienelementen auf dem Sperrbildschirm. Aus, läuft der Sprachmodus in der App, und AirPods und Lautsprecher funktionieren wie in anderen Sprach-Apps."
 }

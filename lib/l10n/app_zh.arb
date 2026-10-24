@@ -4412,5 +4412,7 @@
   "assistantViewActions": "查看操作",
   "assistantToolFailure": "未能完成{tool}：{reason}",
   "assistantToolFailureNoReason": "未能完成{tool}",
-  "assistantToolFailureMany": "{count, plural, other{未能完成 {count} 项操作}}"
+  "assistantToolFailureMany": "{count, plural, other{未能完成 {count} 项操作}}",
+  "voiceShowAsPhoneCall": "将语音模式显示为电话",
+  "voiceShowAsPhoneCallDescription": "向 iOS 报告语音模式为一通电话，并显示通话横幅和锁屏控件。关闭后，语音模式在应用内运行，AirPods 和扬声器的表现与其他语音应用一致。"
 }

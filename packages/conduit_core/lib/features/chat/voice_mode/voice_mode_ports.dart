@@ -178,6 +178,31 @@ abstract interface class VoiceCallKitPort {
   Future<void> endCall(String id);
 }
 
+/// Something the system did to the call's audio that the app has to answer
+/// itself when no system call UI owns the call.
+sealed class VoiceAudioSessionEvent {
+  const VoiceAudioSessionEvent();
+}
+
+/// Another audio client (a phone call, Siri, an alarm) took the session.
+final class VoiceAudioInterruptionBegan extends VoiceAudioSessionEvent {
+  const VoiceAudioInterruptionBegan();
+}
+
+/// The interruption is over. [shouldResume] is the system's own word on
+/// whether the call may pick up where it was.
+final class VoiceAudioInterruptionEnded extends VoiceAudioSessionEvent {
+  const VoiceAudioInterruptionEnded({required this.shouldResume});
+
+  final bool shouldResume;
+}
+
+/// The device the call was playing through went away (headphones unplugged,
+/// AirPods taken out). Audio must not move to the loudspeaker on its own.
+final class VoiceAudioRouteLost extends VoiceAudioSessionEvent {
+  const VoiceAudioRouteLost();
+}
+
 /// The audio session a voice call runs in: its category and mode per phase,
 /// the loudspeaker/earpiece/headset route, and the capture that keeps the
 /// microphone (and so the app) alive while the assistant answers.
@@ -191,6 +216,16 @@ abstract interface class VoiceAudioSessionPort {
 
   /// Failures of the response-wait capture after it started.
   Stream<Object> get responseCaptureFailures;
+
+  /// Interruptions and lost routes, reported only while [setAppOwnsSession]
+  /// is on.
+  Stream<VoiceAudioSessionEvent> get sessionEvents;
+
+  /// Makes the app, not a system call UI, the owner of this call's audio
+  /// session: one call mode for the whole call instead of one per phase, and
+  /// [sessionEvents] reported. Turned on before the first `configureFor*` pass
+  /// of a call and off again when the call's route is handed back.
+  Future<void> setAppOwnsSession(bool owns);
 
   /// Picks the loudspeaker for a call with no accessory attached; the next
   /// `configureFor*` pass applies it.
@@ -379,6 +414,11 @@ class NoVoiceAudioSession implements VoiceAudioSessionPort {
   Stream<bool> get speakerphoneRouteChanges => const Stream<bool>.empty();
   @override
   Stream<Object> get responseCaptureFailures => const Stream<Object>.empty();
+  @override
+  Stream<VoiceAudioSessionEvent> get sessionEvents =>
+      const Stream<VoiceAudioSessionEvent>.empty();
+  @override
+  Future<void> setAppOwnsSession(bool owns) async {}
   @override
   Future<void> applyDefaultSpeakerphoneRoute() async {}
   @override

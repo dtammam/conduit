@@ -1589,6 +1589,197 @@ void main() {
     },
   );
 
+
+  group('voice mode without the phone call', () {
+    late _FakeVoiceInputService input;
+    late _FakeTextToSpeechService tts;
+    late _AvailableCallKitService callKit;
+    late _FakeChatVoiceAudioSessionCoordinator audioSession;
+
+    ProviderContainer build({
+      required bool callKitEnabled,
+      VoiceModePlatformPort platform = const _IosVoicePlatform(),
+    }) {
+      input = _FakeVoiceInputService();
+      tts = _FakeTextToSpeechService()..holdCompletion = true;
+      callKit = _AvailableCallKitService();
+      audioSession = _FakeChatVoiceAudioSessionCoordinator();
+      final lifecycle = FakeAppLifecycle();
+      addTearDown(lifecycle.dispose);
+      final container = ProviderContainer(
+        overrides: [
+          appLifecycleProvider.overrideWithValue(lifecycle),
+          ...openWebUiStorageOpenOverrides(),
+          authNavigationStateProvider.overrideWithValue(
+            AuthNavigationState.authenticated,
+          ),
+          selectedModelProvider.overrideWithValue(_model),
+          appSettingsProvider.overrideWithValue(
+            AppSettings(voiceCallKitEnabled: callKitEnabled),
+          ),
+          reviewerModeProvider.overrideWithValue(true),
+          voiceModeInputProvider.overrideWithValue(input),
+          voiceModeSpeechProvider.overrideWithValue(tts),
+          voiceCallKitProvider.overrideWithValue(callKit),
+          voiceModePlatformProvider.overrideWithValue(platform),
+          chatVoiceModeBackgroundCoordinatorProvider.overrideWithValue(
+            _FakeChatVoiceBackgroundCoordinator(),
+          ),
+          voiceAudioSessionProvider.overrideWithValue(audioSession),
+        ],
+      );
+      addTearDown(container.dispose);
+      addTearDown(callKit.dispose);
+      addTearDown(audioSession.dispose);
+      return container;
+    }
+
+    test('with the setting off iOS makes no CallKit call at all', () async {
+      final container = build(callKitEnabled: false);
+      final controller = container.read(
+        chatVoiceModeControllerProvider.notifier,
+      );
+
+      await controller.start(startNewConversation: false);
+
+      check(callKit.startCalls).equals(0);
+      check(callKit.connectedCallIds).isEmpty();
+      check(audioSession.registeredCallIds).isEmpty();
+      check(audioSession.appOwnsSessionCalls).deepEquals(<bool>[true]);
+      final snapshot = container.read(chatVoiceModeControllerProvider);
+      check(snapshot.phase).equals(ChatVoiceModePhase.listening);
+      check(snapshot.activeCallId).isNull();
+
+      await controller.stop();
+      check(callKit.endedCallIds).isEmpty();
+      check(audioSession.deactivateCalls).equals(1);
+    });
+
+    test('with the setting on iOS keeps the CallKit call', () async {
+      final container = build(callKitEnabled: true);
+      final controller = container.read(
+        chatVoiceModeControllerProvider.notifier,
+      );
+
+      await controller.start(startNewConversation: false);
+
+      check(callKit.startCalls).equals(1);
+      check(audioSession.registeredCallIds).deepEquals(<String>['call-1']);
+      check(audioSession.appOwnsSessionCalls).deepEquals(<bool>[false]);
+
+      await controller.stop();
+      check(callKit.endedCallIds).deepEquals(<String>['call-1']);
+    });
+
+    test('the setting does not apply off iOS', () async {
+      final container = build(
+        callKitEnabled: false,
+        platform: const HostVoiceModePlatform(),
+      );
+      final controller = container.read(
+        chatVoiceModeControllerProvider.notifier,
+      );
+
+      await controller.start(startNewConversation: false);
+
+      check(callKit.startCalls).equals(1);
+      check(audioSession.appOwnsSessionCalls).deepEquals(<bool>[false]);
+      await controller.stop();
+    });
+
+    test('an interruption pauses the call and carries on when allowed', () async {
+      final container = build(callKitEnabled: false);
+      final controller = container.read(
+        chatVoiceModeControllerProvider.notifier,
+      );
+      await controller.start(startNewConversation: false);
+      ChatVoiceModePhase phase() =>
+          container.read(chatVoiceModeControllerProvider).phase;
+
+      audioSession.sessionEventController.add(
+        const VoiceAudioInterruptionBegan(),
+      );
+      await _until(() => phase() == ChatVoiceModePhase.paused);
+
+      audioSession.sessionEventController.add(
+        const VoiceAudioInterruptionEnded(shouldResume: true),
+      );
+      await _until(() => phase() == ChatVoiceModePhase.listening);
+      // The session is taken back before listening again.
+      check(audioSession.listeningCalls).isGreaterThan(1);
+
+      await controller.stop();
+    });
+
+    test('an interruption the system will not undo ends the call', () async {
+      final container = build(callKitEnabled: false);
+      final controller = container.read(
+        chatVoiceModeControllerProvider.notifier,
+      );
+      await controller.start(startNewConversation: false);
+
+      audioSession.sessionEventController
+        ..add(const VoiceAudioInterruptionBegan())
+        ..add(const VoiceAudioInterruptionEnded(shouldResume: false));
+
+      await _until(
+        () =>
+            container.read(chatVoiceModeControllerProvider).phase ==
+            ChatVoiceModePhase.ended,
+      );
+      check(audioSession.deactivateCalls).equals(1);
+    });
+
+    test('a lost route pauses and waits for the user', () async {
+      final container = build(callKitEnabled: false);
+      final controller = container.read(
+        chatVoiceModeControllerProvider.notifier,
+      );
+      await controller.start(startNewConversation: false);
+      ChatVoiceModePhase phase() =>
+          container.read(chatVoiceModeControllerProvider).phase;
+
+      audioSession.sessionEventController.add(const VoiceAudioRouteLost());
+      await _until(() => phase() == ChatVoiceModePhase.paused);
+
+      // An interruption that ends well does not undo a pause for a lost route.
+      audioSession.sessionEventController
+        ..add(const VoiceAudioInterruptionBegan())
+        ..add(const VoiceAudioInterruptionEnded(shouldResume: true));
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      check(phase()).equals(ChatVoiceModePhase.paused);
+
+      final listeningBefore = audioSession.listeningCalls;
+      await controller.resume();
+      check(phase()).equals(ChatVoiceModePhase.listening);
+      check(audioSession.listeningCalls).isGreaterThan(listeningBefore);
+
+      await controller.stop();
+    });
+
+    test('a lost route changes nothing for a call on the loudspeaker', () async {
+      final container = build(callKitEnabled: false);
+      final controller = container.read(
+        chatVoiceModeControllerProvider.notifier,
+      );
+      await controller.start(startNewConversation: false);
+      audioSession.routeChanges.add(true);
+      await _until(
+        () => container
+            .read(chatVoiceModeControllerProvider)
+            .isSpeakerphoneEnabled,
+      );
+
+      audioSession.sessionEventController.add(const VoiceAudioRouteLost());
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+
+      check(
+        container.read(chatVoiceModeControllerProvider).phase,
+      ).equals(ChatVoiceModePhase.listening);
+      await controller.stop();
+    });
+  });
+
   test(
     'muting keeps response-wait capture and surfaces runtime failure',
     () async {
@@ -3719,6 +3910,7 @@ class _AvailableCallKitService implements VoiceCallKitPort {
   final _events = StreamController<VoiceCallKitEvent>.broadcast();
   final connectedCallIds = <String>[];
   final endedCallIds = <String>[];
+  int startCalls = 0;
   bool throwOnEnd = false;
 
   @override
@@ -3740,6 +3932,7 @@ class _AvailableCallKitService implements VoiceCallKitPort {
     required String calleeName,
     required String handle,
   }) async {
+    startCalls += 1;
     return 'call-1';
   }
 
@@ -3757,6 +3950,17 @@ class _AvailableCallKitService implements VoiceCallKitPort {
   }
 
   Future<void> dispose() => _events.close();
+}
+
+class _IosVoicePlatform implements VoiceModePlatformPort {
+  const _IosVoicePlatform();
+
+  @override
+  bool get isIOS => true;
+  @override
+  bool get isAndroid => false;
+  @override
+  Future<void> requestCallRoutingPermission() async {}
 }
 
 class _FakeChatVoiceBackgroundCoordinator implements VoiceBackgroundPort {
@@ -3813,6 +4017,18 @@ class _FakeChatVoiceAudioSessionCoordinator implements VoiceAudioSessionPort {
   bool speakerphoneRouteApplies = true;
   final routeChanges = StreamController<bool>.broadcast();
   final responseCaptureFailureEvents = StreamController<Object>.broadcast();
+  final sessionEventController =
+      StreamController<VoiceAudioSessionEvent>.broadcast();
+  final appOwnsSessionCalls = <bool>[];
+
+  @override
+  Stream<VoiceAudioSessionEvent> get sessionEvents =>
+      sessionEventController.stream;
+
+  @override
+  Future<void> setAppOwnsSession(bool owns) async {
+    appOwnsSessionCalls.add(owns);
+  }
 
   @override
   Stream<bool> get speakerphoneRouteChanges => routeChanges.stream;
@@ -3890,6 +4106,7 @@ class _FakeChatVoiceAudioSessionCoordinator implements VoiceAudioSessionPort {
   Future<void> dispose() async {
     await routeChanges.close();
     await responseCaptureFailureEvents.close();
+    await sessionEventController.close();
   }
 }
 

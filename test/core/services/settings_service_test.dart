@@ -132,6 +132,13 @@ void main() {
         check(settings.quickReplyReactionsEnabled).equals(true);
       });
 
+      test('voiceCallKitEnabled keeps the phone call by default', () {
+        check(settings.voiceCallKitEnabled).equals(true);
+        check(
+          settings.copyWith(voiceCallKitEnabled: false).voiceCallKitEnabled,
+        ).equals(false);
+      });
+
       test('toolActivityInAvatar defaults to true and needs the avatar', () {
         check(settings.toolActivityInAvatar).equals(true);
         check(settings.toolActivityInAvatarActive).equals(false);

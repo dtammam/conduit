@@ -6015,5 +6015,7 @@
   "assistantViewActions": "アクションを表示",
   "assistantToolFailure": "{tool} を完了できませんでした: {reason}",
   "assistantToolFailureNoReason": "{tool} を完了できませんでした",
-  "assistantToolFailureMany": "{count, plural, other{{count} 件の操作を完了できませんでした}}"
+  "assistantToolFailureMany": "{count, plural, other{{count} 件の操作を完了できませんでした}}",
+  "voiceShowAsPhoneCall": "音声モードを通話として表示",
+  "voiceShowAsPhoneCallDescription": "音声モードを iOS に通話として通知し、通話バナーとロック画面の操作を表示します。オフにすると音声モードはアプリ内で動作し、AirPods とスピーカーは他の音声アプリと同じように動作します。"
 }

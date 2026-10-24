@@ -1000,6 +1000,12 @@ class _ConduitAppState extends ConsumerState<ConduitApp> {
                 .read(appSettingsProvider.notifier)
                 .setVoiceBargeInEnabled(value);
           }
+        case 'voice-callkit':
+          if (value is bool) {
+            await ref
+                .read(appSettingsProvider.notifier)
+                .setVoiceCallKitEnabled(value);
+          }
         case 'stt-silence-duration':
           final ms = switch (value) {
             final int i => i,

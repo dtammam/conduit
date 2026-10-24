@@ -6321,5 +6321,7 @@
   "assistantViewActions": "Zobrazit akce",
   "assistantToolFailure": "Nepodařilo se dokončit {tool}: {reason}",
   "assistantToolFailureNoReason": "Nepodařilo se dokončit {tool}",
-  "assistantToolFailureMany": "{count, plural, =1{Nepodařilo se dokončit 1 akci} few{Nepodařilo se dokončit {count} akce} many{Nepodařilo se dokončit {count} akce} other{Nepodařilo se dokončit {count} akcí}}"
+  "assistantToolFailureMany": "{count, plural, =1{Nepodařilo se dokončit 1 akci} few{Nepodařilo se dokončit {count} akce} many{Nepodařilo se dokončit {count} akce} other{Nepodařilo se dokončit {count} akcí}}",
+  "voiceShowAsPhoneCall": "Zobrazit hlasový režim jako telefonní hovor",
+  "voiceShowAsPhoneCallDescription": "Nahlásí hlasový režim systému iOS jako telefonní hovor, s bannerem hovoru a ovládáním na zamčené obrazovce. Když je vypnuto, hlasový režim běží uvnitř aplikace a AirPods i reproduktor fungují jako v jiných hlasových aplikacích."
 }

@@ -946,6 +946,14 @@ NativeAudioSheetParts buildNativeAudioSheetParts(
       kind: NativeSheetItemKind.toggle,
       value: appSettings.voiceBargeInEnabled,
     ),
+    NativeSheetItemConfig(
+      id: 'voice-callkit',
+      title: l10n.voiceShowAsPhoneCall,
+      subtitle: l10n.voiceShowAsPhoneCallDescription,
+      sfSymbol: 'phone',
+      kind: NativeSheetItemKind.toggle,
+      value: appSettings.voiceCallKitEnabled,
+    ),
   ];
 
   final ttsItems = <NativeSheetItemConfig>[

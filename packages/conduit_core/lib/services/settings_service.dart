@@ -319,6 +319,7 @@ class SettingsService {
       _voiceHoldToTalkKey: settings.voiceHoldToTalk,
       _voiceAutoSendKey: settings.voiceAutoSendFinal,
       PreferenceKeys.voiceBargeInEnabled: settings.voiceBargeInEnabled,
+      PreferenceKeys.voiceCallKitEnabled: settings.voiceCallKitEnabled,
       PreferenceKeys.voiceCallMode: settings.voiceCallMode.name,
       _socketTransportModeKey: settings.socketTransportMode,
       _quickPillsKey: settings.quickPills.toList(),
@@ -802,6 +803,8 @@ class SettingsService {
       voiceBargeInEnabled:
           get<bool>(PreferenceKeys.voiceBargeInEnabled) ??
           false,
+      voiceCallKitEnabled:
+          get<bool>(PreferenceKeys.voiceCallKitEnabled) ?? true,
       voiceCallMode: VoiceCallMode.values.firstWhere(
         (mode) => mode.name == get<String>(PreferenceKeys.voiceCallMode),
         orElse: () => VoiceCallMode.auto,
@@ -971,6 +974,12 @@ class AppSettings {
   final bool voiceHoldToTalk;
   final bool voiceAutoSendFinal;
   final bool voiceBargeInEnabled;
+
+  /// Whether a voice call on iOS is reported to the system as a phone call
+  /// (CallKit: the call pill, lock-screen call UI and Phone Recents). Off,
+  /// the app owns the audio session for the whole call and handles
+  /// interruptions itself. No effect elsewhere.
+  final bool voiceCallKitEnabled;
   final VoiceCallMode voiceCallMode;
   final String socketTransportMode; // 'polling' or 'ws'
   final List<String> quickPills; // e.g., ['web','image']
@@ -1039,6 +1048,7 @@ class AppSettings {
     this.voiceHoldToTalk = false,
     this.voiceAutoSendFinal = false,
     this.voiceBargeInEnabled = false,
+    this.voiceCallKitEnabled = true,
     this.voiceCallMode = VoiceCallMode.auto,
     this.socketTransportMode = 'ws',
     this.quickPills = const [],
@@ -1099,6 +1109,7 @@ class AppSettings {
     bool? voiceHoldToTalk,
     bool? voiceAutoSendFinal,
     bool? voiceBargeInEnabled,
+    bool? voiceCallKitEnabled,
     VoiceCallMode? voiceCallMode,
     String? socketTransportMode,
     List<String>? quickPills,
@@ -1170,6 +1181,7 @@ class AppSettings {
       voiceHoldToTalk: voiceHoldToTalk ?? this.voiceHoldToTalk,
       voiceAutoSendFinal: voiceAutoSendFinal ?? this.voiceAutoSendFinal,
       voiceBargeInEnabled: voiceBargeInEnabled ?? this.voiceBargeInEnabled,
+      voiceCallKitEnabled: voiceCallKitEnabled ?? this.voiceCallKitEnabled,
       voiceCallMode: voiceCallMode ?? this.voiceCallMode,
       socketTransportMode: socketTransportMode ?? this.socketTransportMode,
       quickPills: quickPills ?? this.quickPills,
@@ -1257,6 +1269,7 @@ class AppSettings {
         other.voiceHoldToTalk == voiceHoldToTalk &&
         other.voiceAutoSendFinal == voiceAutoSendFinal &&
         other.voiceBargeInEnabled == voiceBargeInEnabled &&
+        other.voiceCallKitEnabled == voiceCallKitEnabled &&
         other.voiceCallMode == voiceCallMode &&
         other.chatWebSearchEnabled == chatWebSearchEnabled &&
         other.chatImageGenerationEnabled == chatImageGenerationEnabled &&
@@ -1320,6 +1333,7 @@ class AppSettings {
       voiceHoldToTalk,
       voiceAutoSendFinal,
       voiceBargeInEnabled,
+      voiceCallKitEnabled,
       voiceCallMode,
       chatWebSearchEnabled,
       chatImageGenerationEnabled,
@@ -1795,6 +1809,11 @@ class AppSettingsNotifier extends _$AppSettingsNotifier {
 
   Future<void> setVoiceBargeInEnabled(bool value) async {
     state = state.copyWith(voiceBargeInEnabled: value);
+    await SettingsService.saveSettings(state);
+  }
+
+  Future<void> setVoiceCallKitEnabled(bool value) async {
+    state = state.copyWith(voiceCallKitEnabled: value);
     await SettingsService.saveSettings(state);
   }
 

@@ -4412,5 +4412,7 @@
   "assistantViewActions": "Vedi azioni",
   "assistantToolFailure": "Impossibile completare {tool}: {reason}",
   "assistantToolFailureNoReason": "Impossibile completare {tool}",
-  "assistantToolFailureMany": "{count, plural, =1{Impossibile completare 1 azione} other{Impossibile completare {count} azioni}}"
+  "assistantToolFailureMany": "{count, plural, =1{Impossibile completare 1 azione} other{Impossibile completare {count} azioni}}",
+  "voiceShowAsPhoneCall": "Mostra la modalità vocale come una telefonata",
+  "voiceShowAsPhoneCallDescription": "Segnala la modalità vocale a iOS come una telefonata, con il banner della chiamata e i comandi nella schermata di blocco. Disattivata, la modalità vocale funziona dentro l'app e gli AirPods e l'altoparlante si comportano come nelle altre app vocali."
 }

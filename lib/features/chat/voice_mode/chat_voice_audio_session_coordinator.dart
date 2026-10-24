@@ -79,10 +79,12 @@ class ChatVoiceAudioSessionCoordinator implements VoiceAudioSessionPort {
   /// Device types that give a call somewhere to play other than the phone
   /// itself. Built-in earpiece, speaker and microphone are deliberately absent.
   ///
-  /// So are A2DP and AirPlay. A voice call runs the session in communication
-  /// mode, which cannot route to either, so a device offering only those is not
-  /// somewhere the call can play. Headsets that also speak HFP still show up
-  /// here as [AudioDeviceType.bluetoothSco].
+  /// So are A2DP and AirPlay, on Android. A voice call runs the session in
+  /// communication mode, which cannot route to either there, so a device
+  /// offering only those is not somewhere the call can play. Headsets that also
+  /// speak HFP still show up here as [AudioDeviceType.bluetoothSco]. iOS
+  /// decides by [isPlayableAccessoryOn] instead, where AirPods and AirPlay
+  /// outputs are exactly where the call plays.
   static const Set<AudioDeviceType> _externalAudioAccessoryTypes = {
     AudioDeviceType.wiredHeadset,
     AudioDeviceType.wiredHeadphones,
@@ -97,6 +99,19 @@ class ChatVoiceAudioSessionCoordinator implements VoiceAudioSessionPort {
     AudioDeviceType.lineDigital,
     AudioDeviceType.hdmi,
     AudioDeviceType.hdmiArc,
+  };
+
+  /// Output types that are the phone itself. On iOS anything else a call can
+  /// be playing through counts as an accessory: Bluetooth (A2DP or HFP),
+  /// AirPlay, wired and USB outputs, a car or an HDMI display.
+  static const Set<AudioDeviceType> _builtInOutputTypes = {
+    AudioDeviceType.builtInEarpiece,
+    AudioDeviceType.builtInSpeaker,
+    AudioDeviceType.builtInSpeakerSafe,
+    AudioDeviceType.builtInMic,
+    AudioDeviceType.telephony,
+    AudioDeviceType.remoteSubmix,
+    AudioDeviceType.unknown,
   };
 
   AudioSession? _session;
@@ -135,6 +150,14 @@ class ChatVoiceAudioSessionCoordinator implements VoiceAudioSessionPort {
   /// is still putting the platform route back.
   int _teardownsRunning = 0;
 
+  /// Whether the app, not a system call UI, owns this call's audio session
+  /// (see [setAppOwnsSession]).
+  bool _appOwnsSession = false;
+  StreamSubscription<AudioInterruptionEvent>? _interruptionSub;
+  StreamSubscription<void>? _becomingNoisySub;
+  final StreamController<VoiceAudioSessionEvent> _sessionEventController =
+      StreamController<VoiceAudioSessionEvent>.broadcast();
+
   /// Whether the hardware has lost its vote over the route.
   ///
   /// A press counts from the moment it is queued, so an automatic reroute
@@ -156,6 +179,10 @@ class ChatVoiceAudioSessionCoordinator implements VoiceAudioSessionPort {
   bool debugTreatAsAndroid = false;
 
   bool get _isAndroid => Platform.isAndroid || debugTreatAsAndroid;
+
+  /// Applies the iOS accessory rules on a test host.
+  @visibleForTesting
+  bool debugTreatAsIos = false;
 
   /// The phases teardown has run for, in order. A test host has no audio route
   /// to watch come back, so this is the only trace teardown leaves behind.
@@ -185,6 +212,55 @@ class ChatVoiceAudioSessionCoordinator implements VoiceAudioSessionPort {
   @override
   Stream<Object> get responseCaptureFailures =>
       _responseCaptureFailureController.stream;
+  @override
+  Stream<VoiceAudioSessionEvent> get sessionEvents =>
+      _sessionEventController.stream;
+
+  @override
+  Future<void> setAppOwnsSession(bool owns) async {
+    _appOwnsSession = owns;
+    await _interruptionSub?.cancel();
+    _interruptionSub = null;
+    await _becomingNoisySub?.cancel();
+    _becomingNoisySub = null;
+    if (!owns || _disposed) return;
+    final session = await _ensureSession();
+    // Turned off, or torn down, while the session was being fetched.
+    if (!_appOwnsSession || _disposed || _interruptionSub != null) return;
+    _interruptionSub = session.interruptionEventStream.listen(
+      handleInterruptionForTesting,
+    );
+    _becomingNoisySub = session.becomingNoisyEventStream.listen(
+      (_) => handleBecomingNoisyForTesting(),
+    );
+  }
+
+  /// Turns the platform's interruption into the call's own event. Ducking
+  /// asks to keep playing quieter, which a call has no use for.
+  @visibleForTesting
+  void handleInterruptionForTesting(AudioInterruptionEvent event) {
+    if (!_appOwnsSession || _routeChangesStopped) return;
+    if (event.type == AudioInterruptionType.duck) return;
+    _emitSessionEvent(
+      event.begin
+          ? const VoiceAudioInterruptionBegan()
+          : VoiceAudioInterruptionEnded(
+              shouldResume: event.type == AudioInterruptionType.pause,
+            ),
+    );
+  }
+
+  /// The device the call was playing through went away.
+  @visibleForTesting
+  void handleBecomingNoisyForTesting() {
+    if (!_appOwnsSession || _routeChangesStopped) return;
+    _emitSessionEvent(const VoiceAudioRouteLost());
+  }
+
+  void _emitSessionEvent(VoiceAudioSessionEvent event) {
+    if (_sessionEventController.isClosed) return;
+    _sessionEventController.add(event);
+  }
 
   Future<Object?> _handleIosVoiceAudioRouteCall(MethodCall call) async {
     if (call.method != 'responseWaitCaptureFailed') {
@@ -221,7 +297,12 @@ class ChatVoiceAudioSessionCoordinator implements VoiceAudioSessionPort {
 
   @override
   Future<void> configureForSpeaking() => _configureCallPhase(
-    AVAudioSessionMode.spokenAudio,
+    // One mode for the whole call when the app owns the session: switching
+    // modes between turns re-routes the session and can drop the headset's
+    // microphone and echo cancellation.
+    _appOwnsSession
+        ? AVAudioSessionMode.voiceChat
+        : AVAudioSessionMode.spokenAudio,
     phase: 'speaking',
     settleIosRoute: true,
   );
@@ -425,6 +506,7 @@ class ChatVoiceAudioSessionCoordinator implements VoiceAudioSessionPort {
     await _tearDownRoute(phase: 'dispose');
     await _speakerphoneRouteController.close();
     await _responseCaptureFailureController.close();
+    await _sessionEventController.close();
   }
 
   /// Hands the route back to whatever had it before the call.
@@ -445,10 +527,16 @@ class ChatVoiceAudioSessionCoordinator implements VoiceAudioSessionPort {
     _devicesSub = null;
     final iosRouteChangeSub = _iosRouteChangeSub;
     _iosRouteChangeSub = null;
+    final interruptionSub = _interruptionSub;
+    _interruptionSub = null;
+    final becomingNoisySub = _becomingNoisySub;
+    _becomingNoisySub = null;
     _routeChangesStopped = true;
     try {
       await devicesSub?.cancel();
       await iosRouteChangeSub?.cancel();
+      await interruptionSub?.cancel();
+      await becomingNoisySub?.cancel();
       // Let any reroute already on the wire finish before tearing the route
       // down, so the teardown is not the thing that gets interleaved.
       await _routeSerial;
@@ -508,6 +596,26 @@ class ChatVoiceAudioSessionCoordinator implements VoiceAudioSessionPort {
   /// own speaker. A plugged-in microphone is not somewhere to play.
   static bool _isPlayableAccessory(AudioDevice device) =>
       device.isOutput && _externalAudioAccessoryTypes.contains(device.type);
+
+  /// Whether [device] is somewhere the call can play in preference to the
+  /// phone's own speaker, by the rules of the platform the call runs on.
+  ///
+  /// Android keeps [_isPlayableAccessory]. iOS routes by what is connected:
+  /// the call session allows Bluetooth, so AirPods are an accessory whether
+  /// they show up as an HFP input, an A2DP output or an AirPlay output, and so
+  /// is anything else that is not the phone's own speaker or receiver. A
+  /// headset's microphone alone is a connected headset too.
+  @visibleForTesting
+  static bool isPlayableAccessoryOn(AudioDevice device, {required bool ios}) {
+    if (!ios) return _isPlayableAccessory(device);
+    if (device.isOutput) return !_builtInOutputTypes.contains(device.type);
+    return device.isInput && _externalAudioAccessoryTypes.contains(device.type);
+  }
+
+  bool _isPlayable(AudioDevice device) => isPlayableAccessoryOn(
+    device,
+    ios: debugTreatAsIos || (Platform.isIOS && !_isAndroid),
+  );
 
   /// Whether [type] is an accessory a call should play through in preference
   /// to the phone's own speaker.
@@ -713,14 +821,32 @@ class ChatVoiceAudioSessionCoordinator implements VoiceAudioSessionPort {
       return;
     }
 
-    final attached = devices.any(_isPlayableAccessory);
+    final attached = devices.any(_isPlayable);
     if (attached == _accessoryAttached) {
       await _syncAndroidRouteAfterDeviceChange();
       return;
     }
+    final wasAttached = _accessoryAttached;
     // Claim the transition before the first await so a burst of events (a
     // headset announcing its A2DP and SCO ends separately) reroutes once.
     _accessoryAttached = attached;
+
+    if (_appOwnsSession && wasAttached == true && !attached) {
+      // The headset left mid-call. The call is being paused (see
+      // [VoiceAudioRouteLost]); moving it to the loudspeaker now would blast
+      // the reply into the room. Only remember the loudspeaker as the route
+      // for when the call carries on: the next configure pass applies it.
+      DebugLogger.info(
+        'audio-accessory-removed-held',
+        scope: 'chat/voice_audio',
+      );
+      await _serializeRouteChange(() async {
+        if (_manualRouteHeld || _routeChangesStopped) return;
+        if (_accessoryAttached != attached) return;
+        _speakerphoneEnabled = true;
+      });
+      return;
+    }
 
     final enabled = !attached;
 
@@ -796,7 +922,7 @@ class ChatVoiceAudioSessionCoordinator implements VoiceAudioSessionPort {
       final session = await _ensureSession();
       final devices = await session.getDevices();
       final accessories = devices
-          .where(_isPlayableAccessory)
+          .where(_isPlayable)
           .map((device) => device.type.name)
           .toSet();
       DebugLogger.info(

@@ -4184,5 +4184,7 @@
   "assistantViewActions": "작업 보기",
   "assistantToolFailure": "{tool}을(를) 완료하지 못했습니다: {reason}",
   "assistantToolFailureNoReason": "{tool}을(를) 완료하지 못했습니다",
-  "assistantToolFailureMany": "{count, plural, other{작업 {count}개를 완료하지 못했습니다}}"
+  "assistantToolFailureMany": "{count, plural, other{작업 {count}개를 완료하지 못했습니다}}",
+  "voiceShowAsPhoneCall": "음성 모드를 전화 통화로 표시",
+  "voiceShowAsPhoneCallDescription": "음성 모드를 iOS에 전화 통화로 알려 통화 배너와 잠금 화면 컨트롤을 표시합니다. 끄면 음성 모드가 앱 안에서 실행되며 AirPods와 스피커가 다른 음성 앱처럼 동작합니다."
 }

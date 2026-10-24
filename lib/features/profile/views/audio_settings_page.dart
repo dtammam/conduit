@@ -303,6 +303,27 @@ class AudioSettingsPage extends ConsumerWidget {
           onTap: () =>
               notifier.setVoiceBargeInEnabled(!settings.voiceBargeInEnabled),
         ),
+        if (Platform.isIOS) ...[
+          const SizedBox(height: Spacing.sm),
+          CustomizationTile(
+            leading: SettingsIconBadge(
+              icon: UiUtils.platformIcon(
+                ios: CupertinoIcons.phone,
+                android: Icons.phone,
+              ),
+              color: theme.buttonPrimary,
+            ),
+            title: l10n.voiceShowAsPhoneCall,
+            subtitle: l10n.voiceShowAsPhoneCallDescription,
+            trailing: AdaptiveSwitch(
+              value: settings.voiceCallKitEnabled,
+              onChanged: notifier.setVoiceCallKitEnabled,
+            ),
+            showChevron: false,
+            onTap: () =>
+                notifier.setVoiceCallKitEnabled(!settings.voiceCallKitEnabled),
+          ),
+        ],
       ],
     );
   }

@@ -189,6 +189,7 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
   DateTime? _assistantSpeechStartedAt;
   StreamSubscription<VoiceCallKitEvent>? _callKitSub;
   StreamSubscription<bool>? _speakerphoneRouteSub;
+  StreamSubscription<VoiceAudioSessionEvent>? _sessionEventSub;
   ProviderSubscription<SocketService?>? _socketServiceSub;
   ProviderSubscription<Model?>? _selectedModelSub;
   Timer? _elapsedTimer;
@@ -229,6 +230,12 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
   final Queue<String> _pendingFinalTranscripts = Queue<String>();
   String? _lastSubmittedTranscript;
   bool _stoppingFromCallKit = false;
+
+  /// Whether this call runs without the system call UI: the app owns the
+  /// audio session and answers interruptions and lost routes itself.
+  bool _appOwnsSession = false;
+  bool _pausedByInterruption = false;
+  bool _pausedByRouteLoss = false;
   bool _sendingTranscript = false;
   bool _usesOpenWebUiTransport = false;
   List<String> _assistantSpeechChunks = const <String>[];
@@ -272,6 +279,9 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
       final ttsSub = _ttsSub;
       final callKitSub = _callKitSub;
       final speakerphoneRouteSub = _speakerphoneRouteSub;
+      final sessionEventSub = _sessionEventSub;
+      _sessionEventSub = null;
+      unawaited(_cancelSubscriptionAfterDispose(sessionEventSub));
       final socketServiceSub = _socketServiceSub;
       final selectedModelSub = _selectedModelSub;
       final bargeInLevelSub = _bargeInLevelSub;
@@ -483,6 +493,9 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
           cancelIfRequested();
 
           await _requestAndroidVoiceRoutingPermission();
+          if (lostOwnership()) return;
+          cancelIfRequested();
+          await _bindAppOwnedSession(settings.voiceCallKitEnabled);
           if (lostOwnership()) return;
           cancelIfRequested();
           await _applyDefaultSpeakerphoneRoute();
@@ -833,6 +846,12 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
   Future<void> pause() {
     return _enqueue(() async {
       if (!state.canPause) return;
+      await _pauseNow();
+    });
+  }
+
+  Future<void> _pauseNow() async {
+    {
       final realtime = _realtime;
       if (realtime != null) {
         // Stops talking and listening, and holds its answers until resume.
@@ -855,12 +874,26 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
       if (_disposed) return;
 
       state = state.copyWith(phase: ChatVoiceModePhase.paused);
-    });
+    }
   }
 
   Future<void> resume() {
     return _enqueue(() async {
       if (!state.canResume) return;
+      await _resumeNow();
+    });
+  }
+
+  Future<void> _resumeNow() async {
+    {
+      if (_pausedByInterruption || _pausedByRouteLoss) {
+        // The system took the session or the route while the call was
+        // paused; take the session and the route back before carrying on.
+        _pausedByInterruption = false;
+        _pausedByRouteLoss = false;
+        await _audioSessionCoordinator?.configureForListening();
+        if (_disposed) return;
+      }
       final realtime = _realtime;
       if (realtime != null) {
         realtime
@@ -890,7 +923,70 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
       }
 
       await _startListening(token);
-    });
+    }
+  }
+
+  /// Starts the call without the system call UI when the setting asks for it
+  /// (iOS only), and listens for what the system does to the audio meanwhile.
+  Future<void> _bindAppOwnedSession(bool callKitEnabled) async {
+    final coordinator = _audioSessionCoordinator;
+    _appOwnsSession = _platform.isIOS && !callKitEnabled;
+    _pausedByInterruption = false;
+    _pausedByRouteLoss = false;
+    final previous = _sessionEventSub;
+    _sessionEventSub = null;
+    await previous?.cancel();
+    if (coordinator == null) return;
+    await coordinator.setAppOwnsSession(_appOwnsSession);
+    if (!_appOwnsSession) return;
+    _sessionEventSub = coordinator.sessionEvents.listen(
+      _handleAudioSessionEvent,
+    );
+  }
+
+  void _handleAudioSessionEvent(VoiceAudioSessionEvent event) {
+    if (_disposed || !_appOwnsSession) return;
+    switch (event) {
+      case VoiceAudioInterruptionBegan():
+        // A phone call, Siri or an alarm has the session. Hold the call; it
+        // goes on when the system says it may.
+        unawaited(
+          _enqueue(() async {
+            if (!state.canPause) return;
+            _pausedByInterruption = true;
+            await _pauseNow();
+          }),
+        );
+      case VoiceAudioInterruptionEnded(:final shouldResume):
+        unawaited(
+          _enqueue(() async {
+            if (!shouldResume) {
+              // The system will not give the session back on its own.
+              if (state.isActive || state.canResume) {
+                await _stopInternal(endCallKit: false);
+              }
+              return;
+            }
+            // Carries on only a pause the interruption made. One the user
+            // made, or a lost route, waits for the user.
+            if (!_pausedByInterruption || _pausedByRouteLoss) return;
+            if (!state.canResume) return;
+            await _resumeNow();
+          }),
+        );
+      case VoiceAudioRouteLost():
+        // Headphones or AirPods went away. Stop talking and wait, like the
+        // system apps; the reply must not come out of the loudspeaker. A call
+        // already on the loudspeaker lost nothing.
+        if (state.isSpeakerphoneEnabled) return;
+        unawaited(
+          _enqueue(() async {
+            if (!state.canPause) return;
+            _pausedByRouteLoss = true;
+            await _pauseNow();
+          }),
+        );
+    }
   }
 
   Future<void> toggleMute() {
@@ -1068,6 +1164,8 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
   }
 
   Future<void> _startCallKit(String modelName, int token) async {
+    // Without the system call UI the call is the app's own.
+    if (_appOwnsSession) return;
     final callKit = _callKit!;
     if (!callKit.isAvailable) {
       return;
@@ -2179,6 +2277,7 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
     final ttsSub = _ttsSub;
     final callKitSub = _callKitSub;
     final speakerphoneRouteSub = _speakerphoneRouteSub;
+    final sessionEventSub = _sessionEventSub;
     final socketServiceSub = _socketServiceSub;
     final selectedModelSub = _selectedModelSub;
     final bargeInLevelSub = _bargeInLevelSub;
@@ -2206,6 +2305,7 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
     _ttsSub = null;
     _callKitSub = null;
     _speakerphoneRouteSub = null;
+    _sessionEventSub = null;
     _socketServiceSub = null;
     _selectedModelSub = null;
     _bargeInLevelSub = null;
@@ -2318,6 +2418,9 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
         await _runTeardownStep('callkit-subscription-cancel', () async {
           await callKitSub?.cancel();
         });
+        await _runTeardownStep('audio-session-events-cancel', () async {
+          await sessionEventSub?.cancel();
+        });
         await _runTeardownStep(
           'speakerphone-route-subscription-cancel',
           () async {
@@ -2378,6 +2481,9 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
     _markedCallConnected = false;
     _pausedDuringSpeech = false;
     _pausedDuringAssistantTurn = false;
+    _appOwnsSession = false;
+    _pausedByInterruption = false;
+    _pausedByRouteLoss = false;
     _mutedDuringSpeech = false;
     _assistantFinalizationDeferred = false;
     _pendingPausedAssistantText = null;

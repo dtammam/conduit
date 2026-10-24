@@ -9353,5 +9353,9 @@
         "type": "int"
       }
     }
-  }
+  },
+  "voiceShowAsPhoneCall": "Show voice mode as a phone call",
+  "@voiceShowAsPhoneCall": {"description":"Setting that reports voice mode to iOS as a phone call (CallKit)."},
+  "voiceShowAsPhoneCallDescription": "Report voice mode to iOS as a phone call, with the call banner and lock screen controls. Off, voice mode runs inside the app and AirPods and the speaker work as in other voice apps.",
+  "@voiceShowAsPhoneCallDescription": {"description":"Explains the setting that shows voice mode as a phone call."}
 }

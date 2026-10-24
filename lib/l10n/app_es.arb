@@ -4412,5 +4412,7 @@
   "assistantViewActions": "Ver acciones",
   "assistantToolFailure": "No se pudo completar {tool}: {reason}",
   "assistantToolFailureNoReason": "No se pudo completar {tool}",
-  "assistantToolFailureMany": "{count, plural, =1{No se pudo completar 1 acción} other{No se pudieron completar {count} acciones}}"
+  "assistantToolFailureMany": "{count, plural, =1{No se pudo completar 1 acción} other{No se pudieron completar {count} acciones}}",
+  "voiceShowAsPhoneCall": "Mostrar el modo de voz como una llamada telefónica",
+  "voiceShowAsPhoneCallDescription": "Informa a iOS del modo de voz como una llamada telefónica, con el banner de llamada y los controles de la pantalla de bloqueo. Desactivado, el modo de voz funciona dentro de la app y los AirPods y el altavoz se comportan como en otras apps de voz."
 }

@@ -4412,5 +4412,7 @@
   "assistantViewActions": "Acties bekijken",
   "assistantToolFailure": "{tool} kon niet worden voltooid: {reason}",
   "assistantToolFailureNoReason": "{tool} kon niet worden voltooid",
-  "assistantToolFailureMany": "{count, plural, =1{1 actie kon niet worden voltooid} other{{count} acties konden niet worden voltooid}}"
+  "assistantToolFailureMany": "{count, plural, =1{1 actie kon niet worden voltooid} other{{count} acties konden niet worden voltooid}}",
+  "voiceShowAsPhoneCall": "Spraakmodus als telefoongesprek tonen",
+  "voiceShowAsPhoneCallDescription": "Meldt de spraakmodus bij iOS als telefoongesprek, met de gespreksbanner en bediening op het vergrendelscherm. Uit draait de spraakmodus binnen de app en werken AirPods en luidspreker zoals in andere spraak-apps."
 }
