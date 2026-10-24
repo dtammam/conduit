@@ -152,6 +152,46 @@ void main() {
     expect(find.text('The server could not answer.'), findsOneWidget);
   });
 
+  testWidgets('the panel keeps one height from Thinking through speaking', (
+    tester,
+  ) async {
+    final container = ProviderContainer(
+      overrides: [
+        chatVoiceModeControllerProvider.overrideWith(
+          () => _TestVoiceModeController(
+            const ChatVoiceModeSnapshot(phase: ChatVoiceModePhase.sending),
+          ),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(_buildActiveHarness(container));
+    final controller = container.read(
+      chatVoiceModeControllerProvider.notifier,
+    ) as _TestVoiceModeController;
+    final panel = find.byKey(const ValueKey('voice-overlay-expanded'));
+    final thinking = tester.getSize(panel).height;
+
+    controller.update(
+      const ChatVoiceModeSnapshot(
+        phase: ChatVoiceModePhase.speaking,
+        spokenResponse: 'Hi.',
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    expect(tester.getSize(panel).height, thinking);
+
+    controller.update(
+      ChatVoiceModeSnapshot(
+        phase: ChatVoiceModePhase.speaking,
+        spokenResponse: 'A much longer sentence ' * 12,
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    expect(tester.getSize(panel).height, thinking);
+  });
+
   testWidgets('reduced motion makes voice surface changes spatially static', (
     tester,
   ) async {

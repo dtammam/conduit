@@ -353,20 +353,39 @@ class _VoiceText extends StatelessWidget {
 
   final ChatVoiceModeSnapshot snapshot;
 
+  /// The height of the response bar at its two-line maximum (its text,
+  /// padding and border), at the user's text size.
+  static double reservedHeight(BuildContext context) {
+    final fontSize = AppTypography.bodyMediumStyle.fontSize ?? 14;
+    final line = MediaQuery.textScalerOf(context).scale(fontSize) * 1.25;
+    return line * 2 + Spacing.xs * 2 + BorderWidth.thin * 2;
+  }
+
   @override
   Widget build(BuildContext context) {
+    // The text area keeps one height from "Thinking" through speaking, so the
+    // panel does not grow and shrink under the thumb as the reply starts and
+    // its sentences wrap onto a second line (2026-10-24: the bottom of the
+    // screen scrolled down each time the assistant began to speak).
+    return ConstrainedBox(
+      constraints: BoxConstraints(minHeight: reservedHeight(context)),
+      child: Align(alignment: Alignment.topLeft, child: _content(context)),
+    );
+  }
+
+  Widget _content(BuildContext context) {
     if (snapshot.phase == ChatVoiceModePhase.speaking ||
         snapshot.phase == ChatVoiceModePhase.sending) {
       final spoken = snapshot.spokenResponse.trim();
       if (spoken.isEmpty) {
-        return const SizedBox(height: 36);
+        return const SizedBox.shrink();
       }
       return _KaraokeResponseBar(snapshot: snapshot);
     }
 
     final text = snapshot.transcript;
     if (text.trim().isEmpty) {
-      return const SizedBox(height: 20);
+      return const SizedBox.shrink();
     }
 
     return Text(
