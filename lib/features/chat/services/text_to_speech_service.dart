@@ -279,9 +279,14 @@ class TextToSpeechService implements VoiceModeSpeech {
     return TtsManager.instance.getDeviceVoices();
   }
 
-  /// Splits text into chunks for TTS playback.
+  /// How a streamed reply is split into spoken units (voice mode).
   @override
   List<String> splitTextForSpeech(String text) {
+    return TtsManager.instance.splitTextForStreamingSpeech(text);
+  }
+
+  /// How a message read aloud is split into sentences.
+  List<String> splitTextForReadAloud(String text) {
     return TtsManager.instance.splitTextForSpeech(text);
   }
 

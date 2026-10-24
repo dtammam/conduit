@@ -76,4 +76,75 @@ void main() {
       expect(next.chunks, ['More text.']);
     });
   });
+
+  group('splitIntoVoiceUnits', () {
+    const first = "That's awesome, Dean!";
+    const long =
+        'Chocolate is made from roasted cocoa beans, ground into a paste, '
+        'then mixed with sugar and milk; the bar is tempered and set.';
+
+    test('the first sentence stays whole, however long', () {
+      expect(splitIntoVoiceUnits([long]), [long]);
+    });
+
+    test('a long second sentence becomes clauses with their punctuation', () {
+      expect(splitIntoVoiceUnits([first, long]), [
+        first,
+        'Chocolate is made from roasted cocoa beans,',
+        'ground into a paste,',
+        'then mixed with sugar and milk;',
+        'the bar is tempered and set.',
+      ]);
+    });
+
+    test('short sentences and later sentences stay whole', () {
+      const short = 'It has cocoa, sugar and milk.';
+      expect(splitIntoVoiceUnits([first, short, short, long]), [
+        first,
+        short,
+        short,
+        long,
+      ]);
+    });
+
+    test('later short sentences merge as for read aloud', () {
+      expect(splitIntoVoiceUnits([first, 'Two.', 'Three.', 'Ok.', 'Fine.']), [
+        first,
+        'Two.',
+        'Three.',
+        'Ok. Fine.',
+      ]);
+    });
+
+    test('a short first sentence stands alone in a reply', () {
+      expect(getVoiceContentParts("That's awesome, Dean! It's good."), [
+        "That's awesome, Dean!",
+        "It's good.",
+      ]);
+    });
+
+    test('splits before a spaced dash, never inside a word', () {
+      const dashed =
+          'There are two kinds of fillers in a bar of chocolate — the ones '
+          'that add texture and the well-known cheap ones.';
+      final units = splitIntoVoiceUnits([first, dashed]);
+      expect(units.sublist(1), [
+        'There are two kinds of fillers in a bar of chocolate',
+        '— the ones that add texture and the well-known cheap ones.',
+      ]);
+      expect(units.sublist(1).join(' '), dashed);
+    });
+
+    test('a long sentence without clause marks stays whole', () {
+      const plain =
+          'This sentence has many words but not a single comma in it at all '
+          'from start to end.';
+      expect(splitIntoVoiceUnits([first, plain]), [first, plain]);
+    });
+
+    test('rejoining the units gives the text back', () {
+      final units = splitIntoVoiceUnits([first, long, long, long]);
+      expect(units.join(' '), [first, long, long, long].join(' '));
+    });
+  });
 }

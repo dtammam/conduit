@@ -248,3 +248,95 @@ _StreamingCursor _resolveStreamingCursor({
   }
   return _StreamingCursor(cursor, matched);
 }
+
+/// Sentences after the first that are split into clauses.
+const int _voiceClauseSentences = 2;
+
+/// A sentence longer than this many words is split into clauses.
+const int _voiceClauseMaxWords = 12;
+
+/// A clause shorter than this joins the next one.
+const int _voiceClauseMinWords = 4;
+
+/// The units a streamed reply is spoken in by voice mode: the first sentence
+/// on its own however short, the next two split at commas, semicolons, colons
+/// and dashes when longer than twelve words, and the rest merged the way
+/// [extractSentencesForAudio] merges them.
+///
+/// A speech server synthesizes one request at a time, so a long second
+/// sentence is still being made when a short first one has finished playing.
+/// A first unit that is only the first sentence starts sooner, and shorter
+/// units right after it keep the queue ahead; once it is ahead, whole
+/// sentences sound more natural.
+List<String> getVoiceContentParts(String content) =>
+    splitIntoVoiceUnits(extractSentences(stripDetailsForSpeech(content)));
+
+/// [sentences] (unmerged) as voice units; see [getVoiceContentParts].
+List<String> splitIntoVoiceUnits(List<String> sentences) {
+  final out = <String>[];
+  final rest = <String>[];
+  for (var i = 0; i < sentences.length; i++) {
+    final sentence = sentences[i].trim();
+    if (sentence.isEmpty) continue;
+    if (out.isEmpty) {
+      out.add(sentence);
+    } else if (i <= _voiceClauseSentences) {
+      out.addAll(splitSentenceIntoClauses(sentence));
+    } else {
+      rest.add(sentence);
+    }
+  }
+  final merged = <String>[];
+  for (final sentence in rest) {
+    if (merged.isNotEmpty &&
+        (_wordCount(merged.last) < _speechMergeMinWords ||
+            merged.last.length < _speechMergeMinChars)) {
+      merged[merged.length - 1] = '${merged.last} $sentence';
+    } else {
+      merged.add(sentence);
+    }
+  }
+  out.addAll(merged);
+  return out;
+}
+
+int _wordCount(String text) =>
+    text.trim().isEmpty ? 0 : text.trim().split(RegExp(r'\s+')).length;
+
+/// [sentence] cut after a comma, semicolon or colon, or before a spaced dash,
+/// when it has more than twelve words; otherwise the sentence itself. Cuts
+/// fall between words and keep their punctuation, and a clause of fewer than
+/// four words joins the next.
+List<String> splitSentenceIntoClauses(String sentence) {
+  final text = sentence.trim();
+  if (_wordCount(text) <= _voiceClauseMaxWords) return [text];
+  final parts = <String>[];
+  var start = 0;
+  final cut = RegExp(r'(?<=[,;:])\s+|\s+(?=[—–-]\s)');
+  for (final match in cut.allMatches(text)) {
+    final part = text.substring(start, match.start).trim();
+    if (part.isNotEmpty) parts.add(part);
+    start = match.end;
+  }
+  final last = text.substring(start).trim();
+  if (last.isNotEmpty) parts.add(last);
+  if (parts.length < 2) return [text];
+
+  final merged = <String>[];
+  var pending = '';
+  for (final part in parts) {
+    pending = pending.isEmpty ? part : '$pending $part';
+    if (_wordCount(pending) >= _voiceClauseMinWords) {
+      merged.add(pending);
+      pending = '';
+    }
+  }
+  if (pending.isNotEmpty) {
+    if (merged.isEmpty) {
+      merged.add(pending);
+    } else {
+      merged[merged.length - 1] = '${merged.last} $pending';
+    }
+  }
+  return merged;
+}

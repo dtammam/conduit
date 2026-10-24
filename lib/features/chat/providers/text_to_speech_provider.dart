@@ -231,7 +231,7 @@ class TextToSpeechController extends Notifier<TextToSpeechState> {
 
     // Prepare sentence split for highlighting
     final cleanText = ConduitMarkdownPreprocessor.cleanText(text);
-    final sentences = _service.splitTextForSpeech(cleanText);
+    final sentences = _service.splitTextForReadAloud(cleanText);
     final offsets = _computeOffsets(cleanText, sentences);
 
     state = state.copyWith(

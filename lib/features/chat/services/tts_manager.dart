@@ -646,6 +646,16 @@ class TtsManager {
     return getMessageContentParts(text, splitOn: _config.splitOn);
   }
 
+  /// The units a streamed reply (voice mode) is spoken in: the first sentence
+  /// alone, the second and third split into clauses when long, so the next
+  /// clip is short ([getVoiceContentParts]). Other split modes are left as
+  /// they are.
+  List<String> splitTextForStreamingSpeech(String text) {
+    return _config.splitOn == splitOnPunctuation
+        ? getVoiceContentParts(text)
+        : splitTextForSpeech(text);
+  }
+
   /// Mirrors OpenWebUI's `extractSentences`.
   List<String> extractSentences(String text) => speech.extractSentences(text);
 
@@ -768,7 +778,7 @@ class TtsManager {
     if (_activeSession?.id != session.id) return;
 
     final advance = advanceStreamingChunks(
-      chunks: splitTextForSpeech(accumulatedText),
+      chunks: splitTextForStreamingSpeech(accumulatedText),
       fedChunkCount: _streamingFedChunkCount,
       spokenText: _streamingSpokenText,
       finalized: finalized,

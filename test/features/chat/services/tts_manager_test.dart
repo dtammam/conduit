@@ -42,6 +42,37 @@ void main() {
     });
   });
 
+  group('TtsManager splitTextForStreamingSpeech', () {
+    const reply =
+        "That's awesome, Dean! Chocolate is made from roasted cocoa beans, "
+        'ground into a paste, then mixed with sugar and milk. Enjoy it.';
+
+    test('keeps the first sentence and cuts a long second one', () async {
+      await TtsManager.instance.updateConfig(
+        const TtsConfig(preferServer: true),
+      );
+      check(TtsManager.instance.splitTextForStreamingSpeech(reply)).deepEquals([
+        "That's awesome, Dean!",
+        'Chocolate is made from roasted cocoa beans,',
+        'ground into a paste,',
+        'then mixed with sugar and milk.',
+        'Enjoy it.',
+      ]);
+      // Read aloud still speaks Open WebUI's merged sentences.
+      check(TtsManager.instance.splitTextForSpeech(reply)).length.equals(2);
+    });
+
+    test('leaves the paragraph mode alone', () async {
+      await TtsManager.instance.updateConfig(
+        const TtsConfig(splitOn: TtsManager.splitOnParagraphs),
+      );
+      check(
+        TtsManager.instance.splitTextForStreamingSpeech(reply),
+      ).length.equals(1);
+      await TtsManager.instance.updateConfig(const TtsConfig());
+    });
+  });
+
   group('TtsManager getMessageContentParts', () {
     test('supports paragraphs mode like OpenWebUI', () {
       final chunks = TtsManager.instance.getMessageContentParts(
