@@ -259,6 +259,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    // On until the user turns it off.
     check(PreferencesStore.get<bool>(PreferenceKeys.omniChatEnabled)).isNull();
     final row = find.text('Omni chat');
     await tester.scrollUntilVisible(row, 300);
@@ -268,7 +269,7 @@ void main() {
     await tester.pumpAndSettle();
 
     check(PreferencesStore.get<bool>(PreferenceKeys.omniChatEnabled))
-        .equals(true);
+        .equals(false);
   });
 
   testWidgets('Chat toggles the persisted wave typing indicator', (

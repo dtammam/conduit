@@ -149,8 +149,8 @@ void main() {
         ).equals(true);
       });
 
-      test('omniChatEnabled defaults to false', () {
-        check(settings.omniChatEnabled).equals(false);
+      test('omniChatEnabled defaults to true', () {
+        check(settings.omniChatEnabled).equals(true);
       });
     });
 

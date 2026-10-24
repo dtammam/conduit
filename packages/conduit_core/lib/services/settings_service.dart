@@ -781,7 +781,7 @@ class SettingsService {
           get<bool>(PreferenceKeys.deliveryReceiptsEnabled) ?? true,
       compactToolSummaries:
           get<bool>(PreferenceKeys.compactToolSummaries) ?? false,
-      omniChatEnabled: get<bool>(PreferenceKeys.omniChatEnabled) ?? false,
+      omniChatEnabled: get<bool>(PreferenceKeys.omniChatEnabled) ?? true,
       toolActivityInAvatar:
           get<bool>(PreferenceKeys.toolActivityInAvatar) ?? true,
       waveTypingIndicator:
@@ -1040,7 +1040,7 @@ class AppSettings {
     this.messageBubbles = false,
     this.assistantAvatarBubbleColor = assistantAvatarBubbleColorAuto,
     this.compactToolSummaries = false,
-    this.omniChatEnabled = false,
+    this.omniChatEnabled = true,
     this.toolActivityInAvatar = true,
     this.waveTypingIndicator = false,
     this.chatDragToFolder = true,
