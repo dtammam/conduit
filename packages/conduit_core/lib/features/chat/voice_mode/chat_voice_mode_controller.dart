@@ -30,6 +30,7 @@ import 'package:conduit_core/services/socket_service.dart'
     show SocketBackgroundActivityLease, SocketService;
 
 import 'package:conduit_core/utils/debug_logger.dart';
+import 'package:conduit_core/features/chat/server_speech/transcription_confidence.dart';
 import 'package:conduit_core/voice/barge_in_echo.dart';
 import 'package:conduit_core/voice/barge_in_onset.dart';
 
@@ -1721,7 +1722,11 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
     }
 
     if (_bargeInProvisional) {
-      if (isBargeInEcho(transcript, _previewBeforeBargeIn)) {
+      if (isBargeInEcho(
+        transcript,
+        _previewBeforeBargeIn,
+        confidence: TranscriptionConfidenceLog.instance.lookup(transcript),
+      )) {
         _ignoredEchoTranscript = transcript;
         await _resumeAfterBargeInEcho(token, transcript);
         return;

@@ -1,3 +1,5 @@
+import 'transcription_confidence.dart';
+
 import 'dart:async';
 import 'dart:typed_data';
 
@@ -58,7 +60,7 @@ final class DirectServerSpeech implements StreamingServerSpeech {
     }
     final lease = _clientPool.acquire(_profile);
     try {
-      final response = await lease.dio.post<Object?>(
+      Future<Response<Object?>> post(String format) => lease.dio.post<Object?>(
         'audio/transcriptions',
         data: FormData.fromMap({
           'file': MultipartFile.fromBytes(
@@ -69,15 +71,29 @@ final class DirectServerSpeech implements StreamingServerSpeech {
           'model': model,
           if (language != null && language.trim().isNotEmpty)
             'language': language.trim(),
-          'response_format': 'json',
+          'response_format': format,
         }),
       );
+      // The verbose answer carries Whisper's confidence, which tells a real
+      // interruption from the assistant's own voice; a server that does not
+      // offer it gets the plain request.
+      Response<Object?> response;
+      try {
+        response = await post('verbose_json');
+      } on DioException catch (error) {
+        final status = error.response?.statusCode;
+        if (status != 400 && status != 422) rethrow;
+        response = await post('json');
+      }
       final data = response.data;
       if (data is! Map) return '';
-      return transcriptionResponseText(
-            data.map((key, value) => MapEntry(key.toString(), value)),
-          ) ??
-          '';
+      final json = data.map((key, value) => MapEntry(key.toString(), value));
+      final text = transcriptionResponseText(json) ?? '';
+      final confidence = TranscriptionConfidence.fromVerboseJson(json);
+      if (confidence != null) {
+        TranscriptionConfidenceLog.instance.record(text, confidence);
+      }
+      return text;
     } finally {
       lease.release();
     }

@@ -97,7 +97,7 @@ void main() {
     check(Map.fromEntries(form.fields)).deepEquals({
       'model': 'gpt-4o-mini-transcribe',
       'language': 'en',
-      'response_format': 'json',
+      'response_format': 'verbose_json',
     });
     check(form.files.single.value.filename).equals('clip.wav');
   });
