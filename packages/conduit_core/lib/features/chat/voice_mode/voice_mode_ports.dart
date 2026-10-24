@@ -15,6 +15,7 @@
 /// throws on first read.
 library;
 
+import 'package:conduit_core/voice/voice_route.dart';
 import 'dart:async';
 import 'dart:io' show Platform;
 
@@ -253,6 +254,10 @@ abstract interface class VoiceAudioSessionPort {
 
   /// Hands the route back to whatever had it before the call.
   Future<void> deactivate();
+
+  /// What the call is playing through now; [VoiceRouteClass.other] when the
+  /// host cannot tell.
+  Future<VoiceRouteClass> currentRouteClass();
 }
 
 /// The background lease that keeps a voice call running while the app is
@@ -409,6 +414,9 @@ class UnavailableVoiceCallKit implements VoiceCallKitPort {
 /// No audio session to configure: every route change is taken as applied.
 class NoVoiceAudioSession implements VoiceAudioSessionPort {
   const NoVoiceAudioSession();
+
+  @override
+  Future<VoiceRouteClass> currentRouteClass() async => VoiceRouteClass.other;
 
   @override
   Stream<bool> get speakerphoneRouteChanges => const Stream<bool>.empty();

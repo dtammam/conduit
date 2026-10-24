@@ -32,6 +32,7 @@ import 'package:conduit_core/services/socket_service.dart';
 import 'package:conduit_core/testing.dart';
 import 'package:riverpod/riverpod.dart';
 import 'package:test/fake.dart';
+import 'package:conduit_core/voice/voice_route.dart';
 import 'package:test/test.dart';
 
 // Moved from the Flutter app's test/features/chat/voice_mode/ with the
@@ -4086,6 +4087,11 @@ class _FakeChatVoiceBackgroundCoordinator implements VoiceBackgroundPort {
 }
 
 class _FakeChatVoiceAudioSessionCoordinator implements VoiceAudioSessionPort {
+  VoiceRouteClass routeClass = VoiceRouteClass.wiredHeadphones;
+
+  @override
+  Future<VoiceRouteClass> currentRouteClass() async => routeClass;
+
   int listeningCalls = 0;
   int speakingCalls = 0;
   int deactivateCalls = 0;

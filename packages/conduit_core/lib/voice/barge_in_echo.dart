@@ -1,4 +1,5 @@
 import 'package:conduit_core/features/chat/server_speech/transcription_confidence.dart';
+import 'package:conduit_core/voice/voice_route.dart';
 
 /// Whether a take heard during a barge-in is the assistant's own voice
 /// coming back through the microphone (or nothing worth answering) rather
@@ -14,10 +15,15 @@ import 'package:conduit_core/features/chat/server_speech/transcription_confidenc
 /// With the recognizer's [confidence] (Whisper's verbose answer), a take it
 /// doubts is echo, and two words are enough for the user; without it three
 /// are needed.
+///
+/// [profile] (the call's route, [VoiceRouteProfile.forClass]) sets those
+/// thresholds; stricter on the loudspeaker and in the car, where the
+/// assistant plays into the microphone's room.
 bool isBargeInEcho(
   String transcript,
   String assistantText, {
   TranscriptionConfidence? confidence,
+  VoiceRouteProfile? profile,
 }) {
   final words = _words(transcript);
   if (words.isEmpty) return true;
@@ -25,18 +31,24 @@ bool isBargeInEcho(
   // Whisper's stock inventions for noise ("Thank you.", "Thanks for
   // watching!", "Bye.") are never the user cutting in.
   if (words.every(_noiseWords.contains)) return true;
-  if (confidence != null && confidence.doubtful) return true;
+  if (confidence != null &&
+      (profile == null
+          ? confidence.doubtful
+          : confidence.noSpeechProb > profile.maxNoSpeechProb ||
+                confidence.avgLogprob < profile.minAvgLogprob)) {
+    return true;
+  }
   // Whisper turns the assistant's own audio into short invented words
   // ("Tinha", 2026-10-24 15:47) that no overlap check can match; while the
   // assistant speaks, the user has to say a few words to cut in.
   final minWords = confidence == null
-      ? _minUserWords
-      : _minUserWordsWithConfidence;
+      ? profile?.minWords ?? _minUserWords
+      : profile?.minWordsWithConfidence ?? _minUserWordsWithConfidence;
   if (words.length < minWords) return true;
   final spoken = _words(assistantText).toSet();
   if (spoken.isEmpty) return false;
   final heard = words.where(spoken.contains).length;
-  return heard / words.length >= _echoShare;
+  return heard / words.length >= (profile?.echoShare ?? _echoShare);
 }
 
 /// Fewest words a take needs to count as the user (commands excepted).

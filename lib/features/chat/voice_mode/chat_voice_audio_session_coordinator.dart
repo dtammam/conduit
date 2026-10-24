@@ -2,6 +2,8 @@
 // way to see what is plugged in without a second native bridge.
 // ignore_for_file: experimental_member_use
 
+import 'package:conduit_core/voice/voice_route.dart';
+
 import 'dart:async';
 import 'dart:developer' as developer;
 import 'dart:io';
@@ -492,6 +494,36 @@ class ChatVoiceAudioSessionCoordinator implements VoiceAudioSessionPort {
 
   @override
   Future<void> deactivate() => _tearDownRoute(phase: 'deactivate');
+
+  @override
+  Future<VoiceRouteClass> currentRouteClass() async {
+    if (!Platform.isIOS) return VoiceRouteClass.other;
+    final payload = await _safeIosRouteCall(
+      () => _iosVoiceAudioRouteChannel.invokeMapMethod<Object?, Object?>(
+        'currentRoute',
+      ),
+      operation: 'current-route',
+      phase: 'route-class',
+    );
+    return voiceRouteClassFromPayload(payload);
+  }
+
+  /// The route class of an iOS `currentRoute` payload.
+  @visibleForTesting
+  static VoiceRouteClass voiceRouteClassFromPayload(
+    Map<Object?, Object?>? payload,
+  ) {
+    List<String> types(Object? ports) => [
+      if (ports is List)
+        for (final port in ports)
+          if (port is Map && port['type'] is String) port['type'] as String,
+    ];
+    if (payload == null) return VoiceRouteClass.other;
+    return classifyVoiceRoute(
+      outputPortTypes: types(payload['currentOutputs']),
+      inputPortTypes: types(payload['currentInputs']),
+    );
+  }
 
   Future<void> dispose() async {
     // Riverpod does not promise to dispose this coordinator after the

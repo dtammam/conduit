@@ -32,6 +32,7 @@ import 'package:conduit_core/services/socket_service.dart'
 import 'package:conduit_core/utils/debug_logger.dart';
 import 'package:conduit_core/features/chat/server_speech/transcription_confidence.dart';
 import 'package:conduit_core/voice/barge_in_echo.dart';
+import 'package:conduit_core/voice/voice_route.dart';
 import 'package:conduit_core/voice/barge_in_onset.dart';
 
 import 'package:conduit_core/features/chat/providers/chat_providers.dart';
@@ -1722,11 +1723,31 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
     }
 
     if (_bargeInProvisional) {
-      if (isBargeInEcho(
+      final routeClass = await _currentRouteClass();
+      final profile = VoiceRouteProfile.forClass(routeClass);
+      final confidence = TranscriptionConfidenceLog.instance.lookup(
         transcript,
-        _previewBeforeBargeIn,
-        confidence: TranscriptionConfidenceLog.instance.lookup(transcript),
-      )) {
+      );
+      final echo =
+          !profile.bargeInAllowed ||
+          isBargeInEcho(
+            transcript,
+            _previewBeforeBargeIn,
+            confidence: confidence,
+            profile: profile,
+          );
+      DebugLogger.info(
+        'barge-in-decision',
+        scope: 'chat/voice_mode',
+        data: {
+          'route': routeClass.name,
+          'decision': echo ? 'echo' : 'user',
+          'words': _wordsOf(transcript).length,
+          'avgLogprob': ?confidence?.avgLogprob,
+          'noSpeechProb': ?confidence?.noSpeechProb,
+        },
+      );
+      if (echo) {
         _ignoredEchoTranscript = transcript;
         await _resumeAfterBargeInEcho(token, transcript);
         return;
@@ -1946,6 +1967,15 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
         stackTrace: stackTrace,
       );
       await _fail(error.toString(), token, _errorKindOf(error));
+    }
+  }
+
+  Future<VoiceRouteClass> _currentRouteClass() async {
+    try {
+      return await _audioSessionCoordinator?.currentRouteClass() ??
+          VoiceRouteClass.other;
+    } catch (_) {
+      return VoiceRouteClass.other;
     }
   }
 
