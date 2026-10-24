@@ -36,6 +36,7 @@ import 'package:conduit_core/services/share_staging_cleanup.dart'
     show shareStagingDirectoryName;
 
 import 'platform/ios_share_staging.dart';
+import 'platform/engine_speech_playback.dart';
 import 'platform/just_audio_playback.dart';
 import 'platform/record_audio_capture.dart';
 import 'platform/flutter_secure_key_value_store.dart';
@@ -256,7 +257,12 @@ void main() {
   // Diagnostics have no destination until a host gives them one.
   // Installed first, so startup itself is logged.
   DebugLogger.sink = const FlutterLogSink();
-  AudioPlaybackPort.hostFactory = JustAudioPlayback.new;
+  // iOS plays streamed speech on its native speech engine (gapless joins);
+  // everything else, and every other platform, plays through just_audio.
+  AudioPlaybackPort.hostFactory =
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS
+      ? HybridSpeechPlayback.new
+      : JustAudioPlayback.new;
   BackgroundExecutionPort.hostDefault = const MobileBackgroundExecution();
   DisplayBoostPort.hostDefault = const IosDisplayBoost();
   if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {

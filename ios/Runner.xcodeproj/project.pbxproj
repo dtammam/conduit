@@ -8,7 +8,9 @@
 
 /* Begin PBXBuildFile section */
 		1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */ = {isa = PBXBuildFile; fileRef = 1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */; };
+		2F1DB9013AE6D6840DAEDF65 /* SpeechEngineBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEE957AC198F5541B6DA13E7 /* SpeechEngineBridge.swift */; };
 		331C808B294A63AB00263BE5 /* RunnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 331C807B294A618700263BE5 /* RunnerTests.swift */; };
+		5392225773208F91BA90683B /* SpeechEngineQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E5AB5F21F0375D57CB097B6 /* SpeechEngineQueue.swift */; };
 		74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74858FAE1ED2DC5600515810 /* AppDelegate.swift */; };
 		78A318202AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage in Frameworks */ = {isa = PBXBuildFile; productRef = 78A3181F2AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage */; };
 		97C146FC1CF9000F007C117D /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FA1CF9000F007C117D /* Main.storyboard */; };
@@ -118,6 +120,7 @@
 		74858FAE1ED2DC5600515810 /* AppDelegate.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		78E0A7A72DC9AD7400C4905E /* FlutterGeneratedPluginSwiftPackage */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = FlutterGeneratedPluginSwiftPackage; path = Flutter/ephemeral/Packages/FlutterGeneratedPluginSwiftPackage; sourceTree = "<group>"; };
 		7AFA3C8E1D35360C0083082E /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Release.xcconfig; path = Flutter/Release.xcconfig; sourceTree = "<group>"; };
+		8E5AB5F21F0375D57CB097B6 /* SpeechEngineQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechEngineQueue.swift; sourceTree = "<group>"; };
 		9740EEB21CF90195004384FC /* Debug.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; name = Debug.xcconfig; path = Flutter/Debug.xcconfig; sourceTree = "<group>"; };
 		9740EEB31CF90195004384FC /* Generated.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; name = Generated.xcconfig; path = Flutter/Generated.xcconfig; sourceTree = "<group>"; };
 		97C146EE1CF9000F007C117D /* Runner.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Runner.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -188,6 +191,7 @@
 		F1L10N202EE550000000000A /* zh-Hant */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hant"; path = "zh-Hant.lproj/Localizable.strings"; sourceTree = "<group>"; };
 		F1L10N202EE550000000000B /* ja */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ja; path = ja.lproj/Localizable.strings; sourceTree = "<group>"; };
 		F1L10N202EE550000000000C /* pl */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = pl; path = pl.lproj/Localizable.strings; sourceTree = "<group>"; };
+		FEE957AC198F5541B6DA13E7 /* SpeechEngineBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechEngineBridge.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -373,6 +377,8 @@
 				C0700E3C1D3E25D23C2D9095 /* AppIntentInvocationStore.swift */,
 				C07E41E507BC83CDF6A2F806 /* NativeIosTtsBridge.swift */,
 				C0748D3BCA6CB2E7D24C8438 /* VoiceAudioRouteBridge.swift */,
+				FEE957AC198F5541B6DA13E7 /* SpeechEngineBridge.swift */,
+				8E5AB5F21F0375D57CB097B6 /* SpeechEngineQueue.swift */,
 				39A7D52A9D5DD70C376EABF2 /* RealtimeAudioBridge.swift */,
 				C07B0ACB6D900F7182D98598 /* BackgroundStreamingHandler.swift */,
 				C076D53F677D9AB9577FCB47 /* ShareImportBridge.swift */,
@@ -699,6 +705,8 @@
 				C07A1ABDC1D26441C3348E00 /* AppIntentInvocationStore.swift in Sources */,
 				C073CCD19D2508BCAD536200 /* NativeIosTtsBridge.swift in Sources */,
 				C079094EC8D3F2DCA002F300 /* VoiceAudioRouteBridge.swift in Sources */,
+				2F1DB9013AE6D6840DAEDF65 /* SpeechEngineBridge.swift in Sources */,
+				5392225773208F91BA90683B /* SpeechEngineQueue.swift in Sources */,
 				F5C6B3C410DE632B01B4234F /* RealtimeAudioBridge.swift in Sources */,
 				C0778A160B9E0F6B3D0E5C00 /* BackgroundStreamingHandler.swift in Sources */,
 				C07E03850D838F4CC4E73700 /* ShareImportBridge.swift in Sources */,
