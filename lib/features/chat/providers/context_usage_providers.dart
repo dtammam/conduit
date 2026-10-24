@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:conduit_core/features/chat/omni/omni_chat.dart';
 import 'package:conduit_core/features/chat/providers/chat_providers.dart';
 import 'package:conduit_core/features/direct_connections/providers/direct_connection_providers.dart';
 import 'package:conduit_core/features/direct_connections/services/direct_chat_bridge.dart';
@@ -359,6 +360,12 @@ final chatContextUsageProvider = Provider<ContextUsage?>((ref) {
     appSettingsProvider.select((settings) => settings.showContextUsage),
   );
   if (!enabled) return null;
+  // The Omni chat sends the model only its current session, so the whole
+  // chat's token count would measure nothing the model sees.
+  final conversationId = ref.watch(
+    activeConversationProvider.select((conversation) => conversation?.id),
+  );
+  if (isOmniChatId(conversationId)) return null;
   final model = ref.watch(selectedModelProvider);
   if (model == null) return null;
   final messages = ref

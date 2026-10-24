@@ -7,6 +7,7 @@ import 'package:conduit_core/features/chat/providers/chat_providers.dart';
 import 'package:conduit_core/features/direct_connections/services/direct_chat_bridge.dart';
 import 'package:conduit_core/features/direct_connections/services/direct_model_registry.dart';
 import 'package:conduit_core/models/chat_message.dart';
+import 'package:conduit_core/models/conversation.dart';
 import 'package:conduit_core/models/model.dart';
 import 'package:conduit_core/persistence/account_scoped_preferences.dart';
 import 'package:conduit_core/persistence/persistence_keys.dart';
@@ -62,6 +63,20 @@ class _Messages extends ChatMessagesNotifier {
   List<ChatMessage> build() => initial;
 
   void put(List<ChatMessage> messages) => state = messages;
+}
+
+class _Active extends ActiveConversationNotifier {
+  _Active(this.id);
+
+  final String id;
+
+  @override
+  Conversation? build() => Conversation(
+    id: id,
+    title: id,
+    createdAt: _at,
+    updatedAt: _at,
+  );
 }
 
 class _Account extends SettledActiveAccountId {
@@ -290,6 +305,7 @@ void main() {
       required Model? model,
       required List<ChatMessage> messages,
       bool enabled = true,
+      String? conversationId,
     }) {
       final notifier = _Messages(messages);
       final container = ProviderContainer(
@@ -297,6 +313,10 @@ void main() {
           appSettingsProvider.overrideWithValue(
             AppSettings(showContextUsage: enabled),
           ),
+          if (conversationId != null)
+            activeConversationProvider.overrideWith(
+              () => _Active(conversationId),
+            ),
           settledActiveAccountIdProvider.overrideWith(_Account.new),
           selectedModelProvider.overrideWith(() => _FixedModel(model)),
           chatMessagesProvider.overrideWith(() => notifier),
@@ -329,6 +349,28 @@ void main() {
           enabled: false,
         ).container.read(chatContextUsageProvider),
       ).isNull();
+    });
+
+    test('nothing to show in the Omni chat', () async {
+      await PreferencesStore.put(PreferenceKeys.omniChatEnabled, true);
+      await PreferencesStore.put(
+        scopedPreferenceWriteKey(PreferenceKeys.omniChatId),
+        'omni-1',
+      );
+      check(
+        containerFor(
+          model: _sampleModel,
+          messages: [_user('hello')],
+          conversationId: 'omni-1',
+        ).container.read(chatContextUsageProvider),
+      ).isNull();
+      check(
+        containerFor(
+          model: _sampleModel,
+          messages: [_user('hello')],
+          conversationId: 'chat-1',
+        ).container.read(chatContextUsageProvider),
+      ).isNotNull();
     });
 
     test('reported usage wins over the estimate', () {
