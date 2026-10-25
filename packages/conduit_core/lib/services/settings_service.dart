@@ -796,7 +796,7 @@ class SettingsService {
         null => assistantAvatarBubbleColorAuto,
       },
       personaAppearanceEnabled:
-          get<bool>(PreferenceKeys.personaAppearanceEnabled) ?? false,
+          get<bool>(PreferenceKeys.personaAppearanceEnabled) ?? true,
       personaAppearanceUrl:
           get<String>(PreferenceKeys.personaAppearanceUrl) ?? '',
       deliveryReceiptsEnabled:
@@ -1063,7 +1063,7 @@ class AppSettings {
     this.deliveryReceiptsEnabled = true,
     this.messageBubbles = false,
     this.assistantAvatarBubbleColor = assistantAvatarBubbleColorAuto,
-    this.personaAppearanceEnabled = false,
+    this.personaAppearanceEnabled = true,
     this.personaAppearanceUrl = '',
     this.compactToolSummaries = false,
     this.omniChatEnabled = true,

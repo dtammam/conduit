@@ -389,6 +389,8 @@ void main() {
         'quick-reply-reactions',
         'assistant-avatar',
         'persona-appearance',
+        'persona-appearance-url',
+        'persona-appearance-token',
         'message-bubbles',
         'compact-tool-summaries',
         'omni-chat',

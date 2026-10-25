@@ -148,14 +148,14 @@ void main() {
         ).equals(false);
       });
 
-      test('personaAppearance is off with no address by default', () {
-        check(settings.personaAppearanceEnabled).equals(false);
+      test('personaAppearance defaults to on with no address', () {
+        check(settings.personaAppearanceEnabled).equals(true);
         check(settings.personaAppearanceUrl).equals('');
         final changed = settings.copyWith(
-          personaAppearanceEnabled: true,
+          personaAppearanceEnabled: false,
           personaAppearanceUrl: 'http://sb.test:1243',
         );
-        check(changed.personaAppearanceEnabled).equals(true);
+        check(changed.personaAppearanceEnabled).equals(false);
         check(changed.personaAppearanceUrl).equals('http://sb.test:1243');
       });
 
