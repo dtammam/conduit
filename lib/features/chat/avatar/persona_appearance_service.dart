@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:conduit_core/persistence/persistence_keys.dart';
+import 'package:conduit_core/providers/app_providers.dart' show modelsProvider;
 import 'package:conduit_core/persistence/preferences_store.dart';
 import 'package:conduit_core/providers/storage_providers.dart';
 import 'package:conduit_core/services/secure_credential_storage.dart';
@@ -653,7 +654,28 @@ class PersonaAppearanceController extends Notifier<PersonaAppearance?>
         .sync(baseUrl: url, token: token);
     if (!ref.mounted) return;
     if (outcome.status == PersonaSyncStatus.updated) {
-      state = outcome.appearance;
+      final previous = state;
+      final next = outcome.appearance;
+      state = next;
+      if (next != null &&
+          (previous?.id != next.id || previous?.name != next.name)) {
+        await _refreshModels();
+      }
+    }
+  }
+
+  /// Switchboard renames the chat model in Open WebUI to the persona's name,
+  /// so a changed persona means the model list is stale. Refreshing it also
+  /// rebinds the selected model, which the chat header reads its name from.
+  Future<void> _refreshModels() async {
+    try {
+      await ref.read(modelsProvider.notifier).refresh();
+    } catch (error) {
+      DebugLogger.log(
+        'models-refresh-failed',
+        scope: _logScope,
+        data: {'error': error.runtimeType.toString()},
+      );
     }
   }
 }

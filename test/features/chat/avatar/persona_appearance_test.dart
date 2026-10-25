@@ -9,7 +9,9 @@ import 'package:conduit/features/chat/avatar/assistant_avatar_accent.dart';
 import 'package:conduit/features/chat/avatar/assistant_avatar_media.dart';
 import 'package:conduit/features/chat/avatar/persona_appearance_service.dart';
 import 'package:conduit/features/chat/widgets/message_bubble_colors.dart';
+import 'package:conduit_core/models/model.dart';
 import 'package:conduit_core/ports/secure_key_value_store.dart';
+import 'package:conduit_core/providers/app_providers.dart';
 import 'package:conduit_core/services/secure_credential_storage.dart';
 import 'package:conduit_core/services/settings_service.dart';
 import 'package:dio/dio.dart';
@@ -464,6 +466,72 @@ void main() {
     });
   });
 
+  group('model list refresh', () {
+    late _CountingModels models;
+
+    Future<ProviderContainer> start() async {
+      final store = InMemorySecureKeyValueStore();
+      await SecureCredentialStorage(instance: store)
+          .writeSwitchboardToken(_token);
+      models = _CountingModels();
+      final container = ProviderContainer(
+        overrides: [
+          appSettingsProvider.overrideWithValue(
+            const AppSettings(
+              personaAppearanceEnabled: true,
+              personaAppearanceUrl: _base,
+            ),
+          ),
+          secureStorageProvider.overrideWithValue(store),
+          personaAppearanceServiceProvider.overrideWithValue(service),
+          modelsProvider.overrideWith(() => models),
+        ],
+      );
+      addTearDown(container.dispose);
+      return container;
+    }
+
+    test('a changed persona refreshes the model list once', () async {
+      final container = await start();
+      final controller = container.read(personaAppearanceProvider.notifier);
+      await controller.refresh();
+      check(models.refreshes).equals(1);
+      check(container.read(personaAppearanceProvider)!.name)
+          .equals('Persona ada');
+
+      active = _persona('bea');
+      await controller.refresh();
+      check(models.refreshes).equals(2);
+    });
+
+    test('an unchanged poll does not refresh it', () async {
+      final container = await start();
+      final controller = container.read(personaAppearanceProvider.notifier);
+      await controller.refresh();
+      await controller.refresh();
+      await controller.refresh();
+      check(models.refreshes).equals(1);
+    });
+
+    test('a rename of the same persona refreshes it', () async {
+      final container = await start();
+      final controller = container.read(personaAppearanceProvider.notifier);
+      await controller.refresh();
+      active = {..._persona('ada'), 'name': 'Ada Renamed'};
+      await controller.refresh();
+      check(models.refreshes).equals(2);
+    });
+
+    test('a failed poll does not refresh it', () async {
+      final container = await start();
+      final controller = container.read(personaAppearanceProvider.notifier);
+      await controller.refresh();
+      adapter.handler = (_) => ResponseBody.fromString('no', 401);
+      await controller.refresh();
+      check(models.refreshes).equals(1);
+    });
+  });
+
   group('bubble color', () {
     const userBlue = '#3E7BD8';
     const persona = PersonaAppearance(id: 'ada', bubbleColor: '#E0B030');
@@ -572,4 +640,16 @@ class _FixedAccent extends AssistantAvatarAutoAccent {
 
   @override
   Color? build() => fixed;
+}
+
+class _CountingModels extends Models {
+  int refreshes = 0;
+
+  @override
+  Future<List<Model>> build() async => const [];
+
+  @override
+  Future<void> refresh() async {
+    refreshes++;
+  }
 }
