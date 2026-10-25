@@ -35,6 +35,7 @@ class AssistantAvatarMediaSet {
   const AssistantAvatarMediaSet({
     this.userFiles = const {},
     this.bundled = const {},
+    this.personaFiles = const {},
   });
 
   static const empty = AssistantAvatarMediaSet();
@@ -42,8 +43,14 @@ class AssistantAvatarMediaSet {
   final Map<AssistantActivity, AssistantAvatarMedia> userFiles;
   final Set<AssistantActivity> bundled;
 
+  /// Clips of the active persona from a Switchboard server, empty unless
+  /// "Match persona from Switchboard" is on. They win over the user's files.
+  final Map<AssistantActivity, AssistantAvatarMedia> personaFiles;
+
   /// The clip assigned to [state] itself, without any fallback.
   AssistantAvatarMedia? ownMedia(AssistantActivity state) {
+    final persona = personaFiles[state];
+    if (persona != null) return persona;
     final user = userFiles[state];
     if (user != null) return user;
     if (bundled.contains(state)) {
@@ -52,7 +59,8 @@ class AssistantAvatarMediaSet {
     return null;
   }
 
-  /// The clip to show for [state]: the user file, then the bundled default,
+  /// The clip to show for [state]: the persona's file, then the user file,
+  /// then the bundled default,
   /// then with neither, [AssistantActivity.making] borrows the working clip
   /// and [AssistantActivity.done] the idle clip. Null means the strip shows
   /// the model's initial.
@@ -66,6 +74,11 @@ class AssistantAvatarMediaSet {
     };
   }
 }
+
+final RegExp _personaIdPattern = RegExp(r'^[A-Za-z0-9_-][A-Za-z0-9_.-]{0,63}$');
+
+/// Whether a persona id from a server is safe to use as a folder name.
+bool isSafePersonaId(String id) => _personaIdPattern.hasMatch(id) && id != '..';
 
 /// Asset key of the optional default clip bundled for [state].
 String _bundledAsset(AssistantActivity state) =>
@@ -116,20 +129,51 @@ class AssistantAvatarMediaStore {
   /// Runs once per store; the strip and its sheet share one store.
   Future<void>? _migration;
 
-  /// Everything currently available. Never throws.
-  Future<AssistantAvatarMediaSet> load() async {
+  /// Everything currently available. With [personaId], the clips synced for
+  /// that persona (under `personas/<id>/`) come first. Never throws.
+  Future<AssistantAvatarMediaSet> load({String? personaId}) async {
     await (_migration ??= migrateLegacyFiles());
-    final results = await Future.wait([_loadUserFiles(), _probeBundled()]);
+    final results = await Future.wait([
+      _loadUserFiles(),
+      _probeBundled(),
+      if (personaId != null) _loadPersonaFiles(personaId),
+    ]);
     return AssistantAvatarMediaSet(
       userFiles: results[0] as Map<AssistantActivity, AssistantAvatarMedia>,
       bundled: results[1] as Set<AssistantActivity>,
+      personaFiles: personaId == null
+          ? const {}
+          : results[2] as Map<AssistantActivity, AssistantAvatarMedia>,
     );
   }
 
-  Future<Map<AssistantActivity, AssistantAvatarMedia>> _loadUserFiles() async {
-    final found = <AssistantActivity, AssistantAvatarMedia>{};
+  Future<Map<AssistantActivity, AssistantAvatarMedia>> _loadPersonaFiles(
+    String personaId,
+  ) async {
+    if (!isSafePersonaId(personaId)) return const {};
     try {
       final folder = await _folder();
+      return await _loadFilesIn(
+        Directory(p.join(folder.path, 'personas', personaId)),
+      );
+    } catch (_) {
+      return const {};
+    }
+  }
+
+  Future<Map<AssistantActivity, AssistantAvatarMedia>> _loadUserFiles() async {
+    try {
+      return await _loadFilesIn(await _folder());
+    } catch (_) {
+      return const {};
+    }
+  }
+
+  Future<Map<AssistantActivity, AssistantAvatarMedia>> _loadFilesIn(
+    Directory folder,
+  ) async {
+    final found = <AssistantActivity, AssistantAvatarMedia>{};
+    try {
       if (!await folder.exists()) return found;
       await for (final entity in folder.list(followLinks: false)) {
         if (entity is! File) continue;

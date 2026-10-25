@@ -4435,5 +4435,37 @@
   "voiceEngineEchoCancelDescription": "语音通话从播放助手声音的同一音频引擎获取麦克风，并使用 Apple 的回声消除。如果助手的声音有杂音，请关闭：通话将改用普通麦克风。下一次通话开始时生效。",
   "@voiceEngineEchoCancelDescription": {
     "description": "Explains the toggle for echo cancellation on the speech engine."
+  },
+  "personaAppearance": "匹配 Switchboard 的角色",
+  "@personaAppearance": {
+    "description": "Toggle title: the avatar clips and bubble color follow the persona active on a Switchboard server."
+  },
+  "personaAppearanceDescription": "头像片段和气泡颜色取自你的 Switchboard 服务器上当前生效的角色。你自己的片段和颜色作为备用。",
+  "@personaAppearanceDescription": {
+    "description": "Subtitle for the persona appearance toggle."
+  },
+  "personaAppearanceUrl": "Switchboard 地址",
+  "@personaAppearanceUrl": {
+    "description": "Title of the row that sets the Switchboard server address."
+  },
+  "personaAppearanceUrlHint": "http://host:1243",
+  "@personaAppearanceUrlHint": {
+    "description": "Placeholder example for the Switchboard server address."
+  },
+  "personaAppearanceToken": "Switchboard 令牌",
+  "@personaAppearanceToken": {
+    "description": "Title of the row that sets the Switchboard bearer token."
+  },
+  "personaAppearanceTokenHint": "Bearer 令牌",
+  "@personaAppearanceTokenHint": {
+    "description": "Placeholder for the Switchboard bearer token field."
+  },
+  "personaAppearanceTokenSaved": "已保存",
+  "@personaAppearanceTokenSaved": {
+    "description": "Shown under the token row when a token is stored."
+  },
+  "personaAppearanceTokenMissing": "未设置",
+  "@personaAppearanceTokenMissing": {
+    "description": "Shown under the token row when no token is stored."
   }
 }

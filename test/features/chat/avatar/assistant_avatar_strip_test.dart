@@ -37,7 +37,7 @@ class _FakeStore extends AssistantAvatarMediaStore {
   int loads = 0;
 
   @override
-  Future<AssistantAvatarMediaSet> load() async {
+  Future<AssistantAvatarMediaSet> load({String? personaId}) async {
     loads += 1;
     return media;
   }

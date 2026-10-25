@@ -7,6 +7,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../avatar/assistant_avatar_accent.dart';
+import '../avatar/persona_appearance_service.dart';
 
 /// Widest a reply bubble gets, as a share of the chat column.
 const double kAssistantBubbleMaxWidthFactor = 0.85;
@@ -52,8 +53,12 @@ Color? parseBubbleColor(String value) {
 /// Null unless the assistant avatar is on. "Auto" follows the color derived
 /// from the avatar's media (null while there is none), "Gray" is always
 /// null, and a swatch is that swatch.
+///
+/// While "Match persona from Switchboard" is on and the active persona has a
+/// bubble color, that color replaces the user's choice (the stored choice is
+/// never overwritten); a persona without one leaves the user's choice alone.
 final messageBubbleAccentProvider = Provider<Color?>((ref) {
-  final (avatarOn, choice) = ref.watch(
+  final (avatarOn, userChoice) = ref.watch(
     appSettingsProvider.select(
       (settings) => (
         settings.assistantAvatarEnabled,
@@ -62,6 +67,13 @@ final messageBubbleAccentProvider = Provider<Color?>((ref) {
     ),
   );
   if (!avatarOn) return null;
+  final choice =
+      ref.watch(
+        activePersonaAppearanceProvider.select(
+          (persona) => persona?.bubbleColor,
+        ),
+      ) ??
+      userChoice;
   if (choice == assistantAvatarBubbleColorGray) return null;
   if (choice == assistantAvatarBubbleColorAuto) {
     return ref.watch(assistantAvatarAutoAccentProvider);

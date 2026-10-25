@@ -4435,5 +4435,37 @@
   "voiceEngineEchoCancelDescription": "Spraakoproepen nemen de microfoon van dezelfde audio-engine die de assistent afspeelt, met de echo-onderdrukking van Apple. Zet uit als de stem van de assistent kraakt: oproepen gebruiken dan de gewone microfoon. Geldt vanaf de volgende oproep.",
   "@voiceEngineEchoCancelDescription": {
     "description": "Explains the toggle for echo cancellation on the speech engine."
+  },
+  "personaAppearance": "Persona van Switchboard volgen",
+  "@personaAppearance": {
+    "description": "Toggle title: the avatar clips and bubble color follow the persona active on a Switchboard server."
+  },
+  "personaAppearanceDescription": "Neemt de avatarclips en de bubbelkleur over van de persona die actief is op je Switchboard-server. Je eigen clips en kleur blijven de terugval.",
+  "@personaAppearanceDescription": {
+    "description": "Subtitle for the persona appearance toggle."
+  },
+  "personaAppearanceUrl": "Switchboard-URL",
+  "@personaAppearanceUrl": {
+    "description": "Title of the row that sets the Switchboard server address."
+  },
+  "personaAppearanceUrlHint": "http://host:1243",
+  "@personaAppearanceUrlHint": {
+    "description": "Placeholder example for the Switchboard server address."
+  },
+  "personaAppearanceToken": "Switchboard-token",
+  "@personaAppearanceToken": {
+    "description": "Title of the row that sets the Switchboard bearer token."
+  },
+  "personaAppearanceTokenHint": "Bearer-token",
+  "@personaAppearanceTokenHint": {
+    "description": "Placeholder for the Switchboard bearer token field."
+  },
+  "personaAppearanceTokenSaved": "Opgeslagen",
+  "@personaAppearanceTokenSaved": {
+    "description": "Shown under the token row when a token is stored."
+  },
+  "personaAppearanceTokenMissing": "Niet ingesteld",
+  "@personaAppearanceTokenMissing": {
+    "description": "Shown under the token row when no token is stored."
   }
 }

@@ -8,6 +8,7 @@ import 'package:uuid/uuid.dart';
 
 import 'package:conduit_core/features/tools/providers/tools_providers.dart';
 
+import '../../features/chat/avatar/persona_appearance_service.dart';
 import '../../features/chat/providers/text_to_speech_provider.dart';
 import '../../features/notifications/providers/scheduled_task_reminders_provider.dart'
     show scheduledTaskRemindersSupportedProvider;
@@ -1619,6 +1620,34 @@ class NativeSheetHydrationService {
         kind: NativeSheetItemKind.toggle,
         value: appSettings.assistantAvatarEnabled,
       ),
+      NativeSheetItemConfig(
+        id: nativePersonaAppearanceId,
+        title: l10n.personaAppearance,
+        subtitle: l10n.personaAppearanceDescription,
+        sfSymbol: 'person.2',
+        kind: NativeSheetItemKind.toggle,
+        value: appSettings.personaAppearanceEnabled,
+      ),
+      if (appSettings.personaAppearanceEnabled) ...[
+        NativeSheetItemConfig(
+          id: nativePersonaAppearanceUrlId,
+          title: l10n.personaAppearanceUrl,
+          sfSymbol: 'link',
+          kind: NativeSheetItemKind.textField,
+          value: appSettings.personaAppearanceUrl,
+          placeholder: l10n.personaAppearanceUrlHint,
+        ),
+        NativeSheetItemConfig(
+          id: nativePersonaAppearanceTokenId,
+          title: l10n.personaAppearanceToken,
+          subtitle: _ref.read(switchboardTokenProvider)
+              ? l10n.personaAppearanceTokenSaved
+              : l10n.personaAppearanceTokenMissing,
+          sfSymbol: 'lock',
+          kind: NativeSheetItemKind.secureTextField,
+          placeholder: l10n.personaAppearanceTokenHint,
+        ),
+      ],
       NativeSheetItemConfig(
         id: nativeMessageBubblesId,
         title: l10n.messageBubbles,

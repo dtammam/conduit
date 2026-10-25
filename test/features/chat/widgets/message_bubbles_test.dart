@@ -49,7 +49,8 @@ class _FixedAccent extends AssistantAvatarAutoAccent {
 
 class _FakeStore extends AssistantAvatarMediaStore {
   @override
-  Future<AssistantAvatarMediaSet> load() async => AssistantAvatarMediaSet.empty;
+  Future<AssistantAvatarMediaSet> load({String? personaId}) async =>
+      AssistantAvatarMediaSet.empty;
 }
 
 class _NoMessages extends ChatMessagesNotifier {

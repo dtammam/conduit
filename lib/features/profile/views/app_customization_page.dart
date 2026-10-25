@@ -25,11 +25,13 @@ import 'package:conduit_core/features/tools/providers/tools_providers.dart';
 import 'package:conduit_core/models/tool.dart';
 
 import '../../../shared/widgets/conduit_components.dart';
+import '../../../shared/widgets/themed_dialogs.dart';
 import '../../../shared/utils/ui_utils.dart';
 
 import 'package:conduit_core/providers/app_providers.dart';
 
 import '../../../l10n/app_localizations.dart';
+import '../../chat/avatar/persona_appearance_service.dart';
 import '../../chat/providers/text_to_speech_provider.dart';
 import '../../chat/services/voice_input_service.dart';
 import '../widgets/adaptive_segmented_selector.dart';
@@ -552,6 +554,80 @@ class AppCustomizationPage extends ConsumerWidget {
               .read(appSettingsProvider.notifier)
               .setAssistantAvatarEnabled(!settings.assistantAvatarEnabled),
         ),
+        const SizedBox(height: Spacing.sm),
+        CustomizationTile(
+          leading: _buildIconBadge(
+            context,
+            Platform.isIOS ? CupertinoIcons.person_2 : Icons.people_outline,
+            color: theme.buttonPrimary,
+          ),
+          title: l10n.personaAppearance,
+          subtitle: l10n.personaAppearanceDescription,
+          toggled: settings.personaAppearanceEnabled,
+          trailing: AdaptiveSwitch(
+            value: settings.personaAppearanceEnabled,
+            onChanged: (value) => ref
+                .read(appSettingsProvider.notifier)
+                .setPersonaAppearanceEnabled(value),
+          ),
+          showChevron: false,
+          onTap: () => ref
+              .read(appSettingsProvider.notifier)
+              .setPersonaAppearanceEnabled(!settings.personaAppearanceEnabled),
+        ),
+        if (settings.personaAppearanceEnabled) ...[
+          const SizedBox(height: Spacing.sm),
+          CustomizationTile(
+            leading: _buildIconBadge(
+              context,
+              Platform.isIOS ? CupertinoIcons.link : Icons.link,
+              color: theme.buttonPrimary,
+            ),
+            title: l10n.personaAppearanceUrl,
+            subtitle: settings.personaAppearanceUrl.isEmpty
+                ? l10n.personaAppearanceUrlHint
+                : settings.personaAppearanceUrl,
+            showChevron: false,
+            onTap: () async {
+              final value = await ThemedDialogs.promptTextInput(
+                context,
+                title: l10n.personaAppearanceUrl,
+                hintText: l10n.personaAppearanceUrlHint,
+                initialValue: settings.personaAppearanceUrl,
+                keyboardType: TextInputType.url,
+                textCapitalization: TextCapitalization.none,
+              );
+              if (value == null) return;
+              await ref
+                  .read(appSettingsProvider.notifier)
+                  .setPersonaAppearanceUrl(value);
+            },
+          ),
+          const SizedBox(height: Spacing.sm),
+          CustomizationTile(
+            leading: _buildIconBadge(
+              context,
+              Platform.isIOS ? CupertinoIcons.lock : Icons.lock_outline,
+              color: theme.buttonPrimary,
+            ),
+            title: l10n.personaAppearanceToken,
+            subtitle: ref.watch(switchboardTokenProvider)
+                ? l10n.personaAppearanceTokenSaved
+                : l10n.personaAppearanceTokenMissing,
+            showChevron: false,
+            onTap: () async {
+              final value = await ThemedDialogs.promptTextInput(
+                context,
+                title: l10n.personaAppearanceToken,
+                hintText: l10n.personaAppearanceTokenHint,
+                keyboardType: TextInputType.visiblePassword,
+                textCapitalization: TextCapitalization.none,
+              );
+              if (value == null) return;
+              await ref.read(switchboardTokenProvider.notifier).set(value);
+            },
+          ),
+        ],
         const SizedBox(height: Spacing.sm),
         CustomizationTile(
           leading: _buildIconBadge(

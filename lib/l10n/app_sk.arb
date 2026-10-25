@@ -6344,5 +6344,37 @@
   "voiceEngineEchoCancelDescription": "Hlasové hovory berú mikrofón z toho istého zvukového enginu, ktorý prehráva asistenta, s potlačením ozveny od Applu. Vypnite, ak hlas asistenta praská: hovory potom použijú bežný mikrofón. Platí od nasledujúceho hovoru.",
   "@voiceEngineEchoCancelDescription": {
     "description": "Explains the toggle for echo cancellation on the speech engine."
+  },
+  "personaAppearance": "Prevziať personu zo Switchboardu",
+  "@personaAppearance": {
+    "description": "Toggle title: the avatar clips and bubble color follow the persona active on a Switchboard server."
+  },
+  "personaAppearanceDescription": "Klipy avatara a farba bublín sa preberajú z persony, ktorá je aktívna na vašom serveri Switchboard. Vaše vlastné klipy a farba zostanú ako záloha.",
+  "@personaAppearanceDescription": {
+    "description": "Subtitle for the persona appearance toggle."
+  },
+  "personaAppearanceUrl": "Adresa Switchboardu",
+  "@personaAppearanceUrl": {
+    "description": "Title of the row that sets the Switchboard server address."
+  },
+  "personaAppearanceUrlHint": "http://host:1243",
+  "@personaAppearanceUrlHint": {
+    "description": "Placeholder example for the Switchboard server address."
+  },
+  "personaAppearanceToken": "Token Switchboardu",
+  "@personaAppearanceToken": {
+    "description": "Title of the row that sets the Switchboard bearer token."
+  },
+  "personaAppearanceTokenHint": "Token Bearer",
+  "@personaAppearanceTokenHint": {
+    "description": "Placeholder for the Switchboard bearer token field."
+  },
+  "personaAppearanceTokenSaved": "Uložené",
+  "@personaAppearanceTokenSaved": {
+    "description": "Shown under the token row when a token is stored."
+  },
+  "personaAppearanceTokenMissing": "Nenastavené",
+  "@personaAppearanceTokenMissing": {
+    "description": "Shown under the token row when no token is stored."
   }
 }

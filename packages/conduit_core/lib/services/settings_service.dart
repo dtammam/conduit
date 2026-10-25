@@ -319,6 +319,9 @@ class SettingsService {
       PreferenceKeys.messageBubbles: settings.messageBubbles,
       PreferenceKeys.assistantAvatarBubbleColor:
           settings.assistantAvatarBubbleColor,
+      PreferenceKeys.personaAppearanceEnabled:
+          settings.personaAppearanceEnabled,
+      PreferenceKeys.personaAppearanceUrl: settings.personaAppearanceUrl,
       PreferenceKeys.deliveryReceiptsEnabled: settings.deliveryReceiptsEnabled,
       PreferenceKeys.compactToolSummaries: settings.compactToolSummaries,
       PreferenceKeys.omniChatEnabled: settings.omniChatEnabled,
@@ -792,6 +795,10 @@ class SettingsService {
         final String stored => stored,
         null => assistantAvatarBubbleColorAuto,
       },
+      personaAppearanceEnabled:
+          get<bool>(PreferenceKeys.personaAppearanceEnabled) ?? false,
+      personaAppearanceUrl:
+          get<String>(PreferenceKeys.personaAppearanceUrl) ?? '',
       deliveryReceiptsEnabled:
           get<bool>(PreferenceKeys.deliveryReceiptsEnabled) ?? true,
       compactToolSummaries:
@@ -924,6 +931,15 @@ class AppSettings {
   /// derives it from the avatar, [assistantAvatarBubbleColorGray] keeps the
   /// neutral look, and an `#RRGGBB` value is a chosen swatch.
   final String assistantAvatarBubbleColor;
+
+  /// Whether the assistant avatar's clips and the bubble color follow the
+  /// persona that is active on a Switchboard server, when that server
+  /// answers. The user's own clips and color stay the fallback.
+  final bool personaAppearanceEnabled;
+
+  /// Base URL of the Switchboard server, such as `http://host:1243`. Empty
+  /// until set. Its bearer token lives in secure storage, not here.
+  final String personaAppearanceUrl;
   final bool deliveryReceiptsEnabled;
 
   /// Whether the tool rows above a reply collapse to "Used tools" instead of
@@ -1047,6 +1063,8 @@ class AppSettings {
     this.deliveryReceiptsEnabled = true,
     this.messageBubbles = false,
     this.assistantAvatarBubbleColor = assistantAvatarBubbleColorAuto,
+    this.personaAppearanceEnabled = false,
+    this.personaAppearanceUrl = '',
     this.compactToolSummaries = false,
     this.omniChatEnabled = true,
     this.omniSessionIdleMinutes = defaultOmniSessionIdleMinutes,
@@ -1111,6 +1129,8 @@ class AppSettings {
     bool? assistantAvatarEnabled,
     bool? messageBubbles,
     String? assistantAvatarBubbleColor,
+    bool? personaAppearanceEnabled,
+    String? personaAppearanceUrl,
     bool? deliveryReceiptsEnabled,
     bool? compactToolSummaries,
     bool? omniChatEnabled,
@@ -1179,6 +1199,9 @@ class AppSettings {
       messageBubbles: messageBubbles ?? this.messageBubbles,
       assistantAvatarBubbleColor:
           assistantAvatarBubbleColor ?? this.assistantAvatarBubbleColor,
+      personaAppearanceEnabled:
+          personaAppearanceEnabled ?? this.personaAppearanceEnabled,
+      personaAppearanceUrl: personaAppearanceUrl ?? this.personaAppearanceUrl,
       deliveryReceiptsEnabled:
           deliveryReceiptsEnabled ?? this.deliveryReceiptsEnabled,
       compactToolSummaries: compactToolSummaries ?? this.compactToolSummaries,
@@ -1281,6 +1304,8 @@ class AppSettings {
         other.assistantAvatarEnabled == assistantAvatarEnabled &&
         other.messageBubbles == messageBubbles &&
         other.assistantAvatarBubbleColor == assistantAvatarBubbleColor &&
+        other.personaAppearanceEnabled == personaAppearanceEnabled &&
+        other.personaAppearanceUrl == personaAppearanceUrl &&
         other.deliveryReceiptsEnabled == deliveryReceiptsEnabled &&
         other.compactToolSummaries == compactToolSummaries &&
         other.omniChatEnabled == omniChatEnabled &&
@@ -1350,6 +1375,8 @@ class AppSettings {
       assistantAvatarEnabled,
       messageBubbles,
       assistantAvatarBubbleColor,
+      personaAppearanceEnabled,
+      personaAppearanceUrl,
       deliveryReceiptsEnabled,
       compactToolSummaries,
       omniChatEnabled,
@@ -1493,6 +1520,23 @@ class AppSettingsNotifier extends _$AppSettingsNotifier {
     await SettingsService._putPreference(
       PreferenceKeys.assistantAvatarBubbleColor,
       value,
+    );
+  }
+
+  Future<void> setPersonaAppearanceEnabled(bool value) async {
+    state = state.copyWith(personaAppearanceEnabled: value);
+    await SettingsService._putPreference(
+      PreferenceKeys.personaAppearanceEnabled,
+      value,
+    );
+  }
+
+  Future<void> setPersonaAppearanceUrl(String value) async {
+    final trimmed = value.trim();
+    state = state.copyWith(personaAppearanceUrl: trimmed);
+    await SettingsService._putPreference(
+      PreferenceKeys.personaAppearanceUrl,
+      trimmed,
     );
   }
 

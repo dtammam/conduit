@@ -28,6 +28,7 @@ class SecureCredentialStorage {
   static const String _openWebUiRegistryKey = 'openwebui_registry_v1';
   static const String _authTokenKey = 'auth_token_v2';
   static const String _hermesApiKeyKey = 'hermes_api_key_v1';
+  static const String _switchboardTokenKey = 'switchboard_token_v1';
   static const String _hermesSessionKeyKey = 'hermes_session_key_v1';
   static const String _hermesDesktopCredentialsKey =
       'hermes_desktop_credentials_v1';
@@ -408,6 +409,28 @@ class SecureCredentialStorage {
       if (key.startsWith(_serverCredentialsPrefix)) {
         await _secureStorage.delete(key: key);
       }
+    }
+  }
+
+  /// The bearer token for the Switchboard server that supplies the active
+  /// persona's appearance. Null when none is stored. A keychain failure is
+  /// thrown, not reported as a missing token.
+  Future<String?> readSwitchboardToken() =>
+      _readHermesSecret(_switchboardTokenKey, scope: 'switchboard/token');
+
+  /// Stores the Switchboard token, or removes it when [token] is null or
+  /// blank. Never logs the value.
+  Future<void> writeSwitchboardToken(String? token) async {
+    final trimmed = token?.trim() ?? '';
+    try {
+      if (trimmed.isEmpty) {
+        await _secureStorage.delete(key: _switchboardTokenKey);
+      } else {
+        await _secureStorage.write(key: _switchboardTokenKey, value: trimmed);
+      }
+    } catch (e) {
+      DebugLogger.error('save-failed', scope: 'switchboard/token', error: e);
+      rethrow;
     }
   }
 

@@ -599,6 +599,16 @@ const nativeQuickReplyReactionsId = 'quick-reply-reactions';
 /// Control id of the "Assistant avatar" toggle in the native Chats page.
 const nativeAssistantAvatarId = 'assistant-avatar';
 
+/// Control id of the "Match persona from Switchboard" toggle in the native
+/// Chats page.
+const nativePersonaAppearanceId = 'persona-appearance';
+
+/// Control id of the Switchboard address field under that toggle.
+const nativePersonaAppearanceUrlId = 'persona-appearance-url';
+
+/// Control id of the Switchboard token field under that toggle.
+const nativePersonaAppearanceTokenId = 'persona-appearance-token';
+
 /// Control id of the "Message bubbles" toggle in the native Chats page.
 const nativeMessageBubblesId = 'message-bubbles';
 

@@ -4207,5 +4207,37 @@
   "voiceEngineEchoCancelDescription": "음성 통화는 어시스턴트를 재생하는 동일한 오디오 엔진에서 마이크를 가져오며 Apple의 에코 제거를 사용합니다. 어시스턴트 목소리에 잡음이 생기면 끄세요. 그러면 통화는 일반 마이크를 사용합니다. 다음 통화부터 적용됩니다.",
   "@voiceEngineEchoCancelDescription": {
     "description": "Explains the toggle for echo cancellation on the speech engine."
+  },
+  "personaAppearance": "Switchboard 페르소나 따르기",
+  "@personaAppearance": {
+    "description": "Toggle title: the avatar clips and bubble color follow the persona active on a Switchboard server."
+  },
+  "personaAppearanceDescription": "아바타 클립과 말풍선 색을 Switchboard 서버에서 활성화된 페르소나에서 가져옵니다. 내 클립과 색은 대체값으로 남습니다.",
+  "@personaAppearanceDescription": {
+    "description": "Subtitle for the persona appearance toggle."
+  },
+  "personaAppearanceUrl": "Switchboard URL",
+  "@personaAppearanceUrl": {
+    "description": "Title of the row that sets the Switchboard server address."
+  },
+  "personaAppearanceUrlHint": "http://host:1243",
+  "@personaAppearanceUrlHint": {
+    "description": "Placeholder example for the Switchboard server address."
+  },
+  "personaAppearanceToken": "Switchboard 토큰",
+  "@personaAppearanceToken": {
+    "description": "Title of the row that sets the Switchboard bearer token."
+  },
+  "personaAppearanceTokenHint": "Bearer 토큰",
+  "@personaAppearanceTokenHint": {
+    "description": "Placeholder for the Switchboard bearer token field."
+  },
+  "personaAppearanceTokenSaved": "저장됨",
+  "@personaAppearanceTokenSaved": {
+    "description": "Shown under the token row when a token is stored."
+  },
+  "personaAppearanceTokenMissing": "설정 안 됨",
+  "@personaAppearanceTokenMissing": {
+    "description": "Shown under the token row when no token is stored."
   }
 }

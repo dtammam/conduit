@@ -103,6 +103,9 @@ import 'core/utils/native_sheet_utils.dart'
         nativeDeliveryReceiptsId,
         nativeQuickReplyReactionsId,
         nativeAssistantAvatarId,
+        nativePersonaAppearanceId,
+        nativePersonaAppearanceTokenId,
+        nativePersonaAppearanceUrlId,
         nativeMessageBubblesId,
         nativeCompactToolSummariesId,
         nativeOmniChatId,
@@ -122,6 +125,7 @@ import 'core/utils/current_localizations.dart';
 
 import 'package:conduit_core/features/chat/services/request_completion_runner.dart';
 
+import 'features/chat/avatar/persona_appearance_service.dart';
 import 'features/chat/providers/text_to_speech_provider.dart';
 import 'core/services/callkit_service.dart';
 import 'features/chat/services/voice_input_service.dart';
@@ -605,6 +609,9 @@ class _ConduitAppState extends ConsumerState<ConduitApp> {
     ref.read(openWebUiRouteResolverProvider);
     ref.read(quickActionsCoordinatorProvider);
     ref.read(chatWakelockCoordinatorProvider);
+    // Starts asking the Switchboard server for the active persona when the
+    // setting is on.
+    ref.read(personaAppearanceProvider);
     _nativeSheetSubscription = NativeSheetBridge.instance.events.listen(
       _handleNativeSheetEvent,
     );
@@ -1231,6 +1238,22 @@ class _ConduitAppState extends ConsumerState<ConduitApp> {
             await ref
                 .read(appSettingsProvider.notifier)
                 .setAssistantAvatarEnabled(value);
+          }
+        case nativePersonaAppearanceId:
+          if (value is bool) {
+            await ref
+                .read(appSettingsProvider.notifier)
+                .setPersonaAppearanceEnabled(value);
+          }
+        case nativePersonaAppearanceUrlId:
+          if (value is String) {
+            await ref
+                .read(appSettingsProvider.notifier)
+                .setPersonaAppearanceUrl(value);
+          }
+        case nativePersonaAppearanceTokenId:
+          if (value is String && value.trim().isNotEmpty) {
+            await ref.read(switchboardTokenProvider.notifier).set(value);
           }
         case nativeMessageBubblesId:
           if (value is bool) {

@@ -148,6 +148,17 @@ void main() {
         ).equals(false);
       });
 
+      test('personaAppearance is off with no address by default', () {
+        check(settings.personaAppearanceEnabled).equals(false);
+        check(settings.personaAppearanceUrl).equals('');
+        final changed = settings.copyWith(
+          personaAppearanceEnabled: true,
+          personaAppearanceUrl: 'http://sb.test:1243',
+        );
+        check(changed.personaAppearanceEnabled).equals(true);
+        check(changed.personaAppearanceUrl).equals('http://sb.test:1243');
+      });
+
       test('voiceCallKitEnabled defaults to off in this build', () {
         check(settings.voiceCallKitEnabled).equals(false);
         check(settings.copyWith(voiceCallKitEnabled: true).voiceCallKitEnabled)

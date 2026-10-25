@@ -22,6 +22,7 @@ import 'assistant_avatar_accent.dart';
 import 'assistant_avatar_media.dart';
 import 'assistant_avatar_sheet.dart';
 import 'assistant_pending_approval.dart';
+import 'persona_appearance_service.dart';
 
 const String _logScope = 'chat/avatar';
 
@@ -110,10 +111,21 @@ class _AssistantAvatarStripState extends ConsumerState<AssistantAvatarStrip> {
   ({String mediaId, String cacheKey})? _pendingVideoAccent;
   Timer? _videoAccentTimer;
 
+  /// Asks for the active persona while this chat is on screen.
+  Timer? _personaTimer;
+
   @override
   void initState() {
     super.initState();
     unawaited(_reloadMedia());
+    // A chat opening is one of the moments the persona is asked for; then
+    // once a minute while the strip is mounted and the app is in front.
+    unawaited(ref.read(personaAppearanceProvider.notifier).refresh());
+    _personaTimer = Timer.periodic(kPersonaPollInterval, (_) {
+      final lifecycle = WidgetsBinding.instance.lifecycleState;
+      if (lifecycle != null && lifecycle != AppLifecycleState.resumed) return;
+      unawaited(ref.read(personaAppearanceProvider.notifier).refresh());
+    });
     // A chat that is already open counts as loaded.
     WidgetsBinding.instance.addPostFrameCallback((_) => _scanLoadedChat());
   }
@@ -123,6 +135,7 @@ class _AssistantAvatarStripState extends ConsumerState<AssistantAvatarStrip> {
     _disposed = true;
     _doneTimer?.cancel();
     _videoAccentTimer?.cancel();
+    _personaTimer?.cancel();
     for (final controller in _controllers.values) {
       unawaited(controller.dispose());
     }
@@ -131,7 +144,9 @@ class _AssistantAvatarStripState extends ConsumerState<AssistantAvatarStrip> {
   }
 
   Future<void> _reloadMedia() async {
-    final media = await _store.load();
+    final media = await _store.load(
+      personaId: ref.read(activePersonaAppearanceProvider)?.id,
+    );
     if (_disposed) return;
     // A replaced file keeps its path, so drop every file controller and
     // any asset controller no longer in use; they are recreated lazily.
@@ -392,6 +407,14 @@ class _AssistantAvatarStripState extends ConsumerState<AssistantAvatarStrip> {
   @override
   Widget build(BuildContext context) {
     ref.listen<bool>(isChatStreamingProvider, _onStreamingChanged);
+    ref.listen<PersonaAppearance?>(activePersonaAppearanceProvider, (
+      previous,
+      next,
+    ) {
+      // New persona, new clips, or the setting turning on or off.
+      final same = next == null ? previous == null : next.sameClipsAs(previous);
+      if (!same) unawaited(_reloadMedia());
+    });
     ref.listen<bool>(
       appSettingsProvider.select((settings) => settings.messageBubbles),
       (previous, next) {

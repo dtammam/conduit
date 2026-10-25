@@ -8514,5 +8514,37 @@
   "voiceEngineEchoCancelDescription": "Rozmowy głosowe biorą mikrofon z tego samego silnika audio, który odtwarza asystenta, z usuwaniem echa Apple. Wyłącz, jeśli głos asystenta trzeszczy: rozmowy używają wtedy zwykłego mikrofonu. Obowiązuje od następnej rozmowy.",
   "@voiceEngineEchoCancelDescription": {
     "description": "Explains the toggle for echo cancellation on the speech engine."
+  },
+  "personaAppearance": "Dopasuj personę z Switchboard",
+  "@personaAppearance": {
+    "description": "Toggle title: the avatar clips and bubble color follow the persona active on a Switchboard server."
+  },
+  "personaAppearanceDescription": "Klipy awatara i kolor dymków pochodzą z persony aktywnej na Twoim serwerze Switchboard. Twoje własne klipy i kolor zostają jako zapas.",
+  "@personaAppearanceDescription": {
+    "description": "Subtitle for the persona appearance toggle."
+  },
+  "personaAppearanceUrl": "Adres Switchboard",
+  "@personaAppearanceUrl": {
+    "description": "Title of the row that sets the Switchboard server address."
+  },
+  "personaAppearanceUrlHint": "http://host:1243",
+  "@personaAppearanceUrlHint": {
+    "description": "Placeholder example for the Switchboard server address."
+  },
+  "personaAppearanceToken": "Token Switchboard",
+  "@personaAppearanceToken": {
+    "description": "Title of the row that sets the Switchboard bearer token."
+  },
+  "personaAppearanceTokenHint": "Token Bearer",
+  "@personaAppearanceTokenHint": {
+    "description": "Placeholder for the Switchboard bearer token field."
+  },
+  "personaAppearanceTokenSaved": "Zapisano",
+  "@personaAppearanceTokenSaved": {
+    "description": "Shown under the token row when a token is stored."
+  },
+  "personaAppearanceTokenMissing": "Nie ustawiono",
+  "@personaAppearanceTokenMissing": {
+    "description": "Shown under the token row when no token is stored."
   }
 }

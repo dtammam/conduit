@@ -15,6 +15,9 @@ final class PreferenceKeys {
       'assistant_avatar_bubble_color';
   static const String assistantAvatarAccentCache =
       'assistant_avatar_accent_cache';
+  static const String personaAppearanceEnabled = 'persona_appearance_enabled';
+  static const String personaAppearanceUrl = 'persona_appearance_url';
+  static const String personaAppearanceCache = 'persona_appearance_cache_v1';
   static const String compactToolSummaries = 'compact_tool_summaries';
   static const String omniChatEnabled = 'omni_chat_enabled';
   static const String omniChatId = 'omni_chat_id';

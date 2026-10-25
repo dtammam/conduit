@@ -388,6 +388,7 @@ void main() {
         'delivery-receipts',
         'quick-reply-reactions',
         'assistant-avatar',
+        'persona-appearance',
         'message-bubbles',
         'compact-tool-summaries',
         'omni-chat',

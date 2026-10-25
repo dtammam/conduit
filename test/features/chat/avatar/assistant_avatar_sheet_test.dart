@@ -53,7 +53,8 @@ class _SeededLog extends AssistantActionLog {
 
 class _FakeStore extends AssistantAvatarMediaStore {
   @override
-  Future<AssistantAvatarMediaSet> load() async => AssistantAvatarMediaSet.empty;
+  Future<AssistantAvatarMediaSet> load({String? personaId}) async =>
+      AssistantAvatarMediaSet.empty;
 }
 
 AssistantActionRecord _call(
