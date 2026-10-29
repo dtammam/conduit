@@ -58,6 +58,7 @@ import 'package:conduit_core/models/server_config.dart';
 
 import 'package:conduit_core/features/tools/providers/tools_providers.dart';
 
+import 'package:conduit/features/chat/omni/omni_refresh.dart';
 import 'package:conduit_core/features/chat/omni/omni_chat.dart';
 import 'package:conduit_core/features/chat/providers/attached_files_provider.dart';
 import 'package:conduit_core/services/settings_service.dart';
@@ -1196,6 +1197,9 @@ class AppStartupFlow extends _$AppStartupFlow {
         .handleLaunchTap();
     unawaited(launchTap);
     _openOmniChatAtLaunch(afterLaunchTap: launchTap);
+    // Server-posted routine messages appear in the Omni chat without
+    // leaving and re-entering it.
+    ref.read(omniRefreshProvider);
     // Scheduled task reminders resync from here on (or cancel themselves when
     // they are off).
     ref.read(scheduledTaskRemindersProvider);
