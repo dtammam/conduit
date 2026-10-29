@@ -632,6 +632,33 @@ class AppCustomizationPage extends ConsumerWidget {
         CustomizationTile(
           leading: _buildIconBadge(
             context,
+            Platform.isIOS ? CupertinoIcons.bell : Icons.notifications_none,
+            color: theme.buttonPrimary,
+          ),
+          title: l10n.routinesServerUrl,
+          subtitle: settings.routinesServerUrl.isEmpty
+              ? l10n.routinesServerUrlHint
+              : settings.routinesServerUrl,
+          showChevron: false,
+          onTap: () async {
+            final value = await ThemedDialogs.promptTextInput(
+              context,
+              title: l10n.routinesServerUrl,
+              hintText: l10n.routinesServerUrlHint,
+              initialValue: settings.routinesServerUrl,
+              keyboardType: TextInputType.url,
+              textCapitalization: TextCapitalization.none,
+            );
+            if (value == null) return;
+            await ref
+                .read(appSettingsProvider.notifier)
+                .setRoutinesServerUrl(value);
+          },
+        ),
+        const SizedBox(height: Spacing.sm),
+        CustomizationTile(
+          leading: _buildIconBadge(
+            context,
             Platform.isIOS
                 ? CupertinoIcons.chat_bubble_2
                 : Icons.chat_bubble_outline,

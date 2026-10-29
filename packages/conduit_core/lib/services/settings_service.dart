@@ -322,6 +322,8 @@ class SettingsService {
       PreferenceKeys.personaAppearanceEnabled:
           settings.personaAppearanceEnabled,
       PreferenceKeys.personaAppearanceUrl: settings.personaAppearanceUrl,
+      PreferenceKeys.routinesServerUrl: settings.routinesServerUrl,
+      PreferenceKeys.routinesPushEnabled: settings.routinesPushEnabled,
       PreferenceKeys.deliveryReceiptsEnabled: settings.deliveryReceiptsEnabled,
       PreferenceKeys.compactToolSummaries: settings.compactToolSummaries,
       PreferenceKeys.omniChatEnabled: settings.omniChatEnabled,
@@ -799,6 +801,9 @@ class SettingsService {
           get<bool>(PreferenceKeys.personaAppearanceEnabled) ?? true,
       personaAppearanceUrl:
           get<String>(PreferenceKeys.personaAppearanceUrl) ?? '',
+      routinesServerUrl: get<String>(PreferenceKeys.routinesServerUrl) ?? '',
+      routinesPushEnabled:
+          get<bool>(PreferenceKeys.routinesPushEnabled) ?? false,
       deliveryReceiptsEnabled:
           get<bool>(PreferenceKeys.deliveryReceiptsEnabled) ?? true,
       compactToolSummaries:
@@ -940,6 +945,13 @@ class AppSettings {
   /// Base URL of the Switchboard server, such as `http://host:1243`. Empty
   /// until set. Its bearer token lives in secure storage, not here.
   final String personaAppearanceUrl;
+
+  /// The routines server (the chat relay) address: push registration, quiet
+  /// hours and the last result of each routine. Empty means none.
+  final String routinesServerUrl;
+
+  /// Whether this phone is registered for the routines server's push.
+  final bool routinesPushEnabled;
   final bool deliveryReceiptsEnabled;
 
   /// Whether the tool rows above a reply collapse to "Used tools" instead of
@@ -1065,6 +1077,8 @@ class AppSettings {
     this.assistantAvatarBubbleColor = assistantAvatarBubbleColorAuto,
     this.personaAppearanceEnabled = true,
     this.personaAppearanceUrl = '',
+    this.routinesServerUrl = '',
+    this.routinesPushEnabled = false,
     this.compactToolSummaries = false,
     this.omniChatEnabled = true,
     this.omniSessionIdleMinutes = defaultOmniSessionIdleMinutes,
@@ -1131,6 +1145,8 @@ class AppSettings {
     String? assistantAvatarBubbleColor,
     bool? personaAppearanceEnabled,
     String? personaAppearanceUrl,
+    String? routinesServerUrl,
+    bool? routinesPushEnabled,
     bool? deliveryReceiptsEnabled,
     bool? compactToolSummaries,
     bool? omniChatEnabled,
@@ -1202,6 +1218,8 @@ class AppSettings {
       personaAppearanceEnabled:
           personaAppearanceEnabled ?? this.personaAppearanceEnabled,
       personaAppearanceUrl: personaAppearanceUrl ?? this.personaAppearanceUrl,
+      routinesServerUrl: routinesServerUrl ?? this.routinesServerUrl,
+      routinesPushEnabled: routinesPushEnabled ?? this.routinesPushEnabled,
       deliveryReceiptsEnabled:
           deliveryReceiptsEnabled ?? this.deliveryReceiptsEnabled,
       compactToolSummaries: compactToolSummaries ?? this.compactToolSummaries,
@@ -1306,6 +1324,8 @@ class AppSettings {
         other.assistantAvatarBubbleColor == assistantAvatarBubbleColor &&
         other.personaAppearanceEnabled == personaAppearanceEnabled &&
         other.personaAppearanceUrl == personaAppearanceUrl &&
+        other.routinesServerUrl == routinesServerUrl &&
+        other.routinesPushEnabled == routinesPushEnabled &&
         other.deliveryReceiptsEnabled == deliveryReceiptsEnabled &&
         other.compactToolSummaries == compactToolSummaries &&
         other.omniChatEnabled == omniChatEnabled &&
@@ -1377,6 +1397,8 @@ class AppSettings {
       assistantAvatarBubbleColor,
       personaAppearanceEnabled,
       personaAppearanceUrl,
+      routinesServerUrl,
+      routinesPushEnabled,
       deliveryReceiptsEnabled,
       compactToolSummaries,
       omniChatEnabled,
@@ -1537,6 +1559,23 @@ class AppSettingsNotifier extends _$AppSettingsNotifier {
     await SettingsService._putPreference(
       PreferenceKeys.personaAppearanceUrl,
       trimmed,
+    );
+  }
+
+  Future<void> setRoutinesServerUrl(String value) async {
+    final trimmed = value.trim();
+    state = state.copyWith(routinesServerUrl: trimmed);
+    await SettingsService._putPreference(
+      PreferenceKeys.routinesServerUrl,
+      trimmed,
+    );
+  }
+
+  Future<void> setRoutinesPushEnabled(bool value) async {
+    state = state.copyWith(routinesPushEnabled: value);
+    await SettingsService._putPreference(
+      PreferenceKeys.routinesPushEnabled,
+      value,
     );
   }
 

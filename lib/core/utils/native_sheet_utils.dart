@@ -609,6 +609,9 @@ const nativePersonaAppearanceUrlId = 'persona-appearance-url';
 /// Control id of the Switchboard token field under that toggle.
 const nativePersonaAppearanceTokenId = 'persona-appearance-token';
 
+/// Control id of the routines server address field in the native Chats page.
+const nativeRoutinesServerUrlId = 'routines-server-url';
+
 /// Control id of the "Message bubbles" toggle in the native Chats page.
 const nativeMessageBubblesId = 'message-bubbles';
 

@@ -1,12 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:conduit/features/automations/views/scheduled_task_format.dart';
 import 'package:conduit/l10n/app_localizations.dart';
-import 'package:conduit/shared/services/navigation_service.dart';
 import 'package:conduit/shared/theme/theme_extensions.dart';
 import 'package:conduit/shared/widgets/platform_ui/platform_ui.dart';
-import 'package:conduit_core/features/automations/models/automation.dart';
 import 'package:conduit_core/features/automations/providers/automation_providers.dart';
 import 'package:conduit_core/features/chat/providers/chat_providers.dart';
 import 'package:conduit_core/providers/app_providers.dart';
@@ -22,6 +19,7 @@ import 'assistant_activity.dart';
 import 'assistant_avatar_accent.dart';
 import 'assistant_avatar_media.dart';
 import 'assistant_pending_approval.dart';
+import '../../routines/routines_tab.dart';
 
 const String _logScope = 'chat/avatar-activity';
 
@@ -130,12 +128,18 @@ class _AssistantAvatarSheetState extends ConsumerState<AssistantAvatarSheet> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final theme = context.conduitTheme;
-    final upcomingAvailable = ref.watch(automationsAvailableProvider);
+    // Routines come from the account's scheduled tasks and from the routines
+    // server, so the tab is there when either exists.
+    final routinesAvailable =
+        ref.watch(automationsAvailableProvider) ||
+        ref.watch(
+          appSettingsProvider.select((s) => s.routinesServerUrl.isNotEmpty),
+        );
     final approval = ref.watch(assistantApprovalProvider);
     final unseen = ref.watch(
       assistantActionLogProvider.select((log) => log.unseenFailures),
     );
-    final tab = _tab == AssistantSheetTab.upcoming && !upcomingAvailable
+    final tab = _tab == AssistantSheetTab.routines && !routinesAvailable
         ? AssistantSheetTab.activity
         : _tab;
     final failures = tab == AssistantSheetTab.activity
@@ -144,7 +148,7 @@ class _AssistantAvatarSheetState extends ConsumerState<AssistantAvatarSheet> {
     final tabs = <AssistantSheetTab>[
       AssistantSheetTab.activity,
       AssistantSheetTab.approvals,
-      if (upcomingAvailable) AssistantSheetTab.upcoming,
+      if (routinesAvailable) AssistantSheetTab.routines,
       AssistantSheetTab.appearance,
     ];
     final height = MediaQuery.sizeOf(context).height;
@@ -182,8 +186,8 @@ class _AssistantAvatarSheetState extends ConsumerState<AssistantAvatarSheet> {
                             l10n.assistantSheetTabActivity,
                           AssistantSheetTab.approvals =>
                             l10n.assistantSheetTabApprovals,
-                          AssistantSheetTab.upcoming =>
-                            l10n.assistantSheetTabUpcoming,
+                          AssistantSheetTab.routines =>
+                            l10n.assistantSheetTabRoutines,
                           AssistantSheetTab.appearance =>
                             l10n.assistantSheetTabAppearance,
                         },
@@ -210,7 +214,7 @@ class _AssistantAvatarSheetState extends ConsumerState<AssistantAvatarSheet> {
                   AssistantSheetTab.approvals => SingleChildScrollView(
                     child: _ApprovalsTab(approval: approval),
                   ),
-                  AssistantSheetTab.upcoming => const _UpcomingTab(),
+                  AssistantSheetTab.routines => const RoutinesTab(),
                   AssistantSheetTab.appearance => SingleChildScrollView(
                     child: _AppearanceTab(
                       store: widget.store,
@@ -869,106 +873,6 @@ class _ApprovalsTabState extends ConsumerState<_ApprovalsTab> {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _UpcomingTab extends ConsumerWidget {
-  const _UpcomingTab();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final l10n = AppLocalizations.of(context)!;
-    final theme = context.conduitTheme;
-    final tasks = ref.watch(automationsProvider);
-    final data = tasks.asData?.value;
-    if (data == null && tasks.isLoading) {
-      return const Align(
-        alignment: Alignment.topCenter,
-        child: Padding(
-          padding: EdgeInsets.symmetric(vertical: Spacing.lg),
-          child: AdaptiveProgressIndicator.activity(),
-        ),
-      );
-    }
-    final upcoming =
-        <Automation>[
-          for (final task in data?.items ?? const <Automation>[])
-            if (task.isActive) task,
-        ]..sort(
-          (a, b) =>
-              (a.nextRunAtNs ?? 1 << 62).compareTo(b.nextRunAtNs ?? 1 << 62),
-        );
-    if (upcoming.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: Spacing.lg),
-        child: Text(
-          l10n.assistantUpcomingEmpty,
-          key: const ValueKey('assistant-upcoming-empty'),
-          textAlign: TextAlign.center,
-          style: AppTypography.bodyMediumStyle.copyWith(
-            color: theme.textSecondary,
-          ),
-        ),
-      );
-    }
-    return ListView(
-      children: [
-        for (final task in upcoming)
-          Builder(
-            builder: (context) {
-              final next = formatServerTime(context, task.nextRunAtNs);
-              return GestureDetector(
-                key: ValueKey('assistant-upcoming-${task.id}'),
-                behavior: HitTestBehavior.opaque,
-                onTap: () {
-                  Navigator.of(context).maybePop();
-                  unawaited(
-                    NavigationService.router.pushNamed<void>(
-                      RouteNames.scheduledTaskDetail,
-                      pathParameters: {'id': task.id},
-                    ),
-                  );
-                },
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: Spacing.xs),
-                  child: Row(
-                    children: [
-                      Icon(
-                        cupertinoIconForSFSymbol('clock'),
-                        size: IconSize.md,
-                        color: theme.textSecondary,
-                      ),
-                      const SizedBox(width: Spacing.sm),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              task.name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: AppTypography.bodyLargeStyle.copyWith(
-                                color: theme.textPrimary,
-                              ),
-                            ),
-                            if (next != null)
-                              Text(
-                                l10n.assistantUpcomingNextRun(next),
-                                style: AppTypography.bodySmallStyle.copyWith(
-                                  color: theme.textSecondary,
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
-      ],
     );
   }
 }

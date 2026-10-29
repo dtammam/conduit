@@ -118,6 +118,22 @@ Future<TimeOfDay?> showAdaptiveTimePicker(
   );
 }
 
+/// [showAdaptiveTimePicker] for callers that hold a time as hour and minute
+/// and keep out of the material library. Null when dismissed.
+Future<({int hour, int minute})?> showAdaptiveHourMinutePicker(
+  BuildContext context, {
+  required int hour,
+  required int minute,
+  String? title,
+}) async {
+  final picked = await showAdaptiveTimePicker(
+    context,
+    initial: TimeOfDay(hour: hour, minute: minute),
+    title: title,
+  );
+  return picked == null ? null : (hour: picked.hour, minute: picked.minute);
+}
+
 DateTime _dateOnly(DateTime value) =>
     DateTime(value.year, value.month, value.day);
 

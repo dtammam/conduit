@@ -18,6 +18,8 @@ final class PreferenceKeys {
   static const String personaAppearanceEnabled = 'persona_appearance_enabled';
   static const String personaAppearanceUrl = 'persona_appearance_url';
   static const String personaAppearanceCache = 'persona_appearance_cache_v1';
+  static const String routinesServerUrl = 'routines_server_url';
+  static const String routinesPushEnabled = 'routines_push_enabled';
   static const String compactToolSummaries = 'compact_tool_summaries';
   static const String omniChatEnabled = 'omni_chat_enabled';
   static const String omniChatId = 'omni_chat_id';

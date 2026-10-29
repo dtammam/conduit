@@ -1649,6 +1649,14 @@ class NativeSheetHydrationService {
         ),
       ],
       NativeSheetItemConfig(
+        id: nativeRoutinesServerUrlId,
+        title: l10n.routinesServerUrl,
+        sfSymbol: 'bell.badge',
+        kind: NativeSheetItemKind.textField,
+        value: appSettings.routinesServerUrl,
+        placeholder: l10n.routinesServerUrlHint,
+      ),
+      NativeSheetItemConfig(
         id: nativeMessageBubblesId,
         title: l10n.messageBubbles,
         subtitle: l10n.messageBubblesDescription,

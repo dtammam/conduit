@@ -159,6 +159,17 @@ void main() {
         check(changed.personaAppearanceUrl).equals('http://sb.test:1243');
       });
 
+      test('routines server defaults to none and push to off', () {
+        check(settings.routinesServerUrl).equals('');
+        check(settings.routinesPushEnabled).equals(false);
+        final changed = settings.copyWith(
+          routinesServerUrl: 'http://relay.test:1236',
+          routinesPushEnabled: true,
+        );
+        check(changed.routinesServerUrl).equals('http://relay.test:1236');
+        check(changed.routinesPushEnabled).equals(true);
+      });
+
       test('voiceCallKitEnabled defaults to off in this build', () {
         check(settings.voiceCallKitEnabled).equals(false);
         check(settings.copyWith(voiceCallKitEnabled: true).voiceCallKitEnabled)

@@ -124,6 +124,7 @@ import '../../../shared/widgets/themed_sheets.dart';
 import '../../../shared/widgets/measure_size.dart';
 import '../providers/context_usage_providers.dart';
 import '../widgets/context_usage_ring.dart';
+import '../../routines/push_registration.dart';
 import '../widgets/omni_session_divider.dart';
 import '../../../shared/widgets/server_version_warning_card.dart';
 import '../../../shared/widgets/adaptive_toolbar_components.dart';
@@ -613,6 +614,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   bool _greetingReady = false;
   ProviderSubscription<String?>? _screenContextSub;
   ProviderSubscription<bool>? _conversationLoadingSub;
+  ProviderSubscription<RoutineReplyRequest?>? _routineReplySub;
+  bool _routineReplySending = false;
   ProviderSubscription<bool>? _reviewerModeSub;
   ProviderSubscription<String?>? _conversationIdSub;
   ProviderSubscription<Object>? _authEpochSub;
@@ -905,6 +908,34 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     );
   }
 
+  /// Sends a reply typed on a routine notification once its chat is open and
+  /// loaded. The reply goes out with the chat's selected tools, like a quick
+  /// reply, and without the composer's attachments.
+  void _drainRoutineReply() {
+    if (!mounted || _routineReplySending) return;
+    final request = ref.read(routineReplyProvider);
+    final active = ref.read(activeConversationProvider);
+    if (request == null ||
+        active == null ||
+        !conversationMatchesScopedId(active, request.chatId) ||
+        ref.read(isLoadingConversationProvider)) {
+      return;
+    }
+    _routineReplySending = true;
+    ref.read(routineReplyProvider.notifier).clear();
+    unawaited(() async {
+      try {
+        await _sendMessage(
+          request.text,
+          includeComposerContext: false,
+          includeSelectedTools: true,
+        );
+      } finally {
+        _routineReplySending = false;
+      }
+    }());
+  }
+
   @override
   void initState() {
     super.initState();
@@ -925,7 +956,12 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       isLoading,
     ) {
       if (!isLoading) _scheduleScreenContextSubmission();
+      if (!isLoading) _drainRoutineReply();
     });
+    _routineReplySub = ref.listenManual(
+      routineReplyProvider,
+      (_, _) => _drainRoutineReply(),
+    );
     _reviewerModeSub = ref.listenManual(reviewerModeProvider, (_, next) {
       if (!next || ref.read(selectedModelProvider) != null) return;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -942,10 +978,12 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       // A failed mark belongs to the conversation it was sent in.
       _failedSendMessageId.value = null;
       _handleConversationChanged(next);
+      _drainRoutineReply();
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _handleConversationChanged(ref.read(conversationIdListenable));
+        _drainRoutineReply();
       }
     });
     _authEpochSub = ref.listenManual(openWebUiAuthSessionEpochProvider, (
@@ -1015,6 +1053,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     _livePromptNotifier.cancel();
     _screenContextSub?.close();
     _conversationLoadingSub?.close();
+    _routineReplySub?.close();
     _reviewerModeSub?.close();
     _conversationIdSub?.close();
     _authEpochSub?.close();

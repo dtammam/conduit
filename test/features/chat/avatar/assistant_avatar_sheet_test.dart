@@ -345,23 +345,23 @@ void main() {
           .isEmpty();
     });
 
-    testWidgets('Upcoming is hidden when automations are unavailable', (
+    testWidgets('Routines is hidden when automations are unavailable', (
       tester,
     ) async {
       await mount(tester);
       await openSheet(tester);
 
-      check(find.text('Upcoming').evaluate()).isEmpty();
+      check(find.text('Routines').evaluate()).isEmpty();
       check(find.text('Appearance').evaluate()).length.equals(1);
     });
 
-    testWidgets('Upcoming shows when automations are available', (
+    testWidgets('Routines shows when automations are available', (
       tester,
     ) async {
       await mount(tester, upcoming: true);
       await openSheet(tester);
 
-      check(find.text('Upcoming').evaluate()).length.equals(1);
+      check(find.text('Routines').evaluate()).length.equals(1);
     });
 
     testWidgets('the sheet and the tab control keep their place across tabs', (
@@ -382,7 +382,7 @@ void main() {
 
       for (final label in const [
         'Approvals',
-        'Upcoming',
+        'Routines',
         'Appearance',
         'Activity',
       ]) {

@@ -538,7 +538,7 @@ class AssistantActionLog extends Notifier<AssistantActionLogState> {
 }
 
 /// Which tab of the avatar's sheet to open on.
-enum AssistantSheetTab { activity, approvals, upcoming, appearance }
+enum AssistantSheetTab { activity, approvals, routines, appearance }
 
 /// A request, from outside the app bar, to open the avatar's sheet: the
 /// failure line under a reply and the reply's "View actions" menu item send

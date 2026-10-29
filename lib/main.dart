@@ -106,6 +106,7 @@ import 'core/utils/native_sheet_utils.dart'
         nativePersonaAppearanceId,
         nativePersonaAppearanceTokenId,
         nativePersonaAppearanceUrlId,
+        nativeRoutinesServerUrlId,
         nativeMessageBubblesId,
         nativeCompactToolSummariesId,
         nativeOmniChatId,
@@ -1254,6 +1255,12 @@ class _ConduitAppState extends ConsumerState<ConduitApp> {
         case nativePersonaAppearanceTokenId:
           if (value is String && value.trim().isNotEmpty) {
             await ref.read(switchboardTokenProvider.notifier).set(value);
+          }
+        case nativeRoutinesServerUrlId:
+          if (value is String) {
+            await ref
+                .read(appSettingsProvider.notifier)
+                .setRoutinesServerUrl(value);
           }
         case nativeMessageBubblesId:
           if (value is bool) {

@@ -391,6 +391,7 @@ void main() {
         'persona-appearance',
         'persona-appearance-url',
         'persona-appearance-token',
+        'routines-server-url',
         'message-bubbles',
         'compact-tool-summaries',
         'omni-chat',

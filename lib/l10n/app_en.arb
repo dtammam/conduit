@@ -9241,10 +9241,6 @@
   "@assistantSheetTabApprovals": {
     "description": "Tab in the assistant avatar sheet showing a request waiting for approval."
   },
-  "assistantSheetTabUpcoming": "Upcoming",
-  "@assistantSheetTabUpcoming": {
-    "description": "Tab in the assistant avatar sheet listing scheduled tasks."
-  },
   "assistantSheetTabAppearance": "Appearance",
   "@assistantSheetTabAppearance": {
     "description": "Tab in the assistant avatar sheet for clips and bubble color."
@@ -9309,19 +9305,6 @@
   "assistantApprovalWaiting": "Waiting for approval",
   "@assistantApprovalWaiting": {
     "description": "Accessibility label of the avatar badge when a request waits for approval."
-  },
-  "assistantUpcomingEmpty": "Nothing scheduled",
-  "@assistantUpcomingEmpty": {
-    "description": "Empty state of the upcoming tab."
-  },
-  "assistantUpcomingNextRun": "Next run {time}",
-  "@assistantUpcomingNextRun": {
-    "description": "When a scheduled task runs next.",
-    "placeholders": {
-      "time": {
-        "type": "String"
-      }
-    }
   },
   "assistantFailedCount": "{count} failed",
   "@assistantFailedCount": {
@@ -9454,5 +9437,55 @@
   "personaAppearanceTokenMissing": "Not set",
   "@personaAppearanceTokenMissing": {
     "description": "Shown under the token row when no token is stored."
-  }
+  },
+  "assistantSheetTabRoutines": "Routines",
+  "@assistantSheetTabRoutines": {"description": "Tab in the assistant avatar sheet listing routines (scheduled tasks), quiet hours and notifications."},
+  "routinesServerUrl": "Routines server URL",
+  "@routinesServerUrl": {"description": "Title of the row that sets the routines server address."},
+  "routinesServerUrlHint": "http://host:1236",
+  "@routinesServerUrlHint": {"description": "Placeholder example for the routines server address."},
+  "routinesEmpty": "No routines yet",
+  "@routinesEmpty": {"description": "Empty state of the routines tab."},
+  "routinesNothingNew": "Nothing new, {time}",
+  "@routinesNothingNew": {"description": "Shown for a routine whose latest run had nothing to report.", "placeholders": {"time": {"type": "String"}}},
+  "routinesToggleFailed": "Could not change the routine",
+  "@routinesToggleFailed": {"description": "Error when switching a routine on or off fails."},
+  "routinesServerUnavailable": "The routines server is not reachable",
+  "@routinesServerUnavailable": {"description": "Shown when the routines server cannot be reached."},
+  "routinesServerNotSet": "Set the routines server address and token in Settings to use this.",
+  "@routinesServerNotSet": {"description": "Shown when no routines server address or token is set."},
+  "routinesQuietHours": "Quiet hours",
+  "@routinesQuietHours": {"description": "Title of the quiet hours section in the routines tab."},
+  "routinesQuietHoursDescription": "Hold notifications overnight and send them when quiet hours end.",
+  "@routinesQuietHoursDescription": {"description": "Explains quiet hours: notifications are held and sent afterwards."},
+  "routinesQuietFrom": "From",
+  "@routinesQuietFrom": {"description": "Label of the time quiet hours start."},
+  "routinesQuietUntil": "Until",
+  "@routinesQuietUntil": {"description": "Label of the time quiet hours end."},
+  "routinesNotifications": "Notifications",
+  "@routinesNotifications": {"description": "Title of the notifications section in the routines tab."},
+  "routinesPushAllowed": "Notifications are allowed",
+  "@routinesPushAllowed": {"description": "Shown when the app may show notifications."},
+  "routinesPushDenied": "Notifications are off for this app in Settings",
+  "@routinesPushDenied": {"description": "Shown when notifications are turned off for the app in system settings."},
+  "routinesPushNotAsked": "Notifications have not been turned on",
+  "@routinesPushNotAsked": {"description": "Shown before notifications have been turned on."},
+  "routinesPushRegistered": "This phone is registered with the server",
+  "@routinesPushRegistered": {"description": "Shown when the routines server holds this phone's push registration."},
+  "routinesPushNotRegistered": "This phone is not registered with the server",
+  "@routinesPushNotRegistered": {"description": "Shown when the routines server does not hold this phone's push registration."},
+  "routinesPushTurnOn": "Turn on notifications",
+  "@routinesPushTurnOn": {"description": "Button that asks for notification permission and registers this phone."},
+  "routinesPushTurnOff": "Turn off",
+  "@routinesPushTurnOff": {"description": "Button that unregisters this phone from routine notifications."},
+  "routinesSendTest": "Send test",
+  "@routinesSendTest": {"description": "Button that makes the server send a test notification."},
+  "routinesTestSent": "Test notification sent",
+  "@routinesTestSent": {"description": "Confirmation after a test notification was requested."},
+  "routinesTestTitle": "Test",
+  "@routinesTestTitle": {"description": "Title of the test notification."},
+  "routinesTestBody": "If you can read this, routine notifications work.",
+  "@routinesTestBody": {"description": "Body of the test notification."},
+  "routinesPushUnsupported": "Push notifications are available on iOS only.",
+  "@routinesPushUnsupported": {"description": "Shown on platforms without routine push notifications."}
 }
