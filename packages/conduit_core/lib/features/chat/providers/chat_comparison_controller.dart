@@ -779,13 +779,20 @@ Future<void> runComparisonCompletion(
     for (final message in messages)
       if (!slotIds.contains(message.id)) message,
   ];
-  final requestMessages = await _buildCompletionRequestMessages(
-    api: api,
+  final requestMessages = _withOmniSession(
+    ref,
+    chatId: conversation?.id,
     messages: history,
-    chatParams: turnSettings.chatParams,
-    baseline: turnSettings.baseline,
-    conversationSystemPrompt: conversation?.systemPrompt,
-    userSystemPrompt: userSystemPrompt,
+    requestMessages: await _buildCompletionRequestMessages(
+      api: api,
+      messages: history,
+      chatParams: turnSettings.chatParams,
+      baseline: turnSettings.baseline,
+      conversationSystemPrompt: conversation?.systemPrompt,
+      userSystemPrompt: userSystemPrompt,
+      isTemporary: false,
+    ),
+    mayStartSession: true,
     isTemporary: false,
   );
   requireOwner();

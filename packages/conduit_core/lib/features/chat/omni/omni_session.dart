@@ -131,7 +131,7 @@ OmniSessionTurn planOmniSessionTurn({
   final user = messages[userIndex];
 
   if (mayStartSession && !next.boundaries.contains(user.id)) {
-    final previous = userIndex > 0 ? messages[userIndex - 1] : null;
+    final previous = _idleReference(messages, userIndex);
     final idle =
         previous != null &&
         user.timestamp.difference(previous.timestamp) > idleGap;
@@ -160,6 +160,22 @@ OmniSessionTurn planOmniSessionTurn({
     if (messages[i].role == 'user') turns++;
   }
   return OmniSessionTurn(state: next, turns: turns);
+}
+
+/// The message the idle gap before the user message at [userIndex] is
+/// measured from: the one before it, except that assistant messages nobody
+/// asked for (a routine's reply the server posted, which follows another
+/// assistant message instead of a user message) are passed over. Otherwise a
+/// reply to a post that arrived minutes ago would count as a continuation of
+/// a conversation that had been quiet for hours.
+ChatMessage? _idleReference(List<ChatMessage> messages, int userIndex) {
+  var i = userIndex - 1;
+  while (i >= 0 &&
+      messages[i].role == 'assistant' &&
+      (i == 0 || messages[i - 1].role != 'user')) {
+    i--;
+  }
+  return i >= 0 ? messages[i] : null;
 }
 
 /// [requestMessages] with the marker for [turns]: appended on a new line to
