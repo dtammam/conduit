@@ -150,6 +150,7 @@ const List<String> _iosFlutterHostSwift = <String>[
   'ios/Runner/FlutterConduitBridgeHost.swift',
   'ios/Runner/NativeKeyboardAttachmentBridge.swift',
   'ios/Runner/NativePasteBridge.swift',
+  'ios/Runner/PushBridge.swift',
 ];
 
 const String _iosFlutterHostMarker = '// FLUTTER HOST ONLY.';

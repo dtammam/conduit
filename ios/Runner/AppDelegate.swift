@@ -25,7 +25,64 @@ import UserNotifications
     // Conduit notification never reached flutter_local_notifications. Set it
     // before launch finishes so a tap that cold-starts the app is delivered.
     UNUserNotificationCenter.current().delegate = self
+    PushBridge.shared.registerCategories()
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+  }
+
+  override func application(
+    _ application: UIApplication,
+    didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
+  ) {
+    PushBridge.shared.didRegister(deviceToken: deviceToken)
+    super.application(
+      application,
+      didRegisterForRemoteNotificationsWithDeviceToken: deviceToken
+    )
+  }
+
+  override func application(
+    _ application: UIApplication,
+    didFailToRegisterForRemoteNotificationsWithError error: Error
+  ) {
+    PushBridge.shared.didFailToRegister(error)
+    super.application(
+      application,
+      didFailToRegisterForRemoteNotificationsWithError: error
+    )
+  }
+
+  // A routine push shows as a banner even while the app is open; everything
+  // else goes to the plugins as before.
+  override func userNotificationCenter(
+    _ center: UNUserNotificationCenter,
+    willPresent notification: UNNotification,
+    withCompletionHandler completionHandler:
+      @escaping (UNNotificationPresentationOptions) -> Void
+  ) {
+    if PushBridge.isRoutinePush(notification) {
+      completionHandler([.banner, .list, .sound])
+      return
+    }
+    super.userNotificationCenter(
+      center,
+      willPresent: notification,
+      withCompletionHandler: completionHandler
+    )
+  }
+
+  override func userNotificationCenter(
+    _ center: UNUserNotificationCenter,
+    didReceive response: UNNotificationResponse,
+    withCompletionHandler completionHandler: @escaping () -> Void
+  ) {
+    if PushBridge.shared.handle(response: response, completion: completionHandler) {
+      return
+    }
+    super.userNotificationCenter(
+      center,
+      didReceive: response,
+      withCompletionHandler: completionHandler
+    )
   }
 
   func didInitializeImplicitFlutterEngine(
@@ -98,6 +155,7 @@ import UserNotifications
     NativePasteBridge.shared.configure(messenger: messenger)
     NativeKeyboardAttachmentBridge.shared.configure(messenger: messenger)
     DisplayBoostBridge.shared.configure(messenger: messenger)
+    PushBridge.shared.configure(messenger: messenger)
   }
 }
 

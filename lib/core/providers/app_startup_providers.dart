@@ -59,6 +59,7 @@ import 'package:conduit_core/models/server_config.dart';
 import 'package:conduit_core/features/tools/providers/tools_providers.dart';
 
 import 'package:conduit/features/chat/omni/omni_refresh.dart';
+import 'package:conduit/features/routines/push_registration.dart';
 import 'package:conduit_core/features/chat/omni/omni_chat.dart';
 import 'package:conduit_core/features/chat/providers/attached_files_provider.dart';
 import 'package:conduit_core/services/settings_service.dart';
@@ -1197,6 +1198,9 @@ class AppStartupFlow extends _$AppStartupFlow {
         .handleLaunchTap();
     unawaited(launchTap);
     _openOmniChatAtLaunch(afterLaunchTap: launchTap);
+    // Routine push: registers this phone again when push is on, and takes
+    // the taps and replies that opened the app.
+    unawaited(ref.read(pushRegistrationProvider.notifier).start());
     // Server-posted routine messages appear in the Omni chat without
     // leaving and re-entering it.
     ref.read(omniRefreshProvider);

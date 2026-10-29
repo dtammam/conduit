@@ -138,6 +138,8 @@
 	</dict>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>PushKeychainGroup</key>
+	<string>$(AppIdentifierPrefix)am.tamm.conduit.push</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>
