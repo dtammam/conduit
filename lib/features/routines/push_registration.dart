@@ -5,6 +5,7 @@ import 'package:conduit/features/chat/avatar/persona_appearance_service.dart'
 import 'package:conduit/features/notifications/providers/notification_socket_listener.dart'
     show openChatById;
 import 'package:conduit_core/features/chat/omni/omni_chat.dart';
+import 'package:conduit_core/features/chat/omni/routine_reply_marker.dart';
 import 'package:conduit_core/services/settings_service.dart';
 import 'package:conduit_core/sync/sync_engine.dart';
 import 'package:conduit_core/utils/debug_logger.dart';
@@ -392,9 +393,19 @@ class PushRegistration extends Notifier<PushStatus> {
     }
   }
 
+  /// The next message sent in [chatId] names the routine the notification
+  /// came from (nothing is armed without a valid `slug`).
+  void _armReplyMarker(String chatId, Map<String, Object?> event) {
+    final slug = event['slug'];
+    ref
+        .read(routineReplyMarkerProvider.notifier)
+        .arm(chatId, slug is String ? slug : null);
+  }
+
   Future<void> _openChat(Map<String, Object?> event) async {
     final chatId = await _chatIdOf(event);
     if (chatId == null || !ref.mounted) return;
+    _armReplyMarker(chatId, event);
     // Opens the chat and pulls it from the server, so the message the
     // routine posted is there.
     await openChatById(ref, chatId);
@@ -406,6 +417,7 @@ class PushRegistration extends Notifier<PushStatus> {
     if (text is! String || text.isEmpty || chatId == null || !ref.mounted) {
       return;
     }
+    _armReplyMarker(chatId, event);
     await openChatById(ref, chatId);
     if (!ref.mounted) return;
     // The reply must hang off the routine's post, so the chat is brought up

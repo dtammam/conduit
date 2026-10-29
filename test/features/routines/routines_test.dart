@@ -7,6 +7,7 @@ import 'package:conduit/features/routines/push_registration.dart';
 import 'package:conduit/features/routines/routines_providers.dart';
 import 'package:conduit/features/routines/routines_service.dart';
 import 'package:conduit/features/routines/routines_tab.dart';
+import 'package:conduit_core/features/chat/omni/routine_reply_marker.dart';
 import 'package:conduit_core/features/automations/models/automation.dart';
 import 'package:conduit_core/ports/secure_key_value_store.dart';
 import 'package:conduit_core/providers/app_providers.dart';
@@ -376,6 +377,23 @@ void main() {
       check(container.read(appSettingsProvider).routinesPushEnabled).isFalse();
       check(adapter.requests.single.uri.path).equals('/push/devices/remove');
       check(push.calls).contains('unregister');
+    });
+
+    test('opening or replying to a notification arms its routine', () async {
+      await start(
+        settings: const AppSettings(
+          routinesServerUrl: _base,
+          routinesPushEnabled: true,
+        ),
+      );
+      await container.read(pushRegistrationProvider.notifier).start();
+      push.emit({'kind': 'open', 'chat_id': 'omni', 'slug': 'journal'});
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      check(container.read(routineReplyMarkerProvider)!.slug).equals('journal');
+      container.read(routineReplyMarkerProvider.notifier).take('omni');
+      push.emit({'kind': 'open', 'chat_id': 'omni'});
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      check(container.read(routineReplyMarkerProvider)).isNull();
     });
 
     test('a reply event waits for the chat page as a request', () async {

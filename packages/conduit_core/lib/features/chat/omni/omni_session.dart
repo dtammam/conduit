@@ -184,8 +184,14 @@ ChatMessage? _idleReference(List<ChatMessage> messages, int userIndex) {
 List<Map<String, dynamic>> withOmniSessionMarker(
   List<Map<String, dynamic>> requestMessages,
   int turns,
+) => withSystemMarker(requestMessages, omniSessionMarker(turns));
+
+/// [requestMessages] with [marker] on its own line at the end of the first
+/// system message, or as a system message of its own when there is none.
+List<Map<String, dynamic>> withSystemMarker(
+  List<Map<String, dynamic>> requestMessages,
+  String marker,
 ) {
-  final marker = omniSessionMarker(turns);
   final out = [
     for (final message in requestMessages) Map<String, dynamic>.from(message),
   ];

@@ -26,6 +26,7 @@ import 'package:meta/meta.dart';
 import 'package:conduit_core/utils/openwebui_request_variables.dart';
 import 'package:conduit_core/features/chat/omni/omni_chat.dart';
 import 'package:conduit_core/features/chat/omni/omni_session.dart';
+import 'package:conduit_core/features/chat/omni/routine_reply_marker.dart';
 import 'package:conduit_core/ports/app_lifecycle.dart';
 import 'package:conduit_core/ports/wakelock_port.dart';
 import 'package:riverpod/riverpod.dart';

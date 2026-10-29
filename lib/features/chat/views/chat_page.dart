@@ -34,7 +34,6 @@ import 'package:conduit_core/services/settings_service.dart';
 import 'package:conduit_core/services/api_service.dart';
 import 'package:conduit_core/services/connectivity_service.dart';
 
-
 import 'package:conduit_core/database/database_provider.dart';
 
 import 'package:conduit_core/database/app_database.dart';
@@ -50,6 +49,7 @@ import '../../direct_connections/widgets/direct_mcp_message_interactions.dart';
 
 import 'package:conduit_core/features/chat/omni/omni_chat.dart';
 import 'package:conduit_core/features/chat/omni/omni_session.dart';
+import 'package:conduit_core/features/chat/omni/routine_reply_marker.dart';
 import 'package:conduit_core/features/chat/providers/chat_providers.dart';
 import 'package:conduit_core/features/chat/composer/openwebui_prompt_answers.dart';
 import 'package:conduit_core/features/chat/providers/openwebui_chat_prompt_provider.dart';
@@ -977,6 +977,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     _conversationIdSub = ref.listenManual(conversationIdListenable, (_, next) {
       // A failed mark belongs to the conversation it was sent in.
       _failedSendMessageId.value = null;
+      // A notification's pending routine reply belongs to its own chat.
+      ref.read(routineReplyMarkerProvider.notifier).keepOnlyFor(next);
       _handleConversationChanged(next);
       _drainRoutineReply();
     });
@@ -3568,7 +3570,10 @@ class _ChatPageState extends ConsumerState<ChatPage> {
           return Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [bubble, ChatBranchSwitcher(messageId: messageId)],
+            children: [
+              bubble,
+              ChatBranchSwitcher(messageId: messageId),
+            ],
           );
         },
       );

@@ -666,9 +666,21 @@ List<Map<String, dynamic>> _withOmniSession(
   required bool mayStartSession,
   required bool isTemporary,
 }) {
-  if (isTemporary || chatId == null || !isOmniChatId(chatId)) {
-    return requestMessages;
+  if (isTemporary || chatId == null) return requestMessages;
+  if (mayStartSession) {
+    // A reply to a routine's notification names the routine for this one
+    // request (see `routine_reply_marker.dart`).
+    final slug = (ref.read(routineReplyMarkerProvider.notifier)
+            as RoutineReplyMarkerNotifier)
+        .take(chatId);
+    if (slug != null) {
+      requestMessages = withSystemMarker(
+        requestMessages,
+        routineReplyMarker(slug)!,
+      );
+    }
   }
+  if (!isOmniChatId(chatId)) return requestMessages;
   final settings = ref.read(appSettingsProvider) as AppSettings;
   final notifier =
       ref.read(omniSessionProvider.notifier) as OmniSessionNotifier;
