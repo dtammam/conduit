@@ -159,8 +159,8 @@ void main() {
         check(changed.personaAppearanceUrl).equals('http://sb.test:1243');
       });
 
-      test('routines server defaults to none and push to off', () {
-        check(settings.routinesServerUrl).equals('');
+      test('routines server defaults to the build address and push to off', () {
+        check(settings.routinesServerUrl).equals(kDefaultRoutinesServerUrl);
         check(settings.routinesPushEnabled).equals(false);
         final changed = settings.copyWith(
           routinesServerUrl: 'http://relay.test:1236',

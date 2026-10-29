@@ -801,7 +801,9 @@ class SettingsService {
           get<bool>(PreferenceKeys.personaAppearanceEnabled) ?? true,
       personaAppearanceUrl:
           get<String>(PreferenceKeys.personaAppearanceUrl) ?? '',
-      routinesServerUrl: get<String>(PreferenceKeys.routinesServerUrl) ?? '',
+      routinesServerUrl:
+          get<String>(PreferenceKeys.routinesServerUrl) ??
+          kDefaultRoutinesServerUrl,
       routinesPushEnabled:
           get<bool>(PreferenceKeys.routinesPushEnabled) ?? false,
       deliveryReceiptsEnabled:
@@ -920,6 +922,10 @@ const String assistantAvatarBubbleColorAuto = 'auto';
 const String assistantAvatarBubbleColorGray = 'gray';
 
 /// Data class for app settings
+/// The chat relay the Routines tab talks to, set at build time with
+/// --dart-define=ROUTINES_SERVER_URL=... (empty: set it in the Routines tab).
+const kDefaultRoutinesServerUrl = String.fromEnvironment('ROUTINES_SERVER_URL');
+
 class AppSettings {
   final bool reduceMotion;
   final double animationSpeed;
@@ -1077,7 +1083,7 @@ class AppSettings {
     this.assistantAvatarBubbleColor = assistantAvatarBubbleColorAuto,
     this.personaAppearanceEnabled = true,
     this.personaAppearanceUrl = '',
-    this.routinesServerUrl = '',
+    this.routinesServerUrl = kDefaultRoutinesServerUrl,
     this.routinesPushEnabled = false,
     this.compactToolSummaries = false,
     this.omniChatEnabled = true,

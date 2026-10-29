@@ -13,6 +13,7 @@ import 'package:conduit_core/models/chat_message.dart';
 import 'package:conduit_core/models/conversation.dart';
 import 'package:conduit_core/models/openwebui_chat_prompt.dart';
 import 'package:conduit_core/providers/app_providers.dart';
+import 'package:conduit_core/services/settings_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
@@ -49,6 +50,11 @@ class _SeededLog extends AssistantActionLog {
     records: seed,
     failuresSeenAt: DateTime.now().subtract(const Duration(days: 1)),
   );
+}
+
+class _NoRoutinesServer extends AppSettingsNotifier {
+  @override
+  AppSettings build() => const AppSettings(routinesServerUrl: '');
 }
 
 class _FakeStore extends AssistantAvatarMediaStore {
@@ -126,6 +132,7 @@ void main() {
       assistantActionLogProvider.overrideWith(() => _SeededLog(records)),
       assistantApprovalProvider.overrideWithValue(approval),
       automationsAvailableProvider.overrideWithValue(upcoming),
+      appSettingsProvider.overrideWith(_NoRoutinesServer.new),
     ];
     container = ProviderContainer(overrides: overrides);
     addTearDown(container.dispose);
