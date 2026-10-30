@@ -1,4 +1,6 @@
 import 'package:conduit/features/chat/widgets/tool_stamp.dart';
+import 'package:conduit/features/chat/avatar/assistant_action_log.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 String _call(String name, String result, {String id = 'c'}) =>
@@ -64,6 +66,7 @@ void main() {
     });
   });
   outputTests();
+  summaryTests();
 }
 
 Map<String, dynamic> _fc(
@@ -146,6 +149,148 @@ void outputTests() {
         ['a b ✓ ×2'],
       );
       expect(toolStampFromOutput(null), isEmpty);
+    });
+  });
+}
+
+AssistantActionRecord _rec(String name, {bool failed = false}) =>
+    AssistantActionRecord(
+      id: name,
+      chatId: '',
+      messageId: '',
+      toolName: name,
+      arguments: '',
+      result: '',
+      status: failed
+          ? AssistantActionStatus.failed
+          : AssistantActionStatus.succeeded,
+      startedAt: DateTime.fromMillisecondsSinceEpoch(0),
+      finishedAt: DateTime.fromMillisecondsSinceEpoch(0),
+    );
+
+List<String> _sum(List<AssistantActionRecord> r) =>
+    buildToolSummary(r).map((s) => s.text).toList();
+
+void summaryTests() {
+  group('toolSystem', () {
+    test('maps prefixes and named tools', () {
+      expect(toolSystem('actual-mcp_actual_accounts_list'), 'budget');
+      expect(toolSystem('calendar-mcp_event_list'), 'calendar');
+      expect(toolSystem('notes-mcp_search_notes'), 'notes');
+      expect(toolSystem('schedule-mcp_schedule_list'), 'routines');
+      expect(toolSystem('search_web'), 'web');
+      expect(toolSystem('fetch_url'), 'web');
+      expect(toolSystem('weather_forecast'), 'weather');
+      expect(toolSystem('generate_image'), 'image');
+      expect(toolSystem('some_other_tool'), 'some other tool');
+    });
+  });
+
+  group('buildToolSummary', () {
+    test('reads are deduped per system and joined', () {
+      expect(
+        _sum([
+          _rec('calendar-mcp_event_list'),
+          _rec('calendar-mcp_event_get'),
+          _rec('actual-mcp_actual_accounts_list'),
+        ]),
+        ['Checked calendar, budget'],
+      );
+    });
+
+    test('write rule decides write vs read', () {
+      expect(
+        kToolWriteRule.hasMatch('actual-mcp_actual_transactions_create'),
+        isTrue,
+      );
+      expect(kToolWriteRule.hasMatch('calendar-mcp_event_delete'), isTrue);
+      expect(kToolWriteRule.hasMatch('notes-mcp_update_note'), isTrue);
+      expect(kToolWriteRule.hasMatch('notes-mcp_manage_tags'), isTrue);
+      expect(kToolWriteRule.hasMatch('schedule-mcp_schedule_update'), isTrue);
+      expect(kToolWriteRule.hasMatch('notes-mcp_search_notes'), isFalse);
+      expect(kToolWriteRule.hasMatch('calendar-mcp_event_list'), isFalse);
+    });
+
+    test('a booking reads then saves, writes count with x N', () {
+      expect(
+        _sum([
+          _rec('calendar-mcp_event_list'),
+          _rec('calendar-mcp_event_create'),
+        ]),
+        ['Checked calendar', 'Saved to calendar'],
+      );
+      expect(
+        _sum([
+          _rec('calendar-mcp_event_create'),
+          _rec('calendar-mcp_event_update'),
+        ]),
+        ['Saved to calendar ×2'],
+      );
+    });
+
+    test('image tools say made an image', () {
+      expect(_sum([_rec('generate_image')]), ['Made an image']);
+    });
+
+    test('failures replace the success of the same system and action', () {
+      final summary = buildToolSummary([
+        _rec('actual-mcp_actual_transactions_create'),
+        _rec('actual-mcp_actual_transactions_create', failed: true),
+        _rec('notes-mcp_search_notes', failed: true),
+        _rec('notes-mcp_get_note'),
+        _rec('calendar-mcp_event_list'),
+      ]);
+      expect(summary, [
+        const ToolSummarySegment(ToolSummaryKind.read, 'Checked calendar'),
+        const ToolSummarySegment(
+          ToolSummaryKind.failedWrite,
+          "Couldn't save to budget",
+        ),
+        const ToolSummarySegment(
+          ToolSummaryKind.failedRead,
+          "Couldn't check notes",
+        ),
+      ]);
+    });
+
+    test('skipped tools leave nothing', () {
+      expect(
+        _sum([
+          _rec('ask_user'),
+          _rec('get_current_timestamp'),
+          _rec('calculate_timestamp'),
+          _rec('view_skill'),
+          _rec('read_skill_file'),
+          _rec('grep_skill_files'),
+          _rec('update_skill_files'),
+          _rec('create_skill'),
+        ]),
+        isEmpty,
+      );
+    });
+  });
+
+  group('ToolStamp widget', () {
+    testWidgets('tap expands the exact tool list', (tester) async {
+      final data = ToolStampData.fromRecords([
+        _rec('calendar-mcp_event_list'),
+        _rec('calendar-mcp_event_create'),
+      ]);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(body: ToolStamp(data: data)),
+        ),
+      );
+      expect(find.byKey(const ValueKey('tool-stamp-detail')), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('tool-stamp')));
+      await tester.pump();
+      final detail = tester.widget<Text>(
+        find.byKey(const ValueKey('tool-stamp-detail')),
+      );
+      expect(detail.data, 'event list ✓ · event create ✓');
+      await tester.tap(find.byKey(const ValueKey('tool-stamp')));
+      await tester.pump();
+      expect(find.byKey(const ValueKey('tool-stamp-detail')), findsNothing);
     });
   });
 }

@@ -1706,7 +1706,7 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
       // The tool stamp comes from the stored tool calls, a separate widget
       // that neither copy nor read-aloud ever sees.
       final stamp = _toolStamp;
-      if (stamp.isNotEmpty) children.add(ToolStamp(entries: stamp));
+      if (!stamp.isEmpty) children.add(ToolStamp(data: stamp));
       if (footer != null) {
         children.add(
           Padding(
@@ -2506,18 +2506,20 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
   List<AssistantActionRecord> _failureScanResult = const [];
 
   String? _stampScanContent;
-  List<ToolStampEntry> _stampScanResult = const [];
+  ToolStampData _stampScanResult = ToolStampData.empty;
 
-  List<ToolStampEntry> get _toolStamp {
+  ToolStampData get _toolStamp {
     final content = _displayedContent;
     if (!identical(_stampScanContent, content)) {
       _stampScanContent = content;
-      final fromOutput = toolStampFromOutput(widget.message.output);
+      final fromOutput = toolRecordsFromOutput(widget.message.output);
       // Stored output wins; the details blocks only fill in when there is none,
       // so a message that has both is never counted twice.
-      _stampScanResult = fromOutput.isNotEmpty
-          ? fromOutput
-          : toolStampFromContent(messageId: _messageId, content: content);
+      _stampScanResult = ToolStampData.fromRecords(
+        fromOutput.isNotEmpty
+            ? fromOutput
+            : toolRecordsFromContent(messageId: _messageId, content: content),
+      );
     }
     return _stampScanResult;
   }
