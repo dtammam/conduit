@@ -898,7 +898,11 @@ class _ModernChatInputState extends ConsumerState<ModernChatInput>
 
   void _sendMessage() {
     final text = _controller.text.trim();
-    if (text.isEmpty || !widget.enabled) return;
+    // attached files alone are a message too (a photo with nothing typed)
+    if ((text.isEmpty && ref.read(attachedFilesProvider).isEmpty) ||
+        !widget.enabled) {
+      return;
+    }
     if (_queuesInsteadOfSending) {
       _queueDraft();
       return;
@@ -3248,6 +3252,9 @@ class _ModernChatInputState extends ConsumerState<ModernChatInput>
             files.every((f) => f.status == FileUploadStatus.completed),
       ),
     );
+    final hasAttachments = ref.watch(
+      attachedFilesProvider.select((files) => files.isNotEmpty),
+    );
 
     final webSearchEnabled = ref.watch(webSearchEnabledProvider);
     final webSearchAvailable = ref.watch(webSearchAvailableProvider);
@@ -3777,7 +3784,7 @@ class _ModernChatInputState extends ConsumerState<ModernChatInput>
               if (!showCreateDraftNoteAction && !showInlineMicAction)
                 const SizedBox(width: Spacing.xs),
               _buildPrimaryButton(
-                _hasText,
+                _hasText || hasAttachments,
                 isGenerating,
                 stopGeneration,
                 voiceAvailable,
@@ -3897,7 +3904,7 @@ class _ModernChatInputState extends ConsumerState<ModernChatInput>
                 ],
                 if (!compactControls.showMic) const SizedBox(width: Spacing.xs),
                 _buildPrimaryButton(
-                  _hasText,
+                  _hasText || hasAttachments,
                   isGenerating,
                   stopGeneration,
                   voiceAvailable,
