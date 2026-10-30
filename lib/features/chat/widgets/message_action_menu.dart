@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:conduit/core/services/haptic_service.dart';
 import 'package:conduit/features/chat/reactions/quick_reply_reactions.dart';
 import 'package:conduit/l10n/app_localizations.dart';
@@ -52,7 +54,14 @@ class MessageMenuSpec {
 /// in the tree when disabled so the content keeps its state. [buildMenu] is
 /// called when the press happens, so the menu reflects the message as it is
 /// then.
-class MessageMenuLongPress extends StatelessWidget {
+///
+/// While a text field has focus (the composer, keyboard up) the message text
+/// cannot take it. Touching selectable text focuses its selection region on
+/// touch down, long before the press is recognised; that pulled focus out of
+/// the composer, the keyboard went down, the tab bar and composer resized and
+/// the whole transcript moved, then the keyboard came back when the menu
+/// opened and it moved again.
+class MessageMenuLongPress extends StatefulWidget {
   const MessageMenuLongPress({
     super.key,
     required this.enabled,
@@ -67,26 +76,70 @@ class MessageMenuLongPress extends StatelessWidget {
   final Widget child;
 
   @override
+  State<MessageMenuLongPress> createState() => _MessageMenuLongPressState();
+}
+
+class _MessageMenuLongPressState extends State<MessageMenuLongPress> {
+  /// Never focused itself; its only job is to switch focus off for the message
+  /// text under it while a text field holds focus.
+  final FocusNode _guard = FocusNode(
+    debugLabel: 'MessageMenuLongPress',
+    canRequestFocus: false,
+    skipTraversal: true,
+  );
+  FocusNode? _focusBeforePress;
+
+  @override
+  void initState() {
+    super.initState();
+    FocusManager.instance.addListener(_syncGuard);
+    _syncGuard();
+  }
+
+  @override
+  void dispose() {
+    FocusManager.instance.removeListener(_syncGuard);
+    _guard.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(MessageMenuLongPress oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncGuard();
+  }
+
+  /// Off while the content is being edited ([MessageMenuLongPress.enabled] is
+  /// false then): the edit field is under the guard and must take focus.
+  void _syncGuard() {
+    final editing =
+        FocusManager.instance.primaryFocus?.context
+            ?.findAncestorWidgetOfExactType<EditableText>() !=
+        null;
+    _guard.descendantsAreFocusable = !(editing && widget.enabled);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    // The text under the press takes focus on touch down (selection does),
-    // which would unfocus the composer. A press that opens the menu hands
-    // focus back to whatever held it before.
-    FocusNode? focusBeforePress;
     return RawGestureDetector(
       behavior: HitTestBehavior.translucent,
-      gestures: enabled
+      gestures: widget.enabled
           ? <Type, GestureRecognizerFactory>{
               LongPressGestureRecognizer:
                   GestureRecognizerFactoryWithHandlers<
                     LongPressGestureRecognizer
                   >(
-                    () => LongPressGestureRecognizer(duration: pressDuration),
+                    () => LongPressGestureRecognizer(
+                      duration: MessageMenuLongPress.pressDuration,
+                    ),
                     (recognizer) => recognizer
                       ..onLongPressDown = (_) {
-                        focusBeforePress = FocusManager.instance.primaryFocus;
+                        _focusBeforePress = FocusManager.instance.primaryFocus;
                       }
                       ..onLongPressStart = (details) {
-                        final previous = focusBeforePress;
+                        // Other focus (not a text field) that the touch took
+                        // goes back to what held it before.
+                        final previous = _focusBeforePress;
                         if (previous != null &&
                             previous.context != null &&
                             !previous.hasPrimaryFocus) {
@@ -96,13 +149,18 @@ class MessageMenuLongPress extends StatelessWidget {
                         showMessageMenu(
                           context,
                           pressPoint: details.globalPosition,
-                          spec: buildMenu(),
+                          spec: widget.buildMenu(),
                         );
                       },
                   ),
             }
           : const <Type, GestureRecognizerFactory>{},
-      child: child,
+      child: Focus(
+        focusNode: _guard,
+        canRequestFocus: false,
+        skipTraversal: true,
+        child: widget.child,
+      ),
     );
   }
 }
@@ -110,56 +168,155 @@ class MessageMenuLongPress extends StatelessWidget {
 /// Shows the menu above [pressPoint] (global coordinates), kept inside the
 /// screen. A tap outside dismisses it; so does choosing something, and the
 /// choice runs after the menu is gone.
+///
+/// The menu is an entry in the root [Overlay], not a pushed route. A route
+/// covers the page under it: every widget that reads `ModalRoute.isCurrent`
+/// rebuilds as covered (the composer swaps its glass shell and removes its
+/// native buttons, assistant rows stop following a streaming reply and catch
+/// up when the menu closes) and the page's focus scope is re-requested on
+/// pop. The transcript moved with that churn. An overlay entry leaves the page
+/// untouched, takes no focus and keeps the keyboard where it was.
 Future<void> showMessageMenu(
   BuildContext context, {
   required Offset pressPoint,
   required MessageMenuSpec spec,
 }) {
-  final l10n = AppLocalizations.of(context)!;
+  final overlay = Overlay.of(context, rootOverlay: true);
+  final padding = MediaQuery.paddingOf(context);
+  final barrierLabel = AppLocalizations.of(context)!.close;
+  final done = Completer<void>();
   VoidCallback? chosen;
-  return showGeneralDialog<void>(
-    context: context,
-    barrierDismissible: true,
-    // The menu must not take focus: that would close the keyboard and move
-    // the transcript under it.
-    requestFocus: false,
-    barrierLabel: l10n.close,
-    barrierColor: const Color(0x00000000),
-    transitionDuration: const Duration(milliseconds: 150),
-    pageBuilder: (dialogContext, _, _) => CustomSingleChildLayout(
-      delegate: _MenuLayout(
-        pressPoint: pressPoint,
-        padding: MediaQuery.paddingOf(dialogContext),
-      ),
-      child: _MessageMenu(
-        spec: spec,
-        onChosen: (callback) {
-          chosen = callback;
-          Navigator.of(dialogContext).pop();
-        },
-      ),
+  final key = GlobalKey<_MessageMenuHostState>();
+  late final OverlayEntry entry;
+  var removed = false;
+
+  void remove() {
+    if (removed) return;
+    removed = true;
+    entry.remove();
+    entry.dispose();
+    done.complete();
+  }
+
+  entry = OverlayEntry(
+    builder: (_) => _MessageMenuHost(
+      key: key,
+      pressPoint: pressPoint,
+      padding: padding,
+      spec: spec,
+      barrierLabel: barrierLabel,
+      onChosen: (callback) {
+        chosen = callback;
+        key.currentState?.dismiss();
+      },
+      onDismissed: remove,
     ),
-    transitionBuilder: (_, animation, _, child) {
-      final curved = CurvedAnimation(
-        parent: animation,
-        curve: Curves.easeOutBack,
-        reverseCurve: Curves.easeIn,
-      );
-      return FadeTransition(
-        opacity: animation,
-        child: ScaleTransition(
-          scale: Tween<double>(begin: 0.6, end: 1).animate(curved),
-          alignment: Alignment.bottomCenter,
-          child: child,
-        ),
-      );
-    },
-  ).then((_) {
+  );
+  overlay.insert(entry);
+
+  return done.future.then((_) {
     final callback = chosen;
     if (callback == null) return;
     ConduitHaptics.selectionClick();
     callback();
   });
+}
+
+/// The overlay entry's content: a transparent barrier and the menu, animated
+/// in and out.
+class _MessageMenuHost extends StatefulWidget {
+  const _MessageMenuHost({
+    super.key,
+    required this.pressPoint,
+    required this.padding,
+    required this.spec,
+    required this.barrierLabel,
+    required this.onChosen,
+    required this.onDismissed,
+  });
+
+  final Offset pressPoint;
+  final EdgeInsets padding;
+  final MessageMenuSpec spec;
+  final String barrierLabel;
+  final ValueChanged<VoidCallback> onChosen;
+  final VoidCallback onDismissed;
+
+  @override
+  State<_MessageMenuHost> createState() => _MessageMenuHostState();
+}
+
+class _MessageMenuHostState extends State<_MessageMenuHost>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 150),
+  );
+  late final CurvedAnimation _curved = CurvedAnimation(
+    parent: _controller,
+    curve: Curves.easeOutBack,
+    reverseCurve: Curves.easeIn,
+  );
+  bool _closing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.forward();
+  }
+
+  /// Plays the exit, then tells the opener to remove the entry.
+  void dismiss() {
+    if (_closing) return;
+    _closing = true;
+    _controller.reverse().whenComplete(widget.onDismissed);
+  }
+
+  @override
+  void dispose() {
+    _curved.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox.expand(
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: Semantics(
+              label: widget.barrierLabel,
+              button: true,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: dismiss,
+              ),
+            ),
+          ),
+          Positioned.fill(
+            child: CustomSingleChildLayout(
+              delegate: _MenuLayout(
+                pressPoint: widget.pressPoint,
+                padding: widget.padding,
+              ),
+              child: FadeTransition(
+                opacity: _controller,
+                child: ScaleTransition(
+                  scale: Tween<double>(begin: 0.6, end: 1).animate(_curved),
+                  alignment: Alignment.bottomCenter,
+                  child: _MessageMenu(
+                    spec: widget.spec,
+                    onChosen: widget.onChosen,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _MenuLayout extends SingleChildLayoutDelegate {
