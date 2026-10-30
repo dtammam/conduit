@@ -6330,7 +6330,6 @@
   "voiceProviderStreamSpeechDescription": "Požiada poskytovateľa o streamovanie zvuku a každú vetu prehrá, kým ešte prichádza. Vypnite, ak server streamovanie reči nepodporuje.",
   "omniFreshStart": "Začať odznova",
   "omniFreshStartDone": "Ďalšia správa začne novú reláciu.",
-  "omniTabChat": "Čet",
   "omniComposerHint": "Správa pre {name}",
   "omniSessionDividerLabel": "Nová relácia",
   "omniSessionIdle": "Nová relácia po",

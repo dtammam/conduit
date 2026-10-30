@@ -4459,7 +4459,6 @@
   "voiceProviderStreamSpeechDescription": "Просить провайдера передавать звук потоком и воспроизводить каждое предложение, пока оно ещё приходит. Отключите, если сервер не поддерживает потоковую речь.",
   "omniFreshStart": "Начать заново",
   "omniFreshStartDone": "Следующее сообщение начнёт новый сеанс.",
-  "omniTabChat": "Чат",
   "omniComposerHint": "Сообщение для {name}",
   "omniSessionDividerLabel": "Новый сеанс",
   "omniSessionIdle": "Новый сеанс через",

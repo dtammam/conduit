@@ -9377,10 +9377,6 @@
   "@omniFreshStartDone": {
     "description": "Confirmation after choosing Fresh start in the Omni chat."
   },
-  "omniTabChat": "Chat",
-  "@omniTabChat": {
-    "description": "Label of the chat button in the Omni chat's bottom bar; the chat itself, the selected page."
-  },
   "omniComposerHint": "Message {name}",
   "@omniComposerHint": {
     "description": "Placeholder of the Omni chat's composer. {name} is the assistant's name (omniChatName).",

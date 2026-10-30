@@ -4421,7 +4421,6 @@
   "voiceProviderStreamSpeechDescription": "请求提供方以流的方式传输音频，并在每句话仍在到达时开始播放。如果服务器不支持流式语音，请关闭。",
   "omniFreshStart": "重新开始",
   "omniFreshStartDone": "下一条消息将开始新的会话。",
-  "omniTabChat": "聊天",
   "omniComposerHint": "给{name}发消息",
   "omniSessionDividerLabel": "新会话",
   "omniSessionIdle": "新会话间隔",

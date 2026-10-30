@@ -8469,7 +8469,6 @@
   "@omniFreshStartDone": {
     "description": "Confirmation after choosing Fresh start in the Omni chat."
   },
-  "omniTabChat": "Czat",
   "omniComposerHint": "Wiadomość do {name}",
   "omniSessionDividerLabel": "Nowa sesja",
   "@omniSessionDividerLabel": {

@@ -80,19 +80,32 @@ void main() {
     });
   }
 
-  testWidgets('the chat button is the selected page and opens nothing', (
+  testWidgets('each button shows its label under the glyph, with no Chat', (
     tester,
   ) async {
-    final opened = await _mount(tester);
-    await tester.tap(find.byKey(const ValueKey('omni-tab-chat')));
-    check(opened).isEmpty();
-    check(find.bySemanticsLabel('Chat').evaluate()).isNotEmpty;
+    await _mount(tester);
+    for (final label in ['Activity', 'Approvals', 'Routines', 'Appearance']) {
+      check(find.text(label).evaluate()).length.equals(1);
+    }
+    check(find.byKey(const ValueKey('omni-tab-chat')).evaluate()).isEmpty();
+    check(find.text('Chat').evaluate()).isEmpty();
+  });
+
+  testWidgets('the capsule fits a narrow phone without overflow', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await _mount(tester);
+    check(tester.takeException()).isNull();
+    final box = tester.getSize(find.byKey(const ValueKey('omni-tab-bar')));
+    check(box.width).isLessOrEqual(320);
   });
 
   testWidgets('the bar is hidden while the keyboard is up', (tester) async {
     await _mount(tester, keyboard: true);
     check(find.byKey(const ValueKey('omni-tab-bar')).evaluate()).isEmpty();
-    check(find.byKey(const ValueKey('omni-tab-chat')).evaluate()).isEmpty();
   });
 
   testWidgets('no Routines button without a routines source', (tester) async {
