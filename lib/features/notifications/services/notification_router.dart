@@ -171,3 +171,25 @@ class NotificationRouter {
     return true;
   }
 }
+
+/// A reply as a notification line: markdown marks, links, code fences, quotes
+/// and tool blocks removed, whitespace collapsed, cut at a word near [max]
+/// characters. A reply's raw text read as "**Calendar**\n- 8:00 AM ...".
+String notificationPreview(String text, {int max = 160}) {
+  var s = text
+      .replaceAll(RegExp(r'<details[\s\S]*?</details>'), ' ')
+      .replaceAll(RegExp(r'```[\s\S]*?```'), ' ')
+      .replaceAll(RegExp(r'!\[[^\]]*\]\([^)]*\)'), ' ')
+      .replaceAllMapped(RegExp(r'\[([^\]]+)\]\([^)]*\)'), (m) => m[1]!)
+      .replaceAll(
+        RegExp(r'^\s{0,3}(#{1,6}|>|[-*+]|\d+\.)\s+', multiLine: true),
+        '',
+      )
+      .replaceAll(RegExp(r'(\*\*|__|\*|`|~~)'), '')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
+  if (s.length <= max) return s;
+  final cut = s.lastIndexOf(' ', max);
+  s = s.substring(0, cut > max * 0.6 ? cut : max).trimRight();
+  return '${s.replaceAll(RegExp(r'[,;:.\-]+$'), '')}…';
+}
