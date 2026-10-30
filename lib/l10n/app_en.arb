@@ -9381,6 +9381,16 @@
   "@omniTabChat": {
     "description": "Label of the chat button in the Omni chat's bottom bar; the chat itself, the selected page."
   },
+  "omniComposerHint": "Message {name}",
+  "@omniComposerHint": {
+    "description": "Placeholder of the Omni chat's composer. {name} is the assistant's name (omniChatName).",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Musey"
+      }
+    }
+  },
   "omniSessionDividerLabel": "New session",
   "@omniSessionDividerLabel": {
     "description": "Accessibility label of the wavy divider where a new Omni session begins."

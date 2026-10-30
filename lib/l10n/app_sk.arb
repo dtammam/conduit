@@ -6331,6 +6331,7 @@
   "omniFreshStart": "Začať odznova",
   "omniFreshStartDone": "Ďalšia správa začne novú reláciu.",
   "omniTabChat": "Čet",
+  "omniComposerHint": "Správa pre {name}",
   "omniSessionDividerLabel": "Nová relácia",
   "omniSessionIdle": "Nová relácia po",
   "omniSessionIdleDescription": "Model vidí len aktuálnu reláciu; nová začne po takom čase bez správy.",

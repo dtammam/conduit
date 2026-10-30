@@ -4422,6 +4422,7 @@
   "omniFreshStart": "重新開始",
   "omniFreshStartDone": "下一則訊息將開始新的工作階段。",
   "omniTabChat": "聊天",
+  "omniComposerHint": "傳訊息給{name}",
   "omniSessionDividerLabel": "新工作階段",
   "omniSessionIdle": "新工作階段間隔",
   "omniSessionIdleDescription": "模型只看得到目前的工作階段；超過這段時間沒有訊息後開始新的工作階段。",

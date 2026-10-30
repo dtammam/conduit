@@ -4422,6 +4422,7 @@
   "omniFreshStart": "Neu beginnen",
   "omniFreshStartDone": "Die nächste Nachricht beginnt eine neue Sitzung.",
   "omniTabChat": "Chat",
+  "omniComposerHint": "Nachricht an {name}",
   "omniSessionDividerLabel": "Neue Sitzung",
   "omniSessionIdle": "Neue Sitzung nach",
   "omniSessionIdleDescription": "Das Modell sieht nur die aktuelle Sitzung; eine neue beginnt nach so langer Zeit ohne Nachricht.",

@@ -4460,6 +4460,7 @@
   "omniFreshStart": "Начать заново",
   "omniFreshStartDone": "Следующее сообщение начнёт новый сеанс.",
   "omniTabChat": "Чат",
+  "omniComposerHint": "Сообщение для {name}",
   "omniSessionDividerLabel": "Новый сеанс",
   "omniSessionIdle": "Новый сеанс через",
   "omniSessionIdleDescription": "Модель видит только текущий сеанс; новый начинается после такого перерыва без сообщений.",

@@ -6025,6 +6025,7 @@
   "omniFreshStart": "新しく始める",
   "omniFreshStartDone": "次のメッセージから新しいセッションになります。",
   "omniTabChat": "チャット",
+  "omniComposerHint": "{name}にメッセージ",
   "omniSessionDividerLabel": "新しいセッション",
   "omniSessionIdle": "新しいセッションまでの時間",
   "omniSessionIdleDescription": "モデルには現在のセッションだけが見えます。メッセージがこの時間なければ新しいセッションになります。",

@@ -4422,6 +4422,7 @@
   "omniFreshStart": "Opnieuw beginnen",
   "omniFreshStartDone": "Het volgende bericht begint een nieuwe sessie.",
   "omniTabChat": "Chat",
+  "omniComposerHint": "Bericht aan {name}",
   "omniSessionDividerLabel": "Nieuwe sessie",
   "omniSessionIdle": "Nieuwe sessie na",
   "omniSessionIdleDescription": "Het model ziet alleen de huidige sessie; een nieuwe begint na zo lang zonder bericht.",

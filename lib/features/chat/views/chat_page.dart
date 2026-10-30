@@ -4224,6 +4224,11 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                           isPreparingMessageSend: _messageSendAdmission.isHeld,
                         ),
                         bottomPadding: 0,
+                        placeholder: isOmniChatId(activeConversation?.id)
+                            ? AppLocalizations.of(context)!.omniComposerHint(
+                                AppLocalizations.of(context)!.omniChatName,
+                              )
+                            : null,
                         managesSystemKeyboardInset: Platform.isAndroid,
                         composerTextInsertionTargetId:
                             chatComposerTextInsertionTargetId,

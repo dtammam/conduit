@@ -6331,6 +6331,7 @@
   "omniFreshStart": "Začít znovu",
   "omniFreshStartDone": "Další zpráva zahájí novou relaci.",
   "omniTabChat": "Chat",
+  "omniComposerHint": "Zpráva pro {name}",
   "omniSessionDividerLabel": "Nová relace",
   "omniSessionIdle": "Nová relace po",
   "omniSessionIdleDescription": "Model vidí jen aktuální relaci; nová začne po takové době bez zprávy.",

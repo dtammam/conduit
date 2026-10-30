@@ -4422,6 +4422,7 @@
   "omniFreshStart": "Ricomincia",
   "omniFreshStartDone": "Il prossimo messaggio avvia una nuova sessione.",
   "omniTabChat": "Chat",
+  "omniComposerHint": "Messaggio a {name}",
   "omniSessionDividerLabel": "Nuova sessione",
   "omniSessionIdle": "Nuova sessione dopo",
   "omniSessionIdleDescription": "Il modello vede solo la sessione corrente; ne inizia una nuova dopo questo tempo senza messaggi.",

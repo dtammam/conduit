@@ -4194,6 +4194,7 @@
   "omniFreshStart": "새로 시작",
   "omniFreshStartDone": "다음 메시지부터 새 세션이 시작됩니다.",
   "omniTabChat": "채팅",
+  "omniComposerHint": "{name}에게 메시지 보내기",
   "omniSessionDividerLabel": "새 세션",
   "omniSessionIdle": "새 세션 시작 간격",
   "omniSessionIdleDescription": "모델은 현재 세션만 봅니다. 이 시간 동안 메시지가 없으면 새 세션이 시작됩니다.",
