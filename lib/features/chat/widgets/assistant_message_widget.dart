@@ -79,6 +79,7 @@ import 'streaming_status_widget.dart';
 import 'package:conduit_core/features/chat/utils/file_utils.dart';
 
 import '../avatar/assistant_action_log.dart';
+import 'tool_stamp.dart';
 import '../avatar/assistant_activity.dart' show toolStepLabel;
 import '../reactions/quick_reply_reactions.dart';
 import 'chat_branch_actions.dart';
@@ -1702,6 +1703,10 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
   }) {
     if (_showActionRowNow) {
       final children = <Widget>[];
+      // The tool stamp comes from the stored tool calls, a separate widget
+      // that neither copy nor read-aloud ever sees.
+      final stamp = _toolStamp;
+      if (stamp.isNotEmpty) children.add(ToolStamp(entries: stamp));
       if (footer != null) {
         children.add(
           Padding(
@@ -2499,6 +2504,21 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
   // far more often than the content changes, so memoize by identity.
   String? _failureScanContent;
   List<AssistantActionRecord> _failureScanResult = const [];
+
+  String? _stampScanContent;
+  List<ToolStampEntry> _stampScanResult = const [];
+
+  List<ToolStampEntry> get _toolStamp {
+    final content = _displayedContent;
+    if (!identical(_stampScanContent, content)) {
+      _stampScanContent = content;
+      _stampScanResult = toolStampFromContent(
+        messageId: _messageId,
+        content: content,
+      );
+    }
+    return _stampScanResult;
+  }
 
   List<AssistantActionRecord> get _failedToolCalls {
     final content = _displayedContent;
