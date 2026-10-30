@@ -106,7 +106,7 @@ void main() {
       find.descendant(of: noteRow, matching: find.text('Flat Note')),
     );
 
-    await tester.tap(sidebarTestBottomNavTabLabel('Chats'));
+    await tester.tap(sidebarTestBottomNavTabLabel('Side chats'));
     await tester.pumpAndSettle();
     final chatRect = tester.getRect(
       find.byKey(

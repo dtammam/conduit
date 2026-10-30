@@ -261,7 +261,7 @@ void main() {
 
     // On until the user turns it off.
     check(PreferencesStore.get<bool>(PreferenceKeys.omniChatEnabled)).isNull();
-    final row = find.text('Omni chat');
+    final row = find.text('Musey chat');
     await tester.scrollUntilVisible(row, 300);
     await tester.ensureVisible(row);
     await tester.pumpAndSettle();

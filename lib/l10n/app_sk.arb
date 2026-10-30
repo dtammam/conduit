@@ -2645,7 +2645,7 @@
   "@chatSaveFailed": {
     "description": "Snackbar message shown when saving a temporary chat fails."
   },
-  "sidebarChatsTab": "Chaty",
+  "sidebarChatsTab": "Vedľajšie chaty",
   "@sidebarChatsTab": {
     "description": "Label for the Chats tab in the sidebar"
   },
@@ -5448,9 +5448,9 @@
   "assistantAvatarRemove": "Odstrániť",
   "assistantAvatarEditLabel": "{name}, {state}",
   "assistantAvatarPickFailed": "Tento súbor sa nedá použiť",
-  "omniChat": "Chat Omni",
+  "omniChat": "Chat Musey",
   "omniChatDescription": "Jedna priebežná konverzácia, pripnutá hore a otvorená pri spustení.",
-  "omniChatName": "Omni",
+  "omniChatName": "Musey",
   "compactToolSummaries": "Stručné prehľady nástrojov",
   "compactToolSummariesDescription": "Nad odpoveďou zobraziť „Použité nástroje“ namiesto názvu každého nástroja. Ťuknutím na riadok ich zobrazíte.",
   "markdownDetailsGroupCompactPendingTitle": "Používa nástroje…",

@@ -1165,7 +1165,7 @@
   "personalConnectionsNoAccount": "Melde dich bei einem Open-WebUI-Konto an, um persönliche Verbindungen zu verwalten.",
   "chatSaved": "Chat im Verlauf gespeichert",
   "chatSaveFailed": "Chat konnte nicht gespeichert werden",
-  "sidebarChatsTab": "Chats",
+  "sidebarChatsTab": "Nebenchats",
   "sidebarTerminalTab": "Terminal",
   "@sidebarTerminalTab": {
     "description": "Label for the Terminal tab in the sidebar"
@@ -3539,9 +3539,9 @@
   "assistantAvatarRemove": "Entfernen",
   "assistantAvatarEditLabel": "{name}, {state}",
   "assistantAvatarPickFailed": "Diese Datei kann nicht verwendet werden",
-  "omniChat": "Omni-Chat",
+  "omniChat": "Musey-Chat",
   "omniChatDescription": "Eine fortlaufende Unterhaltung, oben angeheftet und beim Start geöffnet.",
-  "omniChatName": "Omni",
+  "omniChatName": "Musey",
   "compactToolSummaries": "Kompakte Werkzeugübersicht",
   "compactToolSummariesDescription": "Über einer Antwort „Werkzeuge verwendet“ anzeigen statt jedes Werkzeug zu nennen. Zum Anzeigen auf die Zeile tippen.",
   "markdownDetailsGroupCompactPendingTitle": "Verwendet Werkzeuge…",

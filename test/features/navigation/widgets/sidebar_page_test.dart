@@ -428,7 +428,7 @@ void main() {
       navigationBar.labelBehavior,
       NavigationDestinationLabelBehavior.alwaysShow,
     );
-    expect(sidebarTestBottomNavTabLabel('Chats'), findsOneWidget);
+    expect(sidebarTestBottomNavTabLabel('Side chats'), findsOneWidget);
     expect(sidebarTestBottomNavTabLabel('Terminal'), findsOneWidget);
     expect(sidebarTestBottomNavTabLabel('Notes'), findsOneWidget);
     expect(sidebarTestBottomNavTabLabel('Channels'), findsOneWidget);
@@ -465,7 +465,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(controller.offset, greaterThan(0));
 
-    await tester.tap(sidebarTestBottomNavTabLabel('Chats'));
+    await tester.tap(sidebarTestBottomNavTabLabel('Side chats'));
     await tester.pump();
 
     expect(controller.offset, 0);
@@ -496,7 +496,7 @@ void main() {
           .getSize(find.byKey(const ValueKey<String>('sidebar-page-surface')))
           .width,
     );
-    for (final label in ['Chats', 'Hermes', 'Notes', 'Terminal', 'Channels']) {
+    for (final label in ['Side chats', 'Hermes', 'Notes', 'Terminal', 'Channels']) {
       expect(sidebarTestBottomNavTabLabel(label), findsOneWidget);
     }
 
@@ -576,7 +576,7 @@ void main() {
     expect(tabBar.items, hasLength(5));
     expect(tabBar.iconSize, isNull);
     expect(tabBar.items.map((item) => item.label), [
-      'Chats',
+      'Side chats',
       'Hermes',
       'Notes',
       'Terminal',
@@ -817,7 +817,7 @@ void main() {
     final barScope = find.byType(NavigationBar);
 
     final chatsSemantics = tester.getSemantics(
-      find.descendant(of: barScope, matching: find.text('Chats')).first,
+      find.descendant(of: barScope, matching: find.text('Side chats')).first,
     );
     expect(
       chatsSemantics.getSemanticsData().flagsCollection.isSelected,

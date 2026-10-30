@@ -1163,7 +1163,7 @@
   "personalConnectionsNoAccount": "Log in bij een Open WebUI-account om persoonlijke verbindingen te beheren.",
   "chatSaved": "Chat opgeslagen in geschiedenis",
   "chatSaveFailed": "Chat opslaan mislukt",
-  "sidebarChatsTab": "Chats",
+  "sidebarChatsTab": "Zijchats",
   "sidebarTerminalTab": "Terminal",
   "@sidebarTerminalTab": {
     "description": "Label for the Terminal tab in the sidebar"
@@ -3539,9 +3539,9 @@
   "assistantAvatarRemove": "Verwijderen",
   "assistantAvatarEditLabel": "{name}, {state}",
   "assistantAvatarPickFailed": "Dit bestand kan niet worden gebruikt",
-  "omniChat": "Omni-chat",
+  "omniChat": "Musey-chat",
   "omniChatDescription": "Eén doorlopend gesprek, bovenaan vastgezet en geopend bij het opstarten.",
-  "omniChatName": "Omni",
+  "omniChatName": "Musey",
   "compactToolSummaries": "Compacte toolsamenvattingen",
   "compactToolSummariesDescription": "Toon ‘Tools gebruikt’ boven een antwoord in plaats van elke tool te noemen. Tik op de rij om ze te zien.",
   "markdownDetailsGroupCompactPendingTitle": "Tools in gebruik…",

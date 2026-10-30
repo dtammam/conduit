@@ -1163,7 +1163,7 @@
   "personalConnectionsNoAccount": "请登录 Open WebUI 账户以管理个人连接。",
   "chatSaved": "聊天已保存到历史记录",
   "chatSaveFailed": "无法保存聊天",
-  "sidebarChatsTab": "聊天",
+  "sidebarChatsTab": "侧边聊天",
   "sidebarTerminalTab": "终端",
   "@sidebarTerminalTab": {
     "description": "Label for the Terminal tab in the sidebar"
@@ -3539,9 +3539,9 @@
   "assistantAvatarRemove": "移除",
   "assistantAvatarEditLabel": "{name}，{state}",
   "assistantAvatarPickFailed": "无法使用该文件",
-  "omniChat": "Omni 聊天",
+  "omniChat": "Musey 聊天",
   "omniChatDescription": "一个持续的对话,固定在顶部并在启动时打开。",
-  "omniChatName": "Omni",
+  "omniChatName": "Musey",
   "compactToolSummaries": "精简工具摘要",
   "compactToolSummariesDescription": "在回复上方显示“已使用工具”，而不是列出每个工具的名称。点按该行即可查看。",
   "markdownDetailsGroupCompactPendingTitle": "正在使用工具…",

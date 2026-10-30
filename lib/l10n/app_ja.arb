@@ -2645,7 +2645,7 @@
   "@chatSaveFailed": {
     "description": "Snackbar message shown when saving a temporary chat fails."
   },
-  "sidebarChatsTab": "チャット",
+  "sidebarChatsTab": "サイドチャット",
   "sidebarTerminalTab": "ターミナル",
   "@sidebarTerminalTab": {
     "description": "Label for the Terminal tab in the sidebar"
@@ -5142,9 +5142,9 @@
   "assistantAvatarRemove": "削除",
   "assistantAvatarEditLabel": "{name}、{state}",
   "assistantAvatarPickFailed": "このファイルは使用できません",
-  "omniChat": "Omni チャット",
+  "omniChat": "Musey チャット",
   "omniChatDescription": "ひとつの継続する会話を上部に固定し、起動時に開きます。",
-  "omniChatName": "Omni",
+  "omniChatName": "Musey",
   "compactToolSummaries": "ツールの要約を簡潔に",
   "compactToolSummariesDescription": "各ツール名の代わりに返信の上に「ツールを使用」と表示します。行をタップすると確認できます。",
   "markdownDetailsGroupCompactPendingTitle": "ツールを使用中…",

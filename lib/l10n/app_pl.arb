@@ -2019,7 +2019,7 @@
   "@assistantAvatarPickFailed": {
     "description": "Error shown when a picked video or image could not be copied for the assistant avatar."
   },
-  "omniChat": "Czat Omni",
+  "omniChat": "Czat Musey",
   "@omniChat": {
     "description": "Toggle title: one chat is the ongoing conversation, pinned in the drawer and opened at launch."
   },
@@ -2027,7 +2027,7 @@
   "@omniChatDescription": {
     "description": "Subtitle for the Omni chat toggle."
   },
-  "omniChatName": "Omni",
+  "omniChatName": "Musey",
   "@omniChatName": {
     "description": "Name of the pinned Omni chat row in the drawer and of the chat itself."
   },
@@ -3163,7 +3163,7 @@
   "@chatSaveFailed": {
     "description": "Snackbar message shown when saving a temporary chat fails."
   },
-  "sidebarChatsTab": "Czaty",
+  "sidebarChatsTab": "Czaty poboczne",
   "@sidebarChatsTab": {
     "description": "Label for the Chats tab in the sidebar"
   },
