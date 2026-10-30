@@ -85,7 +85,8 @@ class AssistantAvatarStrip extends ConsumerStatefulWidget {
       _AssistantAvatarStripState();
 }
 
-class _AssistantAvatarStripState extends ConsumerState<AssistantAvatarStrip> {
+class _AssistantAvatarStripState extends ConsumerState<AssistantAvatarStrip>
+    with WidgetsBindingObserver {
   late final AssistantAvatarMediaStore _store =
       widget.mediaStore ?? AssistantAvatarMediaStore();
   AssistantAvatarMediaSet _media = AssistantAvatarMediaSet.empty;
@@ -117,6 +118,7 @@ class _AssistantAvatarStripState extends ConsumerState<AssistantAvatarStrip> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     unawaited(_reloadMedia());
     // A chat opening is one of the moments the persona is asked for; then
     // once a minute while the strip is mounted and the app is in front.
@@ -133,6 +135,7 @@ class _AssistantAvatarStripState extends ConsumerState<AssistantAvatarStrip> {
   @override
   void dispose() {
     _disposed = true;
+    WidgetsBinding.instance.removeObserver(this);
     _doneTimer?.cancel();
     _videoAccentTimer?.cancel();
     _personaTimer?.cancel();
@@ -303,6 +306,7 @@ class _AssistantAvatarStripState extends ConsumerState<AssistantAvatarStrip> {
       await controller.initialize();
       await controller.setLooping(true);
       await controller.setVolume(0);
+      controller.addListener(() => _keepLooping(id, controller));
       if (_disposed || _controllers[id] != controller) return;
       if (_playingId == id) {
         await controller.play();
@@ -324,6 +328,27 @@ class _AssistantAvatarStripState extends ConsumerState<AssistantAvatarStrip> {
       }
       if (mounted) setState(() {});
     }
+  }
+
+  /// iOS pauses players when the app leaves the screen and does not always
+  /// loop a clip that reached its end; the clip on screen is restarted.
+  void _keepLooping(String id, VideoPlayerController controller) {
+    if (_disposed || id != _playingId) return;
+    final v = controller.value;
+    if (!v.isInitialized || v.isPlaying || v.isBuffering) return;
+    final atEnd =
+        v.duration > Duration.zero &&
+        v.position >= v.duration - const Duration(milliseconds: 150);
+    if (!atEnd) return;
+    unawaited(controller.seekTo(Duration.zero).then((_) => controller.play()));
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed || _disposed) return;
+    final controller = _controllers[_playingId];
+    if (controller == null || !controller.value.isInitialized) return;
+    if (!controller.value.isPlaying) unawaited(controller.play());
   }
 
   /// Plays the current state's clip and pauses every other one.
