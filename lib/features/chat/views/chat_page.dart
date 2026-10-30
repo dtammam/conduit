@@ -678,6 +678,9 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       hermesBot: chatHermesBotPresentation(
         ref.read(activeConversationProvider),
       ),
+      standaloneAssistantRows: isOmniChatId(
+        ref.read(activeConversationProvider)?.id,
+      ),
     );
   }
 
@@ -5174,10 +5177,17 @@ typedef ChatGroupingPlacement = ({
 /// reachable, and so acts as its own one-row action group. That does not
 /// affect the header pass: header suppression is decided by the model name
 /// alone, exactly as before grouped bars existed.
+///
+/// With [standaloneAssistantRows] every assistant row is its own action group
+/// (the header pass is unchanged). The Omni chat needs this: the relay posts
+/// each check-in as a separate assistant message with no user turn between, so
+/// grouping them made the speaker, copy and delete on the newest post act on
+/// every post since Dean's last message (the speaker started with the oldest).
 @visibleForTesting
 List<ChatGroupingPlacement> debugResolveAssistantGroupingForTesting(
-  List<ChatGroupingRow> rows,
-) {
+  List<ChatGroupingRow> rows, {
+  bool standaloneAssistantRows = false,
+}) {
   // Display model of the response currently being grouped; null once a user
   // turn closes it. Drives header suppression only.
   String? openGroupModelName;
@@ -5232,7 +5242,7 @@ List<ChatGroupingPlacement> debugResolveAssistantGroupingForTesting(
     if (row.hasVersions) lastAnnouncedModelName = null;
     openGroupModelName = row.displayModelName;
 
-    if (!continuesGroup || row.hasVersions) {
+    if (!continuesGroup || row.hasVersions || standaloneAssistantRows) {
       closeActionGroup();
     }
     openActionGroup.add(index);
@@ -5406,6 +5416,7 @@ class _ChatListStableLayoutCacheKey {
     required this.apiService,
     required this.directModelRegistryRevision,
     required this.hermesBot,
+    required this.standaloneAssistantRows,
   });
 
   final _ChatListStableLayoutSignature signature;
@@ -5413,11 +5424,13 @@ class _ChatListStableLayoutCacheKey {
   final ApiService? apiService;
   final int directModelRegistryRevision;
   final HermesBotChatPresentation? hermesBot;
+  final bool standaloneAssistantRows;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is _ChatListStableLayoutCacheKey &&
+          standaloneAssistantRows == other.standaloneAssistantRows &&
           signature == other.signature &&
           identical(models, other.models) &&
           identical(apiService, other.apiService) &&
@@ -5431,6 +5444,7 @@ class _ChatListStableLayoutCacheKey {
     identityHashCode(apiService),
     directModelRegistryRevision,
     hermesBot,
+    standaloneAssistantRows,
   );
 }
 
@@ -5442,6 +5456,7 @@ final class _ChatListStableLayoutCache {
   ApiService? _apiService;
   int? _directModelRegistryRevision;
   HermesBotChatPresentation? _hermesBot;
+  bool _standaloneAssistantRows = false;
   int _signatureBuildCount = 0;
 
   void invalidate() {
@@ -5452,6 +5467,7 @@ final class _ChatListStableLayoutCache {
     _apiService = null;
     _directModelRegistryRevision = null;
     _hermesBot = null;
+    _standaloneAssistantRows = false;
   }
 
   _ChatListStableLayoutMetadata resolve({
@@ -5460,6 +5476,7 @@ final class _ChatListStableLayoutCache {
     required ApiService? apiService,
     required DirectModelRegistry directModelRegistry,
     HermesBotChatPresentation? hermesBot,
+    bool standaloneAssistantRows = false,
   }) {
     final cached = _metadata;
     final registryRevision = directModelRegistry.revision;
@@ -5471,7 +5488,8 @@ final class _ChatListStableLayoutCache {
         identical(_models, models) &&
         identical(_apiService, apiService) &&
         _directModelRegistryRevision == registryRevision &&
-        _hermesBot == hermesBot) {
+        _hermesBot == hermesBot &&
+        _standaloneAssistantRows == standaloneAssistantRows) {
       return cached;
     }
 
@@ -5482,12 +5500,14 @@ final class _ChatListStableLayoutCache {
       apiService: apiService,
       directModelRegistryRevision: registryRevision,
       hermesBot: hermesBot,
+      standaloneAssistantRows: standaloneAssistantRows,
     );
     _messages = messages;
     _models = models;
     _apiService = apiService;
     _directModelRegistryRevision = registryRevision;
     _hermesBot = hermesBot;
+    _standaloneAssistantRows = standaloneAssistantRows;
     if (cached != null && _key == nextKey) return cached;
 
     final next = _buildChatListStableLayoutMetadata(
@@ -5496,6 +5516,7 @@ final class _ChatListStableLayoutCache {
       apiService: apiService,
       directModelRegistry: directModelRegistry,
       hermesBot: hermesBot,
+      standaloneAssistantRows: standaloneAssistantRows,
     );
     _metadata = next;
     _key = nextKey;
@@ -5573,6 +5594,7 @@ _ChatListStableLayoutMetadata _buildChatListStableLayoutMetadata({
   required ApiService? apiService,
   DirectModelRegistry? directModelRegistry,
   HermesBotChatPresentation? hermesBot,
+  bool standaloneAssistantRows = false,
 }) {
   final modelLookup = _buildChatModelLookup(
     models,
@@ -5610,7 +5632,10 @@ _ChatListStableLayoutMetadata _buildChatListStableLayoutMetadata({
     ));
   }
 
-  final grouping = debugResolveAssistantGroupingForTesting(groupingRows);
+  final grouping = debugResolveAssistantGroupingForTesting(
+    groupingRows,
+    standaloneAssistantRows: standaloneAssistantRows,
+  );
 
   for (var index = 0; index < messages.length; index++) {
     final message = messages[index];
@@ -6021,6 +6046,7 @@ List<ChatListLayoutRowSummary> debugBuildChatListLayoutSummaryForTesting(
   List<Model>? models,
   DirectModelRegistry? directModelRegistry,
   HermesBotChatPresentation? hermesBot,
+  bool standaloneAssistantRows = false,
 }) {
   final metadata = _buildChatListStableLayoutMetadata(
     messages: messages,
@@ -6028,6 +6054,7 @@ List<ChatListLayoutRowSummary> debugBuildChatListLayoutSummaryForTesting(
     apiService: null,
     directModelRegistry: directModelRegistry,
     hermesBot: hermesBot,
+    standaloneAssistantRows: standaloneAssistantRows,
   );
   return metadata.rows.map(_chatListLayoutRowSummary).toList(growable: false);
 }

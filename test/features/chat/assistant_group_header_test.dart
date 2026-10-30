@@ -14,6 +14,7 @@ bool continues({String? open, String? row}) =>
     );
 
 void main() {
+  omniStandaloneTests();
   test('consecutive rows from the same model group under one header', () {
     check(continues(open: 'Hermes', row: 'Hermes')).isTrue();
   });
@@ -307,3 +308,34 @@ const ChatGroupingRow skipped = (
   hasVersions: false,
   displayModelName: 'Hermes',
 );
+
+void omniStandaloneTests() {
+  group('Omni chat: relay posts are separate answers', () {
+    // Three check-ins the relay posted with no user turn between them.
+    test('by default they group, so the newest bar acts on all three', () {
+      final placements = debugResolveAssistantGroupingForTesting([
+        user,
+        hermes,
+        hermes,
+        hermes,
+      ]);
+      check(placements[3].groupIndices).deepEquals([1, 2, 3]);
+    });
+
+    test('standalone rows each own a bar and act on themselves only', () {
+      final placements = debugResolveAssistantGroupingForTesting([
+        user,
+        hermes,
+        hermes,
+        hermes,
+      ], standaloneAssistantRows: true);
+      check(placements.map((p) => p.showActionBar).toList())
+          .deepEquals([false, true, true, true]);
+      check(placements[3].groupIndices).deepEquals([3]);
+      check(placements[2].groupIndices).deepEquals([2]);
+      // The header is still shown once, not repeated per post.
+      check(placements.map((p) => p.showModelHeader).toList())
+          .deepEquals([false, true, false, false]);
+    });
+  });
+}
