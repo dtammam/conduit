@@ -41,6 +41,10 @@ IconData? cupertinoIconForSFSymbol(String symbol) => switch (symbol) {
   'wrench' => CupertinoIcons.wrench,
   'clock' => CupertinoIcons.clock,
   'infinity' => CupertinoIcons.infinite,
+  'list.bullet.rectangle' => CupertinoIcons.list_bullet_below_rectangle,
+  'checkmark.seal' => CupertinoIcons.checkmark_seal,
+  'alarm' => CupertinoIcons.alarm,
+  'paintpalette' => CupertinoIcons.paintbrush,
   _ => null,
 };
 

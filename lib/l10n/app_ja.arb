@@ -6024,6 +6024,7 @@
   "voiceProviderStreamSpeechDescription": "プロバイダーに音声のストリーミングを依頼し、各文が届いている途中から再生します。サーバーが音声のストリーミングに対応していない場合はオフにしてください。",
   "omniFreshStart": "新しく始める",
   "omniFreshStartDone": "次のメッセージから新しいセッションになります。",
+  "omniTabChat": "チャット",
   "omniSessionDividerLabel": "新しいセッション",
   "omniSessionIdle": "新しいセッションまでの時間",
   "omniSessionIdleDescription": "モデルには現在のセッションだけが見えます。メッセージがこの時間なければ新しいセッションになります。",

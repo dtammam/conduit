@@ -9377,6 +9377,10 @@
   "@omniFreshStartDone": {
     "description": "Confirmation after choosing Fresh start in the Omni chat."
   },
+  "omniTabChat": "Chat",
+  "@omniTabChat": {
+    "description": "Label of the chat button in the Omni chat's bottom bar; the chat itself, the selected page."
+  },
   "omniSessionDividerLabel": "New session",
   "@omniSessionDividerLabel": {
     "description": "Accessibility label of the wavy divider where a new Omni session begins."

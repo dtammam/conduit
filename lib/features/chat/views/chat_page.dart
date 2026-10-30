@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart' show listEquals, visibleForTesting;
 import 'package:conduit/core/services/haptic_service.dart';
 import 'package:cupertino_ui/cupertino_ui.dart';
+
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -90,7 +91,9 @@ import '../widgets/openwebui_chat_settings_sheet.dart';
 import '../widgets/modern_chat_input.dart';
 import '../widgets/user_message_bubble.dart';
 import '../reactions/quick_reply_reactions.dart';
+import '../avatar/assistant_action_log.dart';
 import '../avatar/assistant_avatar_strip.dart';
+import '../avatar/omni_tab_bar.dart';
 import '../widgets/assistant_message_widget.dart' as assistant;
 import '../widgets/file_attachment_widget.dart';
 import '../widgets/context_attachment_widget.dart';
@@ -4235,6 +4238,19 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                         onWebAttachment: _promptAttachWebpage,
                         onPastedAttachments: _handlePastedAttachments,
                       ),
+                      if (isOmniChatId(activeConversation?.id) &&
+                          composerRef.watch(
+                            appSettingsProvider.select(
+                              (s) => s.assistantAvatarEnabled,
+                            ),
+                          ))
+                        OmniTabBar(
+                          keyboardVisible:
+                              MediaQuery.viewInsetsOf(context).bottom > 0,
+                          onOpen: (tab) => composerRef
+                              .read(assistantSheetRequestProvider.notifier)
+                              .open(tab: tab),
+                        ),
                     ],
                   );
                 },

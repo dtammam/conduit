@@ -4421,6 +4421,7 @@
   "voiceProviderStreamSpeechDescription": "Vraag de provider om audio te streamen en speel elke zin af terwijl die nog binnenkomt. Zet uit als de server geen streaming van spraak ondersteunt.",
   "omniFreshStart": "Opnieuw beginnen",
   "omniFreshStartDone": "Het volgende bericht begint een nieuwe sessie.",
+  "omniTabChat": "Chat",
   "omniSessionDividerLabel": "Nieuwe sessie",
   "omniSessionIdle": "Nieuwe sessie na",
   "omniSessionIdleDescription": "Het model ziet alleen de huidige sessie; een nieuwe begint na zo lang zonder bericht.",

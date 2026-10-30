@@ -4193,6 +4193,7 @@
   "voiceProviderStreamSpeechDescription": "제공자에게 오디오를 스트리밍하도록 요청하고 각 문장이 도착하는 동안 재생합니다. 서버가 음성 스트리밍을 지원하지 않으면 끄세요.",
   "omniFreshStart": "새로 시작",
   "omniFreshStartDone": "다음 메시지부터 새 세션이 시작됩니다.",
+  "omniTabChat": "채팅",
   "omniSessionDividerLabel": "새 세션",
   "omniSessionIdle": "새 세션 시작 간격",
   "omniSessionIdleDescription": "모델은 현재 세션만 봅니다. 이 시간 동안 메시지가 없으면 새 세션이 시작됩니다.",

@@ -4421,6 +4421,7 @@
   "voiceProviderStreamSpeechDescription": "Chiede al provider di inviare l'audio in streaming e riproduce ogni frase mentre arriva. Disattiva se il server non supporta la voce in streaming.",
   "omniFreshStart": "Ricomincia",
   "omniFreshStartDone": "Il prossimo messaggio avvia una nuova sessione.",
+  "omniTabChat": "Chat",
   "omniSessionDividerLabel": "Nuova sessione",
   "omniSessionIdle": "Nuova sessione dopo",
   "omniSessionIdleDescription": "Il modello vede solo la sessione corrente; ne inizia una nuova dopo questo tempo senza messaggi.",

@@ -4421,6 +4421,7 @@
   "voiceProviderStreamSpeechDescription": "Demande au fournisseur de diffuser l'audio et lit chaque phrase pendant qu'elle arrive. À désactiver si le serveur ne prend pas en charge la voix en continu.",
   "omniFreshStart": "Repartir à zéro",
   "omniFreshStartDone": "Le prochain message commence une nouvelle session.",
+  "omniTabChat": "Chat",
   "omniSessionDividerLabel": "Nouvelle session",
   "omniSessionIdle": "Nouvelle session après",
   "omniSessionIdleDescription": "Le modèle ne voit que la session en cours ; une nouvelle commence après ce délai sans message.",
