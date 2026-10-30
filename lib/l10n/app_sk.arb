@@ -6398,5 +6398,8 @@
   "routinesTestSent": "Testovacie upozornenie odoslané",
   "routinesTestTitle": "Test",
   "routinesTestBody": "Ak toto vidíte, upozornenia rutín fungujú.",
-  "routinesPushUnsupported": "Push upozornenia sú dostupné iba na iOS."
+  "routinesPushUnsupported": "Push upozornenia sú dostupné iba na iOS.",
+  "messageReply": "Odpovedať",
+  "messageShare": "Zdieľať",
+  "replyingToLabel": "Odpoveď na"
 }

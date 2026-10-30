@@ -4489,5 +4489,8 @@
   "routinesTestSent": "Notification de test envoyée",
   "routinesTestTitle": "Test",
   "routinesTestBody": "Si vous lisez ceci, les notifications de routines fonctionnent.",
-  "routinesPushUnsupported": "Les notifications push ne sont disponibles que sur iOS."
+  "routinesPushUnsupported": "Les notifications push ne sont disponibles que sur iOS.",
+  "messageReply": "Répondre",
+  "messageShare": "Partager",
+  "replyingToLabel": "Réponse à"
 }

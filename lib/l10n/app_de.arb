@@ -4489,5 +4489,8 @@
   "routinesTestSent": "Testbenachrichtigung gesendet",
   "routinesTestTitle": "Test",
   "routinesTestBody": "Wenn du das lesen kannst, funktionieren Routinen-Benachrichtigungen.",
-  "routinesPushUnsupported": "Push-Benachrichtigungen gibt es nur unter iOS."
+  "routinesPushUnsupported": "Push-Benachrichtigungen gibt es nur unter iOS.",
+  "messageReply": "Antworten",
+  "messageShare": "Teilen",
+  "replyingToLabel": "Antwort auf"
 }

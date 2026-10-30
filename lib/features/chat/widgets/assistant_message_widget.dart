@@ -30,6 +30,9 @@ import 'package:conduit/l10n/app_localizations.dart';
 import 'enhanced_attachment.dart';
 
 import 'package:conduit/shared/widgets/chat_action_button.dart';
+import 'package:share_plus/share_plus.dart';
+
+import 'message_action_menu.dart';
 
 import '../../../shared/widgets/model_avatar.dart';
 import '../../../shared/widgets/conduit_components.dart';
@@ -115,19 +118,14 @@ class AssistantMessageWidget extends ConsumerStatefulWidget {
   /// emit several assistant messages), so one logical answer shows one header.
   final bool showModelHeader;
 
-  /// Whether to paint the completion action bar below this response.
-  ///
-  /// The counterpart to [showModelHeader]: within one grouped response the
-  /// header sits on the first row and the bar on the last, so a single answer
-  /// shows one of each. Sources and the version chip still render on their own
-  /// row when this is false — only the buttons move.
+  /// Whether this row is the last of its grouped response, the one that
+  /// carries the response's reaction badge. The action buttons that used to
+  /// sit under it now live in every row's long-press menu.
   final bool showActionBar;
 
-  /// Supplies the full text of the grouped response for read-aloud.
-  ///
-  /// Called at tap time, not during build, so a row never has to observe its
-  /// siblings. Null means this row speaks its own content.
-  final String Function()? resolveGroupedResponseText;
+  /// Sets the composer to reply to this message: its id and the text shown.
+  /// Null leaves Reply out of the menu.
+  final void Function(String messageId, String text)? onReply;
   final List<String?> versionModelNames;
   final List<String?> versionModelIconUrls;
   final bool suppressStreamingHaptics;
@@ -163,7 +161,6 @@ class AssistantMessageWidget extends ConsumerStatefulWidget {
     this.modelIconUrl,
     this.showModelHeader = true,
     this.showActionBar = true,
-    this.resolveGroupedResponseText,
     this.versionModelNames = const <String?>[],
     this.versionModelIconUrls = const <String?>[],
     this.suppressStreamingHaptics = false,
@@ -174,6 +171,7 @@ class AssistantMessageWidget extends ConsumerStatefulWidget {
     this.onDislike,
     this.onFollowUpSelected,
     this.onQuickReply,
+    this.onReply,
     this.quickReplyBadge,
     this.debugOnShellBuild,
     this.debugOnStreamingContentBuild,
@@ -841,11 +839,8 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
       return;
     }
 
-    // A grouped response is one answer, so read it whole rather than stopping
-    // at this row's share of it.
-    final rawText =
-        widget.resolveGroupedResponseText?.call() ?? _displayedContent;
-    final speechText = await _buildTtsPlainTextOnDemand(rawText);
+    // The pressed message only: a grouped response reads one row at a time.
+    final speechText = await _buildTtsPlainTextOnDemand(_displayedContent);
     if (!mounted || speechText.trim().isEmpty) {
       return;
     }
@@ -1317,11 +1312,13 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
         ? contentSources
         : const <ChatSourceReference>[];
     final footer = shouldBuildActionFooter
-        ? _buildFooterBar(
-            activeSources: activeSources,
-            includeActions: widget.showActionBar,
-          )
+        ? _buildFooterBar(activeSources: activeSources)
         : null;
+    // The menu's actions are built with the footer's state, in build, because
+    // they watch providers; the press only reads them.
+    _menuActions = shouldBuildActionFooter
+        ? _buildFooterActions()
+        : const <_AssistantFooterAction>[];
     final messageBubbles = ref.watch(
       appSettingsProvider.select((settings) => settings.messageBubbles),
     );
@@ -1526,18 +1523,19 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
       _getActiveError() == null &&
       !_displayedContentLooksLikeError;
 
-  /// Long-press on the reply content opens the reaction picker, and the
-  /// reaction already sent sits on the content's bottom-trailing corner, with
-  /// room reserved under it so the footer never covers it (bubbles off; with
+  /// Long-press on the reply content opens its menu: the reactions on top
+  /// (while [_showsQuickReplies]) and the actions under them. The reaction
+  /// already sent sits on the content's bottom-trailing corner, with room
+  /// reserved under it so the footer never covers it (bubbles off; with
   /// bubbles the last bubble keeps fixed room instead). Both wrappers stay
   /// in the tree when idle so the content keeps its state.
   ///
   /// With message bubbles the badge rides on the last bubble instead (see
   /// [_buildProseBubble]) and [showBadge] is false here.
   Widget _withQuickReplies(Widget content, {bool showBadge = true}) {
-    return QuickReplyLongPress(
-      enabled: _showsQuickReplies,
-      onSelected: _sendQuickReply,
+    return MessageMenuLongPress(
+      enabled: _menuActions.isNotEmpty,
+      buildMenu: _buildMenuSpec,
       // The message margin and the list's side padding leave 20 px past the
       // trailing edge; the overhang needs a little more.
       child: MessageBadgeAnchor(
@@ -1545,6 +1543,67 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
         badge: showBadge ? _buildQuickReplyBadge() : null,
         child: content,
       ),
+    );
+  }
+
+  /// The actions the last build offered, in the order of the old action bar.
+  List<_AssistantFooterAction> _menuActions = const <_AssistantFooterAction>[];
+
+  /// Row one: the reactions. Row two: Reply, Copy, Listen, Share and More,
+  /// where More holds the rest (regenerate, merge, info, branch, delete).
+  /// Everything acts on this message only.
+  MessageMenuSpec _buildMenuSpec() {
+    final l10n = AppLocalizations.of(context)!;
+    final actions = {for (final action in _menuActions) action.id: action};
+    MessageMenuAction? fromFooter(String id) {
+      final action = actions[id];
+      if (action == null) return null;
+      return MessageMenuAction(
+        id: action.id,
+        icon: action.icon,
+        label: action.label,
+        onTap: action.onTap,
+        destructive: action.id == 'delete',
+      );
+    }
+
+    final text = _displayedContent;
+    final id = _messageId;
+    final onReply = widget.onReply;
+    final canReply =
+        onReply != null &&
+        !widget.readOnly &&
+        id.isNotEmpty &&
+        text.trim().isNotEmpty;
+    final primary = <MessageMenuAction>[
+      if (canReply)
+        MessageMenuAction(
+          id: 'reply',
+          icon: Platform.isIOS ? CupertinoIcons.reply : Icons.reply,
+          label: l10n.messageReply,
+          onTap: () => onReply(id, text),
+        ),
+      ?fromFooter('copy'),
+      ?fromFooter('tts'),
+      if (text.trim().isNotEmpty)
+        MessageMenuAction(
+          id: 'share',
+          icon: Platform.isIOS ? CupertinoIcons.share : Icons.share_outlined,
+          label: l10n.messageShare,
+          onTap: () => unawaited(
+            SharePlus.instance.share(ShareParams(text: text.trim())),
+          ),
+        ),
+    ];
+    const inPrimary = {'copy', 'tts'};
+    return MessageMenuSpec(
+      actions: primary,
+      more: [
+        for (final action in _menuActions)
+          if (!inPrimary.contains(action.id)) ?fromFooter(action.id),
+      ],
+      moreIcon: Platform.isIOS ? CupertinoIcons.ellipsis : Icons.more_horiz,
+      onReaction: _showsQuickReplies ? _sendQuickReply : null,
     );
   }
 
@@ -1666,6 +1725,9 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
           ),
         );
       }
+      // Nothing to show under the reply, but the actions are available in the
+      // long-press menu: the slot still marks the settled state.
+      return const SizedBox.shrink(key: ValueKey('actions'));
     }
 
     return const SizedBox.shrink(key: ValueKey('footer-empty'));
@@ -2244,31 +2306,11 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
     );
   }
 
-  Widget? _buildFooterBar({
-    required List<ChatSourceReference> activeSources,
-    required bool includeActions,
-  }) {
-    const maxInlineActions = 3;
-    // A row that does not own its grouped response's bar still shows its own
-    // sources and version chip; only the buttons collapse onto the last row.
-    final actions = includeActions
-        ? _buildFooterActions()
-        : const <_AssistantFooterAction>[];
-    bool alwaysInOverflow(_AssistantFooterAction action) =>
-        action.id == 'delete' || action.id == 'view-actions';
-    final forcedOverflowActions = actions
-        .where(alwaysInOverflow)
-        .toList(growable: false);
-    final inlineCandidateActions = actions
-        .where((action) => !alwaysInOverflow(action))
-        .toList(growable: false);
-    final visibleActions = inlineCandidateActions
-        .take(maxInlineActions)
-        .toList(growable: false);
-    final overflowActions = [
-      ...inlineCandidateActions.skip(maxInlineActions),
-      ...forcedOverflowActions,
-    ];
+  /// The row under a reply that shows state rather than offering actions:
+  /// the version pager, the "continue from here" pill and the sources. The
+  /// actions (copy, listen, regenerate and the rest) live in the menu a long
+  /// press opens, see [_buildMenuSpec].
+  Widget? _buildFooterBar({required List<ChatSourceReference> activeSources}) {
     final infoWidgets = <Widget>[
       if (activeSources.isNotEmpty)
         OpenWebUISourcesWidget(
@@ -2298,30 +2340,14 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
             ],
           );
 
-    if (pagerGroup == null &&
-        infoWidgets.isEmpty &&
-        visibleActions.isEmpty &&
-        overflowActions.isEmpty) {
+    if (pagerGroup == null && infoWidgets.isEmpty) {
       return null;
     }
 
-    final overflowButton = overflowActions.isNotEmpty
-        ? _buildOverflowActionButton(overflowActions)
-        : null;
-    // Like Open WebUI, the version pager leads the row; the icon buttons sit
-    // edge to edge with the overflow trailing them inline, and informational
-    // chips follow the buttons. With the continue pill the pager is a group of
-    // its own, so a narrow row wraps between it and the buttons.
-    final actionButtons = <Widget>[
-      if (continueFromId == null) ?versionPager,
-      for (final action in visibleActions)
-        _buildActionButton(
-          icon: action.icon,
-          label: action.label,
-          onTap: action.onTap,
-        ),
-      ?overflowButton,
-    ];
+    // Like Open WebUI, the version pager leads the row and informational
+    // chips follow. With the continue pill the pager is a group of its own,
+    // so a narrow row wraps between it and the chips.
+    final actionButtons = <Widget>[if (continueFromId == null) ?versionPager];
 
     return Wrap(
       spacing: Spacing.sm,
@@ -2816,57 +2842,6 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
               : null,
         ),
       ],
-    );
-  }
-
-  Widget _buildOverflowActionButton(
-    List<_AssistantFooterAction> overflowActions,
-  ) {
-    final l10n = AppLocalizations.of(context)!;
-    final theme = context.conduitTheme;
-
-    return AdaptiveTooltip(
-      message: l10n.more,
-      waitDuration: const Duration(milliseconds: 600),
-      child: Semantics(
-        button: true,
-        label: l10n.more,
-        child: AdaptivePopupMenuButton.icon<String>(
-          key: const ValueKey<String>('assistant-response-overflow-button'),
-          icon: PlatformUiCapabilities.isIOS
-              ? 'ellipsis'
-              : Icons.more_horiz_rounded,
-          items: overflowActions
-              .map(
-                (action) => AdaptivePopupMenuItem<String>(
-                  value: action.id,
-                  label: action.label,
-                  icon: PlatformUiCapabilities.isIOS
-                      ? action.sfSymbol
-                      : action.icon,
-                  enabled: action.onTap != null,
-                  isDestructive: action.id == 'delete',
-                ),
-              )
-              .toList(growable: false),
-          onSelected: (_, entry) {
-            final selectedId = entry.value;
-            if (selectedId == null) {
-              return;
-            }
-            for (final action in overflowActions) {
-              if (action.id == selectedId) {
-                action.onTap?.call();
-                return;
-              }
-            }
-          },
-          tint: theme.textPrimary.withValues(alpha: 0.8),
-          size: 32,
-          iconSize: IconSize.sm,
-          buttonStyle: PopupButtonStyle.plain,
-        ),
-      ),
     );
   }
 

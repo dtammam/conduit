@@ -1,3 +1,5 @@
+import '../../../helpers/message_menu.dart';
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -731,7 +733,9 @@ void main() {
       final status = tester.widget<Text>(
         find.text(l10n.chatComparisonSlotFailed),
       );
-      final theme = tester.element(find.byType(ChatComparisonTabs)).conduitTheme;
+      final theme = tester
+          .element(find.byType(ChatComparisonTabs))
+          .conduitTheme;
       expect(status.style?.color, theme.error);
       expect(
         find.bySemanticsLabel('Beta, ${l10n.chatComparisonSlotFailed}'),
@@ -747,7 +751,9 @@ void main() {
       final status = tester.widget<Text>(
         find.text(l10n.chatComparisonSlotResponding),
       );
-      final theme = tester.element(find.byType(ChatComparisonTabs)).conduitTheme;
+      final theme = tester
+          .element(find.byType(ChatComparisonTabs))
+          .conduitTheme;
       expect(status.style?.color, isNot(theme.error));
     });
 
@@ -851,20 +857,28 @@ void main() {
       final sheet = find.byType(ChatMergeSourcesSheet);
       expect(
         tester.getSemantics(
-          find.descendant(
-            of: sheet,
-            matching: find.text(l10n.chatMergeResponsesAction),
-          ).first,
+          find
+              .descendant(
+                of: sheet,
+                matching: find.text(l10n.chatMergeResponsesAction),
+              )
+              .first,
         ),
         isSemantics(isHeader: true),
       );
       expect(
-        find.descendant(of: sheet, matching: find.byType(AdaptiveSelectionTile)),
+        find.descendant(
+          of: sheet,
+          matching: find.byType(AdaptiveSelectionTile),
+        ),
         findsNWidgets(3),
       );
       // Every response starts chosen; tapping one leaves the others chosen.
       for (final index in [0, 1, 2]) {
-        expect(tester.widget<AdaptiveSelectionTile>(row(index)).selected, isTrue);
+        expect(
+          tester.widget<AdaptiveSelectionTile>(row(index)).selected,
+          isTrue,
+        );
       }
       await tester.tap(row(1));
       await tester.pumpAndSettle();
@@ -1032,19 +1046,16 @@ void main() {
       );
       // Other languages inflect the verb too.
       expect(
-        refused(
-          ComparisonAdmissionFailure.modelUnavailable,
-          ['gpt-4o', 'claude-x'],
-          localizations: AppLocalizationsDe(),
-        ),
+        refused(ComparisonAdmissionFailure.modelUnavailable, [
+          'gpt-4o',
+          'claude-x',
+        ], localizations: AppLocalizationsDe()),
         'GPT-4o und Claude sind auf diesem Server nicht verfügbar.',
       );
       expect(
-        refused(
-          ComparisonAdmissionFailure.modelUnavailable,
-          ['gpt-4o'],
-          localizations: AppLocalizationsDe(),
-        ),
+        refused(ComparisonAdmissionFailure.modelUnavailable, [
+          'gpt-4o',
+        ], localizations: AppLocalizationsDe()),
         'GPT-4o ist auf diesem Server nicht verfügbar.',
       );
     });
@@ -1070,7 +1081,8 @@ void main() {
 
       // The command lives in the footer's overflow menu.
       expect(find.text(l10n.chatMergeResponsesAction), findsNothing);
-      await tester.tap(find.byIcon(Icons.more_horiz_rounded));
+      await openMessageMenu(tester);
+      await tester.tap(menuAction('more'));
       await tester.pumpAndSettle();
       expect(find.text(l10n.chatMergeResponsesAction), findsOneWidget);
       await tester.tap(find.text(l10n.chatMergeResponsesAction));
@@ -1097,7 +1109,8 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.byIcon(Icons.more_horiz_rounded));
+      await openMessageMenu(tester);
+      await tester.tap(menuAction('more'));
       await tester.pumpAndSettle();
       expect(find.text(l10n.chatMergeResponsesAction), findsNothing);
       await tester.tapAt(const Offset(1, 1));
@@ -1159,7 +1172,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byIcon(Icons.more_horiz_rounded));
+      await openMessageMenu(tester);
+      await tester.tap(menuAction('more'));
       await tester.pumpAndSettle();
       expect(find.text(l10n.chatMergeResponsesAction), findsNothing);
       await tester.tap(find.text(l10n.chatMergeStopAction));
@@ -1236,7 +1250,8 @@ void main() {
     }
 
     Future<void> openMergeCommand(WidgetTester tester) async {
-      await tester.tap(find.byIcon(Icons.more_horiz_rounded));
+      await openMessageMenu(tester);
+      await tester.tap(menuAction('more'));
       await tester.pumpAndSettle();
       await tester.tap(find.text(l10n.chatMergeResponsesAction));
       await tester.pumpAndSettle();
@@ -1341,12 +1356,16 @@ void main() {
     testWidgets('is not offered while the shown answer is unfinished, and not '
         'with a single finished answer', (tester) async {
       await pumpMerge(tester, turn(shownSlot: 3, failed: const {3}));
-      await tester.tap(find.byIcon(Icons.more_horiz_rounded));
+      await openMessageMenu(tester);
+      await tester.tap(menuAction('more'));
       await tester.pumpAndSettle();
       expect(find.text(l10n.chatMergeResponsesAction), findsNothing);
+      await tester.tapAt(const Offset(1, 1));
+      await tester.pumpAndSettle();
 
       await pumpMerge(tester, turn(failed: const {0, 1, 3}));
-      await tester.tap(find.byIcon(Icons.more_horiz_rounded));
+      await openMessageMenu(tester);
+      await tester.tap(menuAction('more'));
       await tester.pumpAndSettle();
       expect(find.text(l10n.chatMergeResponsesAction), findsNothing);
     });

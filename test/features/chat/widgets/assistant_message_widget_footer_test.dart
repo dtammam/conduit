@@ -1,6 +1,9 @@
 import 'dart:async';
 
 import 'package:checks/checks.dart';
+
+import '../../../helpers/message_menu.dart';
+
 import 'package:conduit_core/models/chat_message.dart';
 import 'package:conduit_core/models/message_voice.dart';
 import 'package:conduit_core/services/settings_service.dart';
@@ -460,10 +463,12 @@ void main() {
 
     expect(find.text('1 Source'), findsOneWidget);
     expect(find.text('2/2'), findsOneWidget);
-    expect(find.byIcon(Icons.content_copy_outlined), findsOneWidget);
-    expect(find.byIcon(Icons.refresh), findsOneWidget);
-    // The version pager is inline, not in the overflow. On the latest
-    // version only "back" is available.
+    // The action buttons live in the long-press menu, not under the reply.
+    expect(find.byIcon(Icons.content_copy_outlined), findsNothing);
+    expect(find.byIcon(Icons.refresh), findsNothing);
+    expect(find.byIcon(Icons.more_horiz_rounded), findsNothing);
+    // The version pager is inline. On the latest version only "back" is
+    // available.
     expect(
       tester.getSemantics(find.bySemanticsLabel('Prev')),
       matchesSemantics(
@@ -478,66 +483,65 @@ void main() {
       tester.getSemantics(find.bySemanticsLabel('Next')),
       matchesSemantics(label: 'Next', isButton: true, hasEnabledState: true),
     );
-    expect(find.byIcon(Icons.more_horiz_rounded), findsOneWidget);
 
-    final refreshPosition = tester.getTopLeft(find.byIcon(Icons.refresh));
     final sourcePosition = tester.getTopLeft(find.text('1 Source'));
     final versionPosition = tester.getTopLeft(find.text('2/2'));
-    final overflowPosition = tester.getTopLeft(
-      find.byIcon(Icons.more_horiz_rounded),
-    );
+    expect(sourcePosition.dx, greaterThan(versionPosition.dx));
 
-    // Order: version pager, icon buttons, the inline overflow, info chips.
-    expect(refreshPosition.dx, greaterThan(versionPosition.dx));
-    expect(overflowPosition.dx, greaterThan(refreshPosition.dx));
-    expect(sourcePosition.dx, greaterThan(overflowPosition.dx));
-
-    await tester.tap(find.byIcon(Icons.more_horiz_rounded));
+    await openMessageMenu(tester);
+    expect(menuAction('reply'), findsNothing);
+    expect(menuAction('copy'), findsOneWidget);
+    expect(menuAction('tts'), findsOneWidget);
+    expect(menuAction('share'), findsOneWidget);
+    expect(menuAction('more'), findsOneWidget);
+    // Regenerate, info and delete wait behind More.
+    expect(menuAction('regenerate'), findsNothing);
+    await tester.tap(menuAction('more'));
     await tester.pumpAndSettle();
-
+    expect(menuAction('regenerate'), findsOneWidget);
+    expect(menuAction('usage'), findsOneWidget);
+    expect(menuAction('delete'), findsOneWidget);
     expect(find.text('Prev'), findsNothing);
     expect(find.text('Next'), findsNothing);
-    expect(find.text('Info'), findsOneWidget);
   });
 
-  testWidgets(
-    'a non-terminal grouped row keeps its info chips but no actions',
-    (tester) async {
-      // Within a grouped response only the last row paints the toolbar, but its
-      // siblings still own their own citations, so those must survive.
-      final message = ChatMessage(
-        id: 'assistant-grouped-middle',
-        role: 'assistant',
-        content: 'The first part of one grouped answer.',
-        timestamp: DateTime(2024, 1, 1),
-        isStreaming: false,
-        metadata: const {'responseDone': true},
-        sources: const [
-          ChatSourceReference(
-            title: 'Source A',
-            snippet: 'Source details shown in the bottom sheet.',
-          ),
-        ],
-      );
-
-      await tester.pumpWidget(
-        _buildAssistantHarness(
-          message,
-          isChatStreaming: false,
-          showActionBar: false,
+  testWidgets('a grouped row keeps its info chips and no inline actions', (
+    tester,
+  ) async {
+    // Within a grouped response only the last row paints the toolbar, but its
+    // siblings still own their own citations, so those must survive.
+    final message = ChatMessage(
+      id: 'assistant-grouped-middle',
+      role: 'assistant',
+      content: 'The first part of one grouped answer.',
+      timestamp: DateTime(2024, 1, 1),
+      isStreaming: false,
+      metadata: const {'responseDone': true},
+      sources: const [
+        ChatSourceReference(
+          title: 'Source A',
+          snippet: 'Source details shown in the bottom sheet.',
         ),
-      );
-      await tester.pumpAndSettle();
+      ],
+    );
 
-      check(find.text('1 Source').evaluate()).length.equals(1);
-      check(find.byType(ChatActionButton).evaluate()).isEmpty();
-      check(find.byIcon(Icons.content_copy_outlined).evaluate()).isEmpty();
-      check(find.byIcon(Icons.refresh).evaluate()).isEmpty();
-      check(find.byIcon(Icons.more_horiz_rounded).evaluate()).isEmpty();
-    },
-  );
+    await tester.pumpWidget(
+      _buildAssistantHarness(
+        message,
+        isChatStreaming: false,
+        showActionBar: false,
+      ),
+    );
+    await tester.pumpAndSettle();
 
-  testWidgets('the bar owner reads the whole grouped response aloud', (
+    check(find.text('1 Source').evaluate()).length.equals(1);
+    check(find.byType(ChatActionButton).evaluate()).isEmpty();
+    check(find.byIcon(Icons.content_copy_outlined).evaluate()).isEmpty();
+    check(find.byIcon(Icons.refresh).evaluate()).isEmpty();
+    check(find.byIcon(Icons.more_horiz_rounded).evaluate()).isEmpty();
+  });
+
+  testWidgets('Listen in the menu reads the pressed message only', (
     tester,
   ) async {
     final spoken = <String>[];
@@ -566,8 +570,6 @@ void main() {
             showFollowUps: false,
             animateOnMount: false,
             modelName: message.model,
-            resolveGroupedResponseText: () =>
-                'The first part.\n\nThe last part.',
             onCopy: () {},
             onRegenerate: () {},
             onDelete: () {},
@@ -577,58 +579,13 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byIcon(Icons.volume_up_outlined));
-    await tester.pumpAndSettle();
+    await chooseFromMessageMenu(tester, 'tts');
 
     check(spoken).length.equals(1);
-    check(spoken.single).contains('The first part.');
     check(spoken.single).contains('The last part.');
   });
 
-  testWidgets('assistant overflow uses the native iOS 26 popup menu', (
-    tester,
-  ) async {
-    PlatformUiCapabilities.debugPlatformOverride = TargetPlatform.iOS;
-    PlatformUiCapabilities.debugIOSMajorVersionOverride = 26;
-    PlatformUiCapabilities.debugNativeIOS26Override = true;
-
-    final message = ChatMessage(
-      id: 'assistant-native-overflow',
-      role: 'assistant',
-      content: 'Response with overflow actions.',
-      timestamp: DateTime(2024, 1, 1),
-      usage: const {'total_tokens': 24},
-      versions: [
-        ChatMessageVersion(
-          id: 'assistant-native-overflow-v1',
-          content: 'Older version',
-          timestamp: DateTime(2023, 12, 31),
-        ),
-      ],
-    );
-
-    await tester.pumpWidget(_buildAssistantHarness(message));
-    await tester.pump();
-
-    final nativeMenu = tester.widget<CNPopupMenuButton>(
-      find.byType(CNPopupMenuButton),
-    );
-    expect(nativeMenu.buttonStyle, CNButtonStyle.plain);
-    expect(nativeMenu.width, 32);
-    expect(
-      nativeMenu.items.whereType<CNPopupMenuItem>().last.isDestructive,
-      isTrue,
-    );
-
-    // The native package delays platform-view readiness in debug builds.
-    // Dispose the control before advancing that guard timer in widget tests.
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump(const Duration(milliseconds: 500));
-  });
-
-  testWidgets('a voice reply names itself in the app language', (
-    tester,
-  ) async {
+  testWidgets('a voice reply names itself in the app language', (tester) async {
     final message = ChatMessage(
       id: 'voice-reply',
       role: 'assistant',
@@ -736,7 +693,8 @@ void main() {
     await tester.pump();
 
     expect(find.text('Older version'), findsOneWidget);
-    expect(find.byIcon(Icons.content_copy_outlined), findsOneWidget);
+    await openMessageMenu(tester);
+    expect(menuAction('copy'), findsOneWidget);
     expect(
       tester
           .widget<StreamingMarkdownWidget>(find.byType(StreamingMarkdownWidget))
@@ -927,8 +885,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('actions')), findsOneWidget);
-    expect(find.byIcon(Icons.content_copy_outlined), findsOneWidget);
-    expect(find.byIcon(Icons.refresh), findsOneWidget);
     expect(find.byType(FollowUpSuggestionBar), findsOneWidget);
     expect(find.text('Ask again'), findsOneWidget);
     expect(
@@ -938,10 +894,8 @@ void main() {
       isFalse,
     );
 
-    await tester.tap(find.byIcon(Icons.content_copy_outlined));
-    await tester.pump();
-    await tester.tap(find.byIcon(Icons.refresh));
-    await tester.pump();
+    await chooseFromMessageMenu(tester, 'copy');
+    await chooseFromMessageMenu(tester, 'regenerate');
 
     expect(copyTapCount, 1);
     expect(regenerateTapCount, 1);
@@ -1345,14 +1299,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await openMessageMenu(tester);
+    expect(menuAction('tts'), findsOneWidget);
     expect(find.byIcon(Icons.volume_up_outlined), findsOneWidget);
-    final ttsButton = tester.widget<ChatActionButton>(
-      find.ancestor(
-        of: find.byIcon(Icons.volume_up_outlined),
-        matching: find.byType(ChatActionButton),
-      ),
-    );
-    expect(ttsButton.onTap, isNotNull);
   });
 
   testWidgets(

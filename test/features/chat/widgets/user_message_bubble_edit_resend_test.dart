@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import '../../../helpers/message_menu.dart';
+
 import 'package:checks/checks.dart';
 import 'package:conduit_core/features/chat/providers/chat_providers.dart';
 import 'package:conduit/features/chat/widgets/user_message_bubble.dart';
@@ -7,7 +9,6 @@ import 'package:conduit/l10n/app_localizations.dart';
 import 'package:conduit/l10n/conduit_localizations.dart';
 import 'package:conduit/shared/theme/app_theme.dart';
 import 'package:conduit/shared/theme/tweakcn_themes.dart';
-import 'package:conduit/shared/utils/conversation_context_menu.dart';
 import 'package:conduit/shared/widgets/platform_ui/platform_ui.dart';
 import 'package:conduit_core/database/app_database.dart';
 import 'package:conduit_core/database/database_provider.dart';
@@ -187,10 +188,7 @@ void main() {
       );
       await tester.pump();
 
-      final menu = tester.widget<ConduitContextMenu>(
-        find.byType(ConduitContextMenu),
-      );
-      await menu.actions.first.onSelected();
+      await chooseFromMessageMenu(tester, 'edit');
       await tester.pump();
       await tester.enterText(find.byType(AdaptiveTextField), 'Edited prompt');
       await tester.tap(find.text('Save'));

@@ -50,6 +50,7 @@ import '../../direct_connections/widgets/direct_mcp_message_interactions.dart';
 import 'package:conduit_core/features/chat/omni/omni_chat.dart';
 import 'package:conduit_core/features/chat/omni/omni_session.dart';
 import 'package:conduit_core/features/chat/omni/routine_reply_marker.dart';
+import 'package:conduit_core/features/chat/reply/reply_to.dart';
 import 'package:conduit_core/features/chat/providers/chat_providers.dart';
 import 'package:conduit_core/features/chat/composer/openwebui_prompt_answers.dart';
 import 'package:conduit_core/features/chat/providers/openwebui_chat_prompt_provider.dart';
@@ -126,6 +127,7 @@ import '../providers/context_usage_providers.dart';
 import '../widgets/context_usage_ring.dart';
 import '../../routines/push_registration.dart';
 import '../widgets/omni_session_divider.dart';
+import '../widgets/reply_to_bar.dart';
 import '../../../shared/widgets/server_version_warning_card.dart';
 import '../../../shared/widgets/adaptive_toolbar_components.dart';
 import '../../../shared/widgets/chrome_gradient_fade.dart';
@@ -982,6 +984,9 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       _failedSendMessageId.value = null;
       // A notification's pending routine reply belongs to its own chat.
       ref.read(routineReplyMarkerProvider.notifier).keepOnlyFor(next);
+      // So does a reply to one of its messages.
+      ref.read(replyTargetProvider.notifier).clear();
+      ref.read(pendingReplyToProvider.notifier).clear();
       _handleConversationChanged(next);
       _drainRoutineReply();
     });
@@ -1097,8 +1102,34 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   }
 
   Future<void> _handleMessageSend(String text) async {
-    await _sendMessage(text, includeComposerContext: true);
+    final reply = _takeReplyTarget();
+    await _sendMessage(
+      reply == null ? text : composeReplyText(reply.content, text),
+      includeComposerContext: true,
+    ).then(_finishReply(reply));
   }
+
+  /// The message the composer is replying to, if any. The request that goes
+  /// out names it (see `reply_to.dart`); [_finishReply] ends the reply.
+  ReplyTarget? _takeReplyTarget() {
+    final reply = ref.read(replyTargetProvider);
+    final chatId = ref.read(activeConversationProvider)?.id;
+    if (reply != null && chatId != null) {
+      ref.read(pendingReplyToProvider.notifier).arm(chatId, reply.messageId);
+    }
+    return reply;
+  }
+
+  /// Clears the quote bar once the send was taken, and the marker whether or
+  /// not a request used it. A send that was refused keeps the bar.
+  FutureOr<void> Function(({bool admitted, bool dispatched})) _finishReply(
+    ReplyTarget? reply,
+  ) => (result) {
+    ref.read(pendingReplyToProvider.notifier).clear();
+    if (reply != null && result.admitted && mounted) {
+      ref.read(replyTargetProvider.notifier).clear();
+    }
+  };
 
   /// Sends the composer's message to the chosen models as one comparison turn.
   /// The result names the committed turn, so the composer can tell whether it
@@ -1109,12 +1140,14 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     List<Model> models,
   ) async {
     ChatSendPlaceholderHandle? committed;
+    final reply = _takeReplyTarget();
     final result = await _sendMessage(
-      text,
+      reply == null ? text : composeReplyText(reply.content, text),
       includeComposerContext: true,
       compareModels: models,
       onComparisonCommitted: (handle) => committed = handle,
     );
+    await _finishReply(reply)(result);
     return result.dispatched ? committed : null;
   }
 
@@ -3548,6 +3581,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
             isStreaming: latestMessage.isStreaming,
             receipt: receipt,
             modelName: rowMetadata.displayModelName,
+            onReply: _startReply,
             onCopy: () {
               final currentMessage = rowRef.read(
                 chatMessageByIdProvider(messageId),
@@ -3669,17 +3703,10 @@ class _ChatPageState extends ConsumerState<ChatPage> {
           ? null
           : _handleQuickReplySend,
       quickReplyBadge: quickReplyBadge,
-      // The bar owner acts on the whole grouped response: a Hermes turn is one
-      // answer split across rows, so copying or reading back only this row's
-      // share would hand over a fragment.
-      resolveGroupedResponseText: groupIds.length > 1
-          ? () => _joinGroupedResponseText(rowRef, groupIds)
-          : null,
+      onReply: readOnly ? null : _startReply,
+      // Copy and listen act on the pressed row only; regenerate and delete
+      // still act on the whole grouped response below.
       onCopy: () {
-        if (groupIds.length > 1) {
-          _copyMessage(_joinGroupedResponseText(rowRef, groupIds));
-          return;
-        }
         final currentMessage = rowRef.read(chatMessageByIdProvider(messageId));
         if (currentMessage != null) {
           _copyMessage(currentMessage.content);
@@ -3728,19 +3755,9 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     return message.copyWith(statusHistory: grouped[index]);
   }
 
-  /// Current text of every row in a grouped response, in display order.
-  ///
-  /// Read at tap time rather than cached with the layout metadata, whose
-  /// signature deliberately ignores message content.
-  String _joinGroupedResponseText(WidgetRef rowRef, List<String> groupIds) {
-    final parts = <String>[];
-    for (final id in groupIds) {
-      final content = rowRef.read(chatMessageByIdProvider(id))?.content.trim();
-      if (content != null && content.isNotEmpty) {
-        parts.add(content);
-      }
-    }
-    return parts.join('\n\n');
+  /// Replies to one message: the composer shows its quote bar.
+  void _startReply(String messageId, String text) {
+    ref.read(replyTargetProvider.notifier).set(messageId, text);
   }
 
   void _scheduleMarkdownPrewarm(
@@ -4187,28 +4204,34 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                   )) {
                     return _buildReadOnlyNotice(context);
                   }
-                  return ModernChatInput(
-                    onSendMessage: _handleMessageSend,
-                    onCompareSend: _handleCompareSend,
-                    enabled: debugCanSubmitChatMessageForTesting(
-                      isLoadingConversation: isLoadingConversation,
-                      isSavingTemporary: _isSavingTemporary,
-                      isPreparingMessageSend: _messageSendAdmission.isHeld,
-                    ),
-                    bottomPadding: 0,
-                    managesSystemKeyboardInset: Platform.isAndroid,
-                    composerTextInsertionTargetId:
-                        chatComposerTextInsertionTargetId,
-                    attachedOverlay: attachedOverlay,
-                    onVoiceInput: null,
-                    onVoiceCall: _handleVoiceCall,
-                    onFileAttachment: _handleFileAttachment,
-                    onServerFileAttachment: _handleServerFileAttachment,
-                    onImageAttachment: _handleImageAttachment,
-                    onCameraCapture: () =>
-                        _handleImageAttachment(fromCamera: true),
-                    onWebAttachment: _promptAttachWebpage,
-                    onPastedAttachments: _handlePastedAttachments,
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const ReplyToBar(),
+                      ModernChatInput(
+                        onSendMessage: _handleMessageSend,
+                        onCompareSend: _handleCompareSend,
+                        enabled: debugCanSubmitChatMessageForTesting(
+                          isLoadingConversation: isLoadingConversation,
+                          isSavingTemporary: _isSavingTemporary,
+                          isPreparingMessageSend: _messageSendAdmission.isHeld,
+                        ),
+                        bottomPadding: 0,
+                        managesSystemKeyboardInset: Platform.isAndroid,
+                        composerTextInsertionTargetId:
+                            chatComposerTextInsertionTargetId,
+                        attachedOverlay: attachedOverlay,
+                        onVoiceInput: null,
+                        onVoiceCall: _handleVoiceCall,
+                        onFileAttachment: _handleFileAttachment,
+                        onServerFileAttachment: _handleServerFileAttachment,
+                        onImageAttachment: _handleImageAttachment,
+                        onCameraCapture: () =>
+                            _handleImageAttachment(fromCamera: true),
+                        onWebAttachment: _promptAttachWebpage,
+                        onPastedAttachments: _handlePastedAttachments,
+                      ),
+                    ],
                   );
                 },
               ),

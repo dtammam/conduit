@@ -1,12 +1,10 @@
 import 'dart:math' as math;
 
-import 'package:conduit/core/services/haptic_service.dart';
 import 'package:conduit/l10n/app_localizations.dart';
 import 'package:conduit/shared/theme/theme_extensions.dart';
 import 'package:conduit_core/features/chat/providers/chat_providers.dart'
     show chatMessagesProvider;
 import 'package:conduit_core/models/chat_message.dart';
-import 'package:flutter/gestures.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -131,154 +129,9 @@ QuickReplyReaction? quickReplyBadgeFor(
   return answer.reaction;
 }
 
-/// Opens the reaction picker on a long press of [child], an assistant reply's
-/// content.
-///
-/// The press is claimed at 400 ms, before text selection's own long press, so
-/// while [enabled] a long press no longer selects a word. The detector stays
-/// in the tree when disabled so the reply's content keeps its state.
-class QuickReplyLongPress extends StatelessWidget {
-  const QuickReplyLongPress({
-    super.key,
-    required this.enabled,
-    required this.onSelected,
-    required this.child,
-  });
-
-  static const Duration pressDuration = Duration(milliseconds: 400);
-
-  final bool enabled;
-  final ValueChanged<QuickReplyReaction> onSelected;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    // The text under the press takes focus on touch down (selection does),
-    // which would unfocus the composer. A press that becomes a reaction
-    // hands focus back to whatever held it before.
-    FocusNode? focusBeforePress;
-    return RawGestureDetector(
-      behavior: HitTestBehavior.translucent,
-      gestures: enabled
-          ? <Type, GestureRecognizerFactory>{
-              LongPressGestureRecognizer:
-                  GestureRecognizerFactoryWithHandlers<
-                    LongPressGestureRecognizer
-                  >(
-                    () => LongPressGestureRecognizer(duration: pressDuration),
-                    (recognizer) => recognizer
-                      ..onLongPressDown = (_) {
-                        focusBeforePress = FocusManager.instance.primaryFocus;
-                      }
-                      ..onLongPressStart = (_) {
-                        final previous = focusBeforePress;
-                        if (previous != null &&
-                            previous.context != null &&
-                            !previous.hasPrimaryFocus) {
-                          previous.requestFocus();
-                        }
-                        _open(context);
-                      },
-                  ),
-            }
-          : const <Type, GestureRecognizerFactory>{},
-      child: child,
-    );
-  }
-
-  Future<void> _open(BuildContext context) async {
-    final box = context.findRenderObject();
-    if (box is! RenderBox || !box.attached) return;
-    final anchor = box.localToGlobal(Offset.zero) & box.size;
-    ConduitHaptics.selectionClick();
-    final picked = await showQuickReplyPicker(context, anchor: anchor);
-    if (picked == null) return;
-    ConduitHaptics.selectionClick();
-    onSelected(picked);
-  }
-}
-
-/// Shows the floating reaction pill just above [anchor] (global coordinates),
-/// kept inside the screen. Resolves to the picked reaction, or null when the
-/// user taps outside.
-Future<QuickReplyReaction?> showQuickReplyPicker(
-  BuildContext context, {
-  required Rect anchor,
-}) {
-  final l10n = AppLocalizations.of(context)!;
-  return showGeneralDialog<QuickReplyReaction>(
-    context: context,
-    barrierDismissible: true,
-    // The picker must not take focus: that would close the keyboard and move
-    // the transcript under it.
-    requestFocus: false,
-    barrierLabel: l10n.close,
-    barrierColor: const Color(0x00000000),
-    transitionDuration: const Duration(milliseconds: 150),
-    pageBuilder: (dialogContext, _, _) => CustomSingleChildLayout(
-      delegate: _PillLayout(
-        anchor: anchor,
-        padding: MediaQuery.paddingOf(dialogContext),
-      ),
-      child: _QuickReplyPill(
-        onSelected: (reaction) => Navigator.of(dialogContext).pop(reaction),
-      ),
-    ),
-    transitionBuilder: (_, animation, _, child) {
-      final curved = CurvedAnimation(
-        parent: animation,
-        curve: Curves.easeOutBack,
-        reverseCurve: Curves.easeIn,
-      );
-      return FadeTransition(
-        opacity: animation,
-        child: ScaleTransition(
-          scale: Tween<double>(begin: 0.6, end: 1).animate(curved),
-          alignment: Alignment.bottomLeft,
-          child: child,
-        ),
-      );
-    },
-  );
-}
-
-class _PillLayout extends SingleChildLayoutDelegate {
-  const _PillLayout({required this.anchor, required this.padding});
-
-  static const double _gap = Spacing.xs;
-  static const double _margin = Spacing.sm;
-
-  final Rect anchor;
-  final EdgeInsets padding;
-
-  @override
-  BoxConstraints getConstraintsForChild(BoxConstraints constraints) =>
-      constraints.loosen();
-
-  @override
-  Offset getPositionForChild(Size size, Size childSize) {
-    final maxLeft = size.width - padding.right - childSize.width - _margin;
-    final minLeft = padding.left + _margin;
-    final maxTop = size.height - padding.bottom - childSize.height - _margin;
-    final minTop = padding.top + _margin;
-    final left = anchor.left.clamp(
-      minLeft,
-      maxLeft < minLeft ? minLeft : maxLeft,
-    );
-    final top = (anchor.top - childSize.height - _gap).clamp(
-      minTop,
-      maxTop < minTop ? minTop : maxTop,
-    );
-    return Offset(left, top);
-  }
-
-  @override
-  bool shouldRelayout(_PillLayout oldDelegate) =>
-      anchor != oldDelegate.anchor || padding != oldDelegate.padding;
-}
-
-class _QuickReplyPill extends StatelessWidget {
-  const _QuickReplyPill({required this.onSelected});
+/// The floating pill of reactions: row one of the message menu.
+class QuickReplyPill extends StatelessWidget {
+  const QuickReplyPill({super.key, required this.onSelected});
 
   static const double _itemExtent = 44;
 

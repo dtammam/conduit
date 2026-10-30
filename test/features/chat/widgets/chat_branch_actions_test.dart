@@ -1,6 +1,10 @@
 import 'package:conduit/features/chat/providers/text_to_speech_provider.dart';
 import 'package:conduit/features/chat/widgets/assistant_message_widget.dart';
 import 'package:conduit/features/chat/widgets/chat_branch_actions.dart';
+import 'package:conduit/features/chat/widgets/message_action_menu.dart';
+
+import '../../../helpers/message_menu.dart';
+
 import 'package:conduit/l10n/app_localizations.dart';
 import 'package:conduit/l10n/app_localizations_en.dart';
 import 'package:conduit/l10n/conduit_localizations.dart';
@@ -724,15 +728,11 @@ void main() {
     };
 
     Future<void> tapFork(WidgetTester tester) async {
-      if (action(_en.chatBranchForkChat).evaluate().isEmpty) {
-        await tester.tap(
-          find.byKey(const ValueKey('assistant-response-overflow-button')).last,
-        );
-        await tester.pumpAndSettle();
-        await tester.tap(find.text(_en.chatBranchForkChat));
-      } else {
-        await tester.tap(action(_en.chatBranchForkChat).last);
-      }
+      await chooseFromMessageMenu(
+        tester,
+        'fork',
+        on: find.byType(MessageMenuLongPress).last,
+      );
       await settle(tester);
     }
 
@@ -778,13 +778,12 @@ void main() {
     ) async {
       await open(tester, canImport: false);
 
-      // The overflow still exists for delete; fork is simply not among it.
-      await tester.tap(
-        find.byKey(const ValueKey('assistant-response-overflow-button')).last,
-      );
+      // The menu still offers delete; fork is simply not among it.
+      await openMessageMenu(tester, on: find.byType(MessageMenuLongPress).last);
+      await tester.tap(menuAction('more'));
       await tester.pumpAndSettle();
 
-      expect(action(_en.chatBranchForkChat), findsNothing);
+      expect(menuAction('fork'), findsNothing);
       expect(find.text(_en.chatBranchForkChat), findsNothing);
       expect(find.text(_en.delete), findsWidgets);
     });

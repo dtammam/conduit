@@ -4489,5 +4489,8 @@
   "routinesTestSent": "已傳送測試通知",
   "routinesTestTitle": "測試",
   "routinesTestBody": "如果你能看到這則訊息，代表例行任務通知可以正常運作。",
-  "routinesPushUnsupported": "推播通知僅支援 iOS。"
+  "routinesPushUnsupported": "推播通知僅支援 iOS。",
+  "messageReply": "回覆",
+  "messageShare": "分享",
+  "replyingToLabel": "回覆給"
 }

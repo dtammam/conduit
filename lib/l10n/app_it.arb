@@ -4489,5 +4489,8 @@
   "routinesTestSent": "Notifica di prova inviata",
   "routinesTestTitle": "Test",
   "routinesTestBody": "Se riesci a leggere questo, le notifiche delle routine funzionano.",
-  "routinesPushUnsupported": "Le notifiche push sono disponibili solo su iOS."
+  "routinesPushUnsupported": "Le notifiche push sono disponibili solo su iOS.",
+  "messageReply": "Rispondi",
+  "messageShare": "Condividi",
+  "replyingToLabel": "In risposta a"
 }

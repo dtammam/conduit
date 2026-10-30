@@ -12,7 +12,6 @@ import 'package:conduit/features/chat/widgets/message_badge.dart';
 import 'package:conduit/features/chat/widgets/message_bubble_colors.dart';
 import 'package:conduit/features/chat/widgets/user_message_bubble.dart';
 import 'package:conduit/l10n/app_localizations.dart';
-import 'package:conduit/shared/widgets/chat_action_button.dart';
 import 'package:conduit/l10n/conduit_localizations.dart';
 import 'package:conduit/platform/flutter_key_value_store.dart';
 import 'package:conduit/shared/theme/app_theme.dart';
@@ -128,12 +127,11 @@ Widget _assistant(
   quickReplyBadge: badge,
 );
 
-final _actionButtons = find.byType(ChatActionButton);
-
-/// The rects of the action row's buttons under a reply.
+/// The rect of what follows a reply (see [_thenNext]). The replies have no
+/// action row under them any more, so the next message is what a badge's
+/// room must keep clear.
 List<Rect> _actionRects(WidgetTester tester) => [
-  for (var i = 0; i < _actionButtons.evaluate().length; i++)
-    tester.getRect(_actionButtons.at(i)),
+  tester.getRect(find.byKey(_nextKey)),
 ];
 
 /// The top of the marker laid out right after [message], standing in for the
@@ -437,30 +435,13 @@ void main() {
       });
     }
 
-    testWidgets('on: the short badge sits over the buttons, not beside them', (
-      tester,
-    ) async {
-      await tester.pumpWidget(
-        _app(
-          _assistant('Saved.', badge: quickReplyReactions.first),
-          settings: _bubblesOn,
-        ),
-      );
-      await tester.pumpAndSettle();
-      final badge = tester.getRect(_quickReplyBadge);
-      final rects = _actionRects(tester);
-      // The case this guards: the badge shares the buttons' columns.
-      check(rects.any((r) => r.left < badge.right && badge.left < r.right))
-          .isTrue();
-    });
-
     testWidgets(
       'on: a reply that cannot carry a reaction keeps the plain gap',
       (tester) async {
         Future<double> gap({required bool quickReplies}) async {
           await tester.pumpWidget(
             _app(
-              _assistant('Saved.', quickReplies: quickReplies),
+              _thenNext(_assistant('Saved.', quickReplies: quickReplies)),
               settings: _bubblesOn,
             ),
           );
@@ -478,7 +459,9 @@ void main() {
       tester,
     ) async {
       Future<double> rowTop(QuickReplyReaction? badge) async {
-        await tester.pumpWidget(_app(_assistant('Saved.', badge: badge)));
+        await tester.pumpWidget(
+          _app(_thenNext(_assistant('Saved.', badge: badge))),
+        );
         await tester.pumpAndSettle();
         return _actionRects(tester).first.top;
       }

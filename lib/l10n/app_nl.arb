@@ -4489,5 +4489,8 @@
   "routinesTestSent": "Testmelding verstuurd",
   "routinesTestTitle": "Test",
   "routinesTestBody": "Als je dit kunt lezen, werken routinemeldingen.",
-  "routinesPushUnsupported": "Pushmeldingen zijn alleen beschikbaar op iOS."
+  "routinesPushUnsupported": "Pushmeldingen zijn alleen beschikbaar op iOS.",
+  "messageReply": "Beantwoorden",
+  "messageShare": "Delen",
+  "replyingToLabel": "Antwoord op"
 }

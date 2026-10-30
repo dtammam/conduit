@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import '../../../helpers/message_menu.dart';
+
 import 'package:conduit/shared/widgets/platform_ui/platform_ui.dart';
 import 'package:conduit_core/auth/api_auth_interceptor.dart';
 import 'package:conduit_core/providers/app_providers.dart';
@@ -10,6 +12,7 @@ import 'package:conduit_core/models/chat_message.dart';
 import 'package:conduit_core/models/conversation.dart';
 import 'package:conduit/features/chat/widgets/enhanced_attachment.dart';
 import 'package:conduit/features/chat/widgets/enhanced_image_attachment.dart';
+import 'package:conduit/features/chat/providers/text_to_speech_provider.dart';
 import 'package:conduit/features/chat/widgets/user_message_bubble.dart';
 import 'package:conduit_core/features/hermes/services/hermes_session_provenance.dart';
 import 'package:conduit/l10n/app_localizations.dart';
@@ -17,13 +20,17 @@ import 'package:conduit/l10n/conduit_localizations.dart';
 import 'package:conduit/shared/theme/app_theme.dart';
 import 'package:conduit/shared/theme/theme_extensions.dart';
 import 'package:conduit/shared/theme/tweakcn_themes.dart';
-import 'package:conduit/shared/utils/conversation_context_menu.dart';
 import 'package:conduit/shared/widgets/skeleton_loader.dart';
 import 'package:dio/dio.dart' show CancelToken;
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
+
+class _TestTextToSpeechController extends TextToSpeechController {
+  @override
+  TextToSpeechState build() => const TextToSpeechState();
+}
 
 void main() {
   Widget buildHarness(
@@ -196,7 +203,13 @@ void main() {
       content: 'Original answer',
       timestamp: DateTime.utc(2026, 7, 13, 10, 1),
     );
-    final container = ProviderContainer();
+    final container = ProviderContainer(
+      overrides: [
+        textToSpeechControllerProvider.overrideWith(
+          _TestTextToSpeechController.new,
+        ),
+      ],
+    );
     addTearDown(container.dispose);
     container
         .read(activeConversationProvider.notifier)
@@ -232,10 +245,7 @@ void main() {
     );
     await tester.pump();
 
-    final contextMenu = tester.widget<ConduitContextMenu>(
-      find.byType(ConduitContextMenu),
-    );
-    await contextMenu.actions.first.onSelected();
+    await chooseFromMessageMenu(tester, 'edit');
     await tester.pump();
     await tester.enterText(find.byType(AdaptiveTextField), 'Edited prompt');
     await tester.tap(find.text('Save'));

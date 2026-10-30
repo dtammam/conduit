@@ -8579,5 +8579,11 @@
   "routinesTestBody": "Jeśli to widzisz, powiadomienia rutyn działają.",
   "@routinesTestBody": {"description": "Body of the test notification."},
   "routinesPushUnsupported": "Powiadomienia push są dostępne tylko na iOS.",
-  "@routinesPushUnsupported": {"description": "Shown on platforms without routine push notifications."}
+  "@routinesPushUnsupported": {"description": "Shown on platforms without routine push notifications."},
+  "messageReply": "Odpowiedz",
+  "@messageReply": {"description": "Menu action that replies to the message that was long-pressed."},
+  "messageShare": "Udostępnij",
+  "@messageShare": {"description": "Menu action that shares the text of the message that was long-pressed."},
+  "replyingToLabel": "Odpowiedź na",
+  "@replyingToLabel": {"description": "Label above the composer naming the message the next send replies to."}
 }

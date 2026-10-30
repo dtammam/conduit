@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io' show Platform;
 import 'dart:math' as math;
 
@@ -11,11 +12,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../shared/services/navigation_service.dart';
 
 import 'package:conduit_core/services/settings_service.dart';
+import 'package:conduit_core/features/chat/reply/reply_to.dart';
 import 'package:conduit_core/utils/debug_logger.dart';
 
 import '../../../shared/theme/conduit_input_styles.dart';
 import '../../../shared/theme/theme_extensions.dart';
-import '../../../shared/utils/conversation_context_menu.dart';
+
+import 'package:share_plus/share_plus.dart';
+
+import '../providers/text_to_speech_provider.dart';
+import 'message_action_menu.dart';
 import '../../../shared/utils/file_type_utils.dart';
 import '../../../shared/utils/locale_display_formatters.dart';
 
@@ -71,6 +77,9 @@ class UserMessageBubble extends ConsumerStatefulWidget {
   final VoidCallback? onLike;
   final VoidCallback? onDislike;
 
+  /// Sets the composer to reply to this message (its id and text).
+  final void Function(String messageId, String text)? onReply;
+
   /// The delivery mark on the text bubble's bottom-trailing corner;
   /// [MessageReceipt.none] shows nothing.
   final MessageReceipt receipt;
@@ -87,6 +96,7 @@ class UserMessageBubble extends ConsumerStatefulWidget {
     this.onRegenerate,
     this.onLike,
     this.onDislike,
+    this.onReply,
     this.readOnly = false,
     this.receipt = MessageReceipt.none,
   });
@@ -753,44 +763,131 @@ class _UserMessageBubbleState extends ConsumerState<UserMessageBubble> {
     super.dispose();
   }
 
-  List<ConduitContextMenuAction> _buildMessageActions(BuildContext context) {
-    // Don't show menu while editing - return empty list
-    if (_isEditing) return [];
-
+  /// The menu a long press opens: Reply, Copy, Listen and Share, with Edit
+  /// and Delete under More. No reactions: those answer an assistant reply.
+  MessageMenuSpec _buildMessageMenu() {
     final l10n = AppLocalizations.of(context)!;
+    final text = (widget.message.content as String?) ?? '';
+    final id = (widget.message.id as String?) ?? '';
+    final hasText = text.trim().isNotEmpty;
+    final onReply = widget.onReply;
+    final tts = ref.read(textToSpeechControllerProvider);
+    final speaking =
+        tts.activeMessageId == id &&
+        (tts.status == TtsPlaybackStatus.speaking ||
+            tts.status == TtsPlaybackStatus.paused ||
+            tts.status == TtsPlaybackStatus.loading);
+    return MessageMenuSpec(
+      actions: [
+        if (onReply != null && !widget.readOnly && id.isNotEmpty && hasText)
+          MessageMenuAction(
+            id: 'reply',
+            icon: Platform.isIOS ? CupertinoIcons.reply : Icons.reply,
+            label: l10n.messageReply,
+            onTap: () => onReply(id, text),
+          ),
+        MessageMenuAction(
+          id: 'copy',
+          icon: Platform.isIOS
+              ? CupertinoIcons.doc_on_doc
+              : Icons.content_copy_outlined,
+          label: l10n.copy,
+          onTap: widget.onCopy,
+        ),
+        if (hasText && id.isNotEmpty)
+          MessageMenuAction(
+            id: 'tts',
+            icon: speaking
+                ? (Platform.isIOS ? CupertinoIcons.stop_fill : Icons.stop)
+                : (Platform.isIOS
+                      ? CupertinoIcons.speaker_2
+                      : Icons.volume_up_outlined),
+            label: speaking ? l10n.ttsStop : l10n.ttsListen,
+            onTap: () => unawaited(
+              ref
+                  .read(textToSpeechControllerProvider.notifier)
+                  .toggleForMessage(messageId: id, text: text),
+            ),
+          ),
+        if (hasText)
+          MessageMenuAction(
+            id: 'share',
+            icon: Platform.isIOS ? CupertinoIcons.share : Icons.share_outlined,
+            label: l10n.messageShare,
+            onTap: () => unawaited(
+              SharePlus.instance.share(ShareParams(text: text.trim())),
+            ),
+          ),
+      ],
+      more: [
+        if (!widget.readOnly)
+          MessageMenuAction(
+            id: 'edit',
+            icon: Platform.isIOS ? CupertinoIcons.pencil : Icons.edit_outlined,
+            label: l10n.edit,
+            onTap: _startInlineEdit,
+          ),
+        if (!widget.readOnly)
+          MessageMenuAction(
+            id: 'delete',
+            icon: Platform.isIOS ? CupertinoIcons.delete : Icons.delete_outline,
+            label: l10n.delete,
+            destructive: true,
+            onTap: widget.onDelete,
+          ),
+      ],
+      moreIcon: Platform.isIOS ? CupertinoIcons.ellipsis : Icons.more_horiz,
+    );
+  }
 
-    return [
-      if (!widget.readOnly)
-        ConduitContextMenuAction(
-          cupertinoIcon: CupertinoIcons.pencil,
-          materialIcon: Icons.edit_outlined,
-          label: l10n.edit,
-          onBeforeClose: () => ConduitHaptics.selectionClick(),
-          onSelected: () async => _startInlineEdit(),
-        ),
-      ConduitContextMenuAction(
-        cupertinoIcon: CupertinoIcons.doc_on_clipboard,
-        materialIcon: Icons.content_copy,
-        label: l10n.copy,
-        onBeforeClose: () => ConduitHaptics.selectionClick(),
-        onSelected: () async {
-          if (widget.onCopy != null) {
-            widget.onCopy!();
-          }
-        },
+  /// The message text. A reply starts with a markdown quote of the message it
+  /// answers; that leading block shows muted with a bar on its leading edge,
+  /// then the typed text.
+  Widget _buildMessageText(Color color) {
+    final content = widget.message.content as String;
+    Text text(String value, {Color? textColor, int? maxLines}) => Text(
+      value,
+      maxLines: maxLines,
+      overflow: maxLines == null ? null : TextOverflow.ellipsis,
+      style: AppTypography.chatMessageStyle.copyWith(color: textColor ?? color),
+      softWrap: true,
+      textAlign: TextAlign.left,
+      textWidthBasis: TextWidthBasis.longestLine,
+      textHeightBehavior: const TextHeightBehavior(
+        applyHeightToFirstAscent: false,
+        applyHeightToLastDescent: false,
+        leadingDistribution: TextLeadingDistribution.even,
       ),
-      if (!widget.readOnly)
-        ConduitContextMenuAction(
-          cupertinoIcon: CupertinoIcons.delete,
-          materialIcon: Icons.delete_outline,
-          label: l10n.delete,
-          destructive: true,
-          onBeforeClose: () => ConduitHaptics.mediumImpact(),
-          onSelected: () async {
-            widget.onDelete();
-          },
+    );
+    final split = splitLeadingQuote(content);
+    if (split == null) return text(content);
+    return Column(
+      key: const ValueKey<String>('user-message-quote'),
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        IntrinsicHeight(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(width: 3, color: color.withValues(alpha: 0.5)),
+              const SizedBox(width: Spacing.sm),
+              Flexible(
+                child: text(
+                  split.quote,
+                  textColor: color.withValues(alpha: 0.7),
+                ),
+              ),
+            ],
+          ),
         ),
-    ];
+        if (split.rest.isNotEmpty) ...[
+          const SizedBox(height: Spacing.xs),
+          text(split.rest),
+        ],
+      ],
+    );
   }
 
   @override
@@ -833,7 +930,6 @@ class _UserMessageBubbleState extends ConsumerState<UserMessageBubble> {
         : null;
     final bubbleFill = bubbleColors?.userFill ?? theme.chatBubbleUser;
     final bubbleTextColor = bubbleColors?.userText ?? theme.chatBubbleUserText;
-    final actions = _buildMessageActions(context);
     final receiptRoom = _showsReceipt && !messageBubbles
         ? _receiptTrailingRoom
         : 0.0;
@@ -852,7 +948,11 @@ class _UserMessageBubbleState extends ConsumerState<UserMessageBubble> {
           // Display images outside and above the text bubble (iMessage style)
           // Prioritize files array over attachmentIds to avoid duplication
           if (attachmentContent != null)
-            ConduitContextMenu(actions: actions, child: attachmentContent),
+            MessageMenuLongPress(
+              enabled: !_isEditing,
+              buildMenu: _buildMessageMenu,
+              child: attachmentContent,
+            ),
 
           // Display text bubble if there's text content
           if (hasText) const SizedBox(height: Spacing.xs),
@@ -865,8 +965,9 @@ class _UserMessageBubbleState extends ConsumerState<UserMessageBubble> {
                     constraints: BoxConstraints(
                       maxWidth: bubbleMaxWidth - receiptRoom,
                     ),
-                    child: ConduitContextMenu(
-                      actions: actions,
+                    child: MessageMenuLongPress(
+                      enabled: !_isEditing,
+                      buildMenu: _buildMessageMenu,
                       child: Container(
                         key: const Key('user-message-bubble-surface'),
                         // Text keeps clear of the receipt's overlapping corner.
@@ -925,21 +1026,7 @@ class _UserMessageBubbleState extends ConsumerState<UserMessageBubble> {
                                   ),
                                 ),
                               )
-                            : Text(
-                                widget.message.content,
-                                style: AppTypography.chatMessageStyle.copyWith(
-                                  color: bubbleTextColor,
-                                ),
-                                softWrap: true,
-                                textAlign: TextAlign.left,
-                                textWidthBasis: TextWidthBasis.longestLine,
-                                textHeightBehavior: const TextHeightBehavior(
-                                  applyHeightToFirstAscent: false,
-                                  applyHeightToLastDescent: false,
-                                  leadingDistribution:
-                                      TextLeadingDistribution.even,
-                                ),
-                              ),
+                            : _buildMessageText(bubbleTextColor),
                       ),
                     ),
                   ),

@@ -1,3 +1,5 @@
+import '../../../helpers/message_menu.dart';
+
 import 'package:checks/checks.dart';
 import 'package:conduit/features/chat/avatar/assistant_action_log.dart';
 import 'package:conduit/features/chat/providers/text_to_speech_provider.dart';
@@ -232,7 +234,8 @@ void main() {
 
   group('View actions', () {
     Future<void> openMenu(WidgetTester tester) async {
-      await tester.tap(find.byIcon(Icons.more_horiz_rounded));
+      await openMessageMenu(tester);
+      await tester.tap(menuAction('more'));
       await tester.pumpAndSettle();
     }
 

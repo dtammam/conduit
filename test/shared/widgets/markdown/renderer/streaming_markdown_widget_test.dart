@@ -1,3 +1,5 @@
+import '../../../../helpers/message_menu.dart';
+
 import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
@@ -2487,10 +2489,7 @@ After
       tester,
     ) async {
       await tester.pumpWidget(
-        buildHarness(
-          calls,
-          overrides: settings(avatar: true, activity: true),
-        ),
+        buildHarness(calls, overrides: settings(avatar: true, activity: true)),
       );
 
       check(find.textContaining('Explored').evaluate()).isEmpty();
@@ -2523,27 +2522,19 @@ After
       tester,
     ) async {
       await tester.pumpWidget(
-        buildHarness(
-          calls,
-          overrides: settings(avatar: false, activity: true),
-        ),
+        buildHarness(calls, overrides: settings(avatar: false, activity: true)),
       );
 
-      check(find.text('Explored web_search, create_event').evaluate())
-          .length
+      check(find.text('Explored web_search, create_event').evaluate()).length
           .equals(1);
     });
 
     testWidgets('with the setting off the rows stay', (tester) async {
       await tester.pumpWidget(
-        buildHarness(
-          calls,
-          overrides: settings(avatar: true, activity: false),
-        ),
+        buildHarness(calls, overrides: settings(avatar: true, activity: false)),
       );
 
-      check(find.text('Explored web_search, create_event').evaluate())
-          .length
+      check(find.text('Explored web_search, create_event').evaluate()).length
           .equals(1);
     });
   });
@@ -3467,7 +3458,7 @@ Tail keeps growing
         final l10n = AppLocalizations.of(
           tester.element(find.byType(AssistantMessageWidget)),
         )!;
-        expect(find.bySemanticsLabel(l10n.ttsListen), findsNothing);
+        expect(menuAction('tts'), findsNothing);
 
         await tester.pumpWidget(
           buildAssistantHarness(
@@ -3478,6 +3469,7 @@ Tail keeps growing
         );
         await tester.pumpAndSettle();
 
+        await openMessageMenu(tester);
         expect(find.bySemanticsLabel(l10n.ttsListen), findsOneWidget);
       } finally {
         workerManager.dispose();

@@ -4261,5 +4261,8 @@
   "routinesTestSent": "테스트 알림을 보냈습니다",
   "routinesTestTitle": "테스트",
   "routinesTestBody": "이 내용이 보인다면 루틴 알림이 작동하는 것입니다.",
-  "routinesPushUnsupported": "푸시 알림은 iOS에서만 사용할 수 있습니다."
+  "routinesPushUnsupported": "푸시 알림은 iOS에서만 사용할 수 있습니다.",
+  "messageReply": "답장",
+  "messageShare": "공유",
+  "replyingToLabel": "답장 대상"
 }

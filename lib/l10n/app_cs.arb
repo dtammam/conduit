@@ -6398,5 +6398,8 @@
   "routinesTestSent": "Testovací oznámení odesláno",
   "routinesTestTitle": "Test",
   "routinesTestBody": "Pokud to vidíte, oznámení rutin fungují.",
-  "routinesPushUnsupported": "Push oznámení jsou dostupná jen na iOS."
+  "routinesPushUnsupported": "Push oznámení jsou dostupná jen na iOS.",
+  "messageReply": "Odpovědět",
+  "messageShare": "Sdílet",
+  "replyingToLabel": "Odpověď na"
 }

@@ -6092,5 +6092,8 @@
   "routinesTestSent": "テスト通知を送信しました",
   "routinesTestTitle": "テスト",
   "routinesTestBody": "これが読めていれば、ルーティンの通知は動作しています。",
-  "routinesPushUnsupported": "プッシュ通知は iOS でのみ利用できます。"
+  "routinesPushUnsupported": "プッシュ通知は iOS でのみ利用できます。",
+  "messageReply": "返信",
+  "messageShare": "共有",
+  "replyingToLabel": "返信先"
 }

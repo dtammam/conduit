@@ -679,6 +679,15 @@ List<Map<String, dynamic>> _withOmniSession(
         routineReplyMarker(slug)!,
       );
     }
+    // A reply to one message names it for this one request (see
+    // `reply_to.dart`), after the routine line when both apply.
+    final replyToId = (ref.read(pendingReplyToProvider.notifier)
+            as PendingReplyToNotifier)
+        .take(chatId);
+    final replyMarker = replyToMarker(replyToId);
+    if (replyMarker != null) {
+      requestMessages = withSystemMarker(requestMessages, replyMarker);
+    }
   }
   if (!isOmniChatId(chatId)) return requestMessages;
   final settings = ref.read(appSettingsProvider) as AppSettings;

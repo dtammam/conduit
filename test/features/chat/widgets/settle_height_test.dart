@@ -119,22 +119,24 @@ void main() {
     await tester.pumpAndSettle();
     final settledTotal = tester.getSize(find.byType(Column).first).height;
 
+    // The action row is gone from under a reply (its actions are in the
+    // long-press menu), so settling drops the typing indicator and the card
+    // never grows past what streamed.
     expect(
       settledTotal,
-      moreOrLessEquals(streamingTotal, epsilon: 0.5),
+      lessThanOrEqualTo(streamingTotal + 0.5),
       reason:
-          '$name (scale $textScale): the settle transition must be '
-          'extent-neutral — streaming card + typing indicator '
-          '($streamingTotal) vs settled card ($settledTotal)',
+          '$name (scale $textScale): the settled card must not grow — '
+          'streaming card + typing indicator ($streamingTotal) vs settled '
+          'card ($settledTotal)',
     );
   }
 
-  // The timeline swaps the typing-indicator footer (16 + 28 + 4) for the
-  // in-card action row (16 + 32) at settle. These cases must be
-  // extent-neutral so the bottom-anchored viewport does not jump; growth
-  // from settle-only UI (sources row, text-scaled chips) is animated by the
-  // AnimatedSize around the footer slot instead.
-  testWidgets('the streaming-to-settled swap is extent-neutral', (
+  // The timeline drops the typing-indicator footer (16 + 28 + 4) at settle.
+  // These cases must not grow, so the bottom-anchored viewport does not jump
+  // upward; growth from settle-only UI (sources row, text-scaled chips) is
+  // animated by the AnimatedSize around the footer slot instead.
+  testWidgets('the streaming-to-settled swap never grows the card', (
     tester,
   ) async {
     await probe(tester, 'plain-1.0', textScale: 1.0);

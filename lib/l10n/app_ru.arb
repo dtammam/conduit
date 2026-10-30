@@ -4527,5 +4527,8 @@
   "routinesTestSent": "Тестовое уведомление отправлено",
   "routinesTestTitle": "Тест",
   "routinesTestBody": "Если вы это видите, уведомления рутин работают.",
-  "routinesPushUnsupported": "Push-уведомления доступны только на iOS."
+  "routinesPushUnsupported": "Push-уведомления доступны только на iOS.",
+  "messageReply": "Ответить",
+  "messageShare": "Поделиться",
+  "replyingToLabel": "Ответ на"
 }
