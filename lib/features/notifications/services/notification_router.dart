@@ -172,22 +172,25 @@ class NotificationRouter {
   }
 }
 
-/// A reply as a notification line: markdown marks, links, code fences, quotes
-/// and tool blocks removed, whitespace collapsed, cut at a word near [max]
-/// characters. A reply's raw text read as "**Calendar**\n- 8:00 AM ...".
-String notificationPreview(String text, {int max = 160}) {
+/// A reply as a notification body: markdown marks, links, code fences, images
+/// and tool blocks removed, list items as "• " lines, blank lines dropped, cut
+/// at a word near [max]. Raw text read as "**Calendar**\n- 8:00 AM ...".
+String notificationPreview(String text, {int max = 400}) {
   var s = text
       .replaceAll(RegExp(r'<details[\s\S]*?</details>'), ' ')
       .replaceAll(RegExp(r'```[\s\S]*?```'), ' ')
       .replaceAll(RegExp(r'!\[[^\]]*\]\([^)]*\)'), ' ')
       .replaceAllMapped(RegExp(r'\[([^\]]+)\]\([^)]*\)'), (m) => m[1]!)
       .replaceAll(
-        RegExp(r'^\s{0,3}(#{1,6}|>|[-*+]|\d+\.)\s+', multiLine: true),
-        '',
+        RegExp(r'^\s{0,3}([-*+]|\d+\.)\s+', multiLine: true),
+        '\u2022 ',
       )
+      .replaceAll(RegExp(r'^\s{0,3}(#{1,6}|>)\s+', multiLine: true), '')
       .replaceAll(RegExp(r'(\*\*|__|\*|`|~~)'), '')
-      .replaceAll(RegExp(r'\s+'), ' ')
-      .trim();
+      .split('\n')
+      .map((l) => l.replaceAll(RegExp(r'[ \t]+'), ' ').trim())
+      .where((l) => l.isNotEmpty)
+      .join('\n');
   if (s.length <= max) return s;
   final cut = s.lastIndexOf(' ', max);
   s = s.substring(0, cut > max * 0.6 ? cut : max).trimRight();
