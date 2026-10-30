@@ -4607,7 +4607,10 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     final activeConversation = ref.watch(activeConversationProvider);
     final isTemporary = ref.watch(temporaryChatEnabledProvider);
     final hasMessages = ref.watch(hasChatMessagesProvider);
-    final showNewChatAction = activeConversation != null || hasMessages;
+    // The Omni chat is the one standing chat: it has no New chat button.
+    final showNewChatAction =
+        (activeConversation != null || hasMessages) &&
+        !isOmniChatId(activeConversation?.id);
     final tintColor = context.conduitTheme.textPrimary;
     final showContextRing = ref.watch(
       chatContextUsageProvider.select((usage) => usage != null),

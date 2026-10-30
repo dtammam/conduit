@@ -205,16 +205,29 @@ void main() {
     _assistant('a1', parent: 'u1'),
   ];
   final bar = find.byKey(const ValueKey('omni-tab-bar'));
+  final newChat = find.byIcon(Icons.add_comment);
 
-  testWidgets('the Omni chat has the tab bar', (tester) async {
+  testWidgets('the Omni chat has the tab bar and no New chat button', (
+    tester,
+  ) async {
     await mountPage(tester, messages: transcript);
     check(bar.evaluate()).length.equals(1);
     check(find.byType(OmniTabBar).evaluate()).length.equals(1);
+    check(newChat.evaluate()).isEmpty();
+    check(find.byIcon(CupertinoIcons.create).evaluate()).isEmpty();
   });
 
-  testWidgets('another chat has no bar', (tester) async {
+  testWidgets('another chat has neither the bar nor the missing button', (
+    tester,
+  ) async {
     await mountPage(tester, messages: transcript, chatId: 'other-chat');
     check(bar.evaluate()).isEmpty();
+    check(
+      [
+        Icons.add_comment,
+        CupertinoIcons.create,
+      ].expand((i) => find.byIcon(i).evaluate()),
+    ).isNotEmpty;
   });
 
   testWidgets('no bar when the assistant avatar is off', (tester) async {
