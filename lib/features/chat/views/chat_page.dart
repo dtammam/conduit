@@ -3379,7 +3379,11 @@ class _ChatPageState extends ConsumerState<ChatPage> {
           !isOmniChatId(ref.read(activeConversationProvider)?.id)) {
         return row;
       }
-      return OmniSessionDividerGate(messageId: renderedMessageId, child: row);
+      return OmniSessionDividerGate(
+        messageId: renderedMessageId,
+        timestamp: historyMessageById(renderedMessageId)?.timestamp,
+        child: row,
+      );
     }
 
     _rowBuilderTimeline = timeline;

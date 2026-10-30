@@ -1,10 +1,9 @@
-import 'dart:math' as math;
-
 import 'package:conduit/l10n/app_localizations.dart';
 import 'package:conduit/shared/theme/theme_extensions.dart';
 import 'package:conduit_core/features/chat/omni/omni_session.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
 /// [child] with the Omni session divider above it when message [messageId]
 /// started a session. The transcript's first row never gets one.
@@ -13,10 +12,16 @@ class OmniSessionDividerGate extends ConsumerWidget {
     super.key,
     required this.messageId,
     required this.child,
+    this.timestamp,
+    this.now,
   });
 
   final String messageId;
   final Widget child;
+
+  /// When message [messageId] was sent; without it no divider is drawn.
+  final DateTime? timestamp;
+  final DateTime? now;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -25,67 +30,66 @@ class OmniSessionDividerGate extends ConsumerWidget {
         (session) => session.boundaries.contains(messageId),
       ),
     );
-    if (!startsSession) return child;
+    final start = timestamp;
+    if (!startsSession || start == null) return child;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
-      children: [const OmniSessionDivider(), child],
+      children: [
+        OmniSessionDivider(start: start, now: now),
+        child,
+      ],
     );
   }
 }
 
-/// A thin wavy line across the transcript where a new Omni session begins.
-class OmniSessionDivider extends StatelessWidget {
-  const OmniSessionDivider({super.key});
+/// The label of a session that began at [start]: the time alone today, else
+/// the ISO date, a comma and the time ("2026-10-12, 3:26 PM"). [locale] picks
+/// the time format.
+String omniSessionTimeLabel(DateTime start, DateTime now, String locale) {
+  final time = DateFormat.jm(locale).format(start);
+  final sameDay =
+      start.year == now.year &&
+      start.month == now.month &&
+      start.day == now.day;
+  if (sameDay) return time;
+  return '${DateFormat('yyyy-MM-dd').format(start)}, $time';
+}
 
-  static const double height = 28;
+/// A small centered muted timestamp where a new Omni session begins.
+class OmniSessionDivider extends StatelessWidget {
+  const OmniSessionDivider({super.key, required this.start, this.now});
+
+  /// When the first message of the session was sent.
+  final DateTime start;
+
+  /// The clock, for tests; defaults to the current time.
+  final DateTime? now;
 
   @override
   Widget build(BuildContext context) {
-    final color = context.conduitTheme.textSecondary.withValues(alpha: 0.35);
+    final l10n = AppLocalizations.of(context)!;
+    final label = omniSessionTimeLabel(
+      start,
+      now ?? DateTime.now(),
+      Localizations.localeOf(context).toString(),
+    );
     return Semantics(
-      label: AppLocalizations.of(context)!.omniSessionDividerLabel,
+      label: '${l10n.omniSessionDividerLabel}, $label',
       container: true,
-      child: SizedBox(
-        height: height,
-        child: CustomPaint(painter: _WavePainter(color)),
+      excludeSemantics: true,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Center(
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: context.conduitTheme.textSecondary.withValues(alpha: 0.7),
+            ),
+          ),
+        ),
       ),
     );
   }
-}
-
-class _WavePainter extends CustomPainter {
-  const _WavePainter(this.color);
-
-  final Color color;
-
-  static const double _wavelength = 12;
-  static const double _amplitude = 1.6;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final inset = size.width * 0.08;
-    final width = size.width - inset * 2;
-    if (width <= 0) return;
-    final mid = size.height / 2;
-    final path = Path()..moveTo(inset, mid);
-    for (var x = 0.0; x <= width; x += 1) {
-      path.lineTo(
-        inset + x,
-        mid + _amplitude * math.sin(x / _wavelength * 2 * math.pi),
-      );
-    }
-    canvas.drawPath(
-      path,
-      Paint()
-        ..color = color
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1
-        ..strokeCap = StrokeCap.round
-        ..isAntiAlias = true,
-    );
-  }
-
-  @override
-  bool shouldRepaint(_WavePainter oldDelegate) => oldDelegate.color != color;
 }
