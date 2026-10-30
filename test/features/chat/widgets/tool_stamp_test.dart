@@ -63,4 +63,89 @@ void main() {
       expect(_labels(running), isEmpty);
     });
   });
+  outputTests();
+}
+
+Map<String, dynamic> _fc(
+  String id,
+  String name, {
+  String status = 'completed',
+}) => {
+  'type': 'function_call',
+  'id': id,
+  'call_id': id,
+  'name': name,
+  'arguments': '{}',
+  'status': status,
+};
+
+Map<String, dynamic> _fco(String id, Object output) => {
+  'type': 'function_call_output',
+  'id': 'fco_$id',
+  'call_id': id,
+  'output': output,
+};
+
+void outputTests() {
+  group('toolStampFromOutput', () {
+    List<String> labels(List<Map<String, dynamic>> o) =>
+        toolStampFromOutput(o).map((e) => e.label).toList();
+
+    test('pairs calls with outputs by call_id and joins text parts', () {
+      expect(
+        labels([
+          {'type': 'message', 'content': []},
+          _fc('1', 'notes-mcp_search_notes'),
+          _fc('2', 'actual-mcp_actual_transactions_create'),
+          _fco('2', [
+            {'type': 'input_text', 'text': '{"ok": true}'},
+          ]),
+          _fco('1', '{"results": []}'),
+        ]),
+        ['search notes ✓', 'transactions create ✓'],
+      );
+    });
+
+    test('error results give a cross', () {
+      expect(
+        labels([
+          _fc('1', 'a_b'),
+          _fco('1', [
+            {'type': 'input_text', 'text': 'Error: nope'},
+          ]),
+          _fc('2', 'c_d'),
+          _fco('2', '{"error": "bad"}'),
+          _fc('3', 'e_f'),
+          _fco('3', '{"success": false}'),
+        ]),
+        ['a b ✗', 'c d ✗', 'e f ✗'],
+      );
+    });
+
+    test('a call with no output or not completed is left out', () {
+      expect(
+        labels([
+          _fc('1', 'a_b'),
+          _fc('2', 'c_d', status: 'in_progress'),
+          _fco('2', 'x'),
+          _fc('3', 'ask_user'),
+          _fco('3', 'x'),
+        ]),
+        isEmpty,
+      );
+    });
+
+    test('repeats merge and null output is empty', () {
+      expect(
+        labels([
+          _fc('1', 'a_b'),
+          _fco('1', 'x'),
+          _fc('2', 'a_b'),
+          _fco('2', 'y'),
+        ]),
+        ['a b ✓ ×2'],
+      );
+      expect(toolStampFromOutput(null), isEmpty);
+    });
+  });
 }

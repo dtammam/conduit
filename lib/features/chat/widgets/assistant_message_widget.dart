@@ -2512,10 +2512,12 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
     final content = _displayedContent;
     if (!identical(_stampScanContent, content)) {
       _stampScanContent = content;
-      _stampScanResult = toolStampFromContent(
-        messageId: _messageId,
-        content: content,
-      );
+      final fromOutput = toolStampFromOutput(widget.message.output);
+      // Stored output wins; the details blocks only fill in when there is none,
+      // so a message that has both is never counted twice.
+      _stampScanResult = fromOutput.isNotEmpty
+          ? fromOutput
+          : toolStampFromContent(messageId: _messageId, content: content);
     }
     return _stampScanResult;
   }

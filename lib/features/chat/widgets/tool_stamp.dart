@@ -25,7 +25,8 @@ class ToolStampEntry {
   final bool failed;
   final int count;
 
-  String get label => '$name ${failed ? '✗' : '✓'}${count > 1 ? ' ×$count' : ''}';
+  String get label =>
+      '$name ${failed ? '✗' : '✓'}${count > 1 ? ' ×$count' : ''}';
 
   @override
   bool operator ==(Object other) =>
@@ -111,6 +112,83 @@ List<ToolStampEntry> toolStampFromContent({
       messageTime: DateTime.fromMillisecondsSinceEpoch(0),
     ),
   );
+}
+
+String _outputResultText(Object? output) {
+  if (output is String) return output;
+  if (output is List) {
+    return output
+        .map((part) => part is Map ? (part['text']?.toString() ?? '') : '')
+        .where((text) => text.isNotEmpty)
+        .join('\n');
+  }
+  return '';
+}
+
+/// The stamp from a message's stored `output` array: each completed
+/// `function_call` paired by `call_id` with its `function_call_output`. A call
+/// with no output yet, or a status other than completed, is still running and
+/// left out. Returns an empty list when [output] has no such calls.
+List<ToolStampEntry> toolStampFromOutput(List<Map<String, dynamic>>? output) {
+  if (output == null || output.isEmpty) return const [];
+  final results = <String, String>{};
+  for (final item in output) {
+    if (item['type'] == 'function_call_output') {
+      final id = (item['call_id'] ?? item['id'])?.toString();
+      if (id != null && id.isNotEmpty) {
+        results[id] = _outputResultText(item['output']);
+      }
+    }
+  }
+  final records = <AssistantActionRecord>[];
+  final epoch = DateTime.fromMillisecondsSinceEpoch(0);
+  for (final item in output) {
+    if (item['type'] != 'function_call') continue;
+    final id = (item['call_id'] ?? item['id'])?.toString() ?? '';
+    final status = item['status']?.toString();
+    if (!results.containsKey(id) || (status != null && status != 'completed')) {
+      continue;
+    }
+    final result = results[id]!;
+    final text = result.trim().toLowerCase();
+    final failed =
+        text.startsWith('error') ||
+        text.startsWith('exception:') ||
+        text.startsWith('traceback') ||
+        _resultSaysFailed(result) ||
+        _jsonErrorField(result);
+    records.add(
+      AssistantActionRecord(
+        id: id,
+        chatId: '',
+        messageId: '',
+        toolName: item['name']?.toString() ?? '',
+        arguments: '',
+        result: result,
+        status: failed
+            ? AssistantActionStatus.failed
+            : AssistantActionStatus.succeeded,
+        startedAt: epoch,
+        finishedAt: epoch,
+      ),
+    );
+  }
+  return buildToolStamp(records);
+}
+
+bool _jsonErrorField(String result) {
+  final text = result.trim();
+  if (!text.startsWith('{')) return false;
+  try {
+    final decoded = jsonDecode(text);
+    if (decoded is Map) {
+      final error = decoded['error'];
+      return error is String
+          ? error.trim().isNotEmpty
+          : error is Map || error is List;
+    }
+  } catch (_) {}
+  return false;
 }
 
 /// A small muted row under a reply: a wrench and the calls that really ran.
