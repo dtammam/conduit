@@ -1035,6 +1035,25 @@ final class NativePasteBridge: NativePasteHostApi {
         swizzlePaste(for: targetClass)
         swizzleCanPerformAction(for: targetClass)
         swizzlePasteConfiguration(for: targetClass)
+        addPasteItemProviders(to: targetClass)
+    }
+
+    /// The paste configuration above makes UIKit offer the text view as a drop
+    /// target, and a drop calls `pasteItemProviders:`, which Flutter never
+    /// implemented: UIResponder's default asserts and the app aborted
+    /// (2026-10-29, a subject lifted from a photo and dropped on the composer).
+    /// Dropped images take the paste path; anything else is ignored.
+    private static func addPasteItemProviders(to targetClass: AnyClass) {
+        guard let method = class_getInstanceMethod(
+            UIResponder.self,
+            #selector(UIResponder.conduit_pasteItemProviders(_:))
+        ) else { return }
+        class_addMethod(
+            targetClass,
+            #selector(UIResponder.paste(itemProviders:)),
+            method_getImplementation(method),
+            method_getTypeEncoding(method)
+        )
     }
 
     private static func swizzlePaste(for targetClass: AnyClass) {
@@ -1139,16 +1158,18 @@ final class NativePasteBridge: NativePasteHostApi {
     }
 
     fileprivate func handlePasteAction(
+        droppedProviders: [NSItemProvider]? = nil,
         completion: @escaping (Bool) -> Void
     ) {
         let deliveryCompletion = NativePasteDeliveryCompletion(
             completion: completion
         )
         let pasteboard = UIPasteboard.general
-        let directItems = Self.directImageDataItems(from: pasteboard)
+        let directItems = droppedProviders == nil
+            ? Self.directImageDataItems(from: pasteboard) : []
         let sources: [NativePasteImageSource]
         if directItems.isEmpty {
-            sources = pasteboard.itemProviders.compactMap { provider in
+            sources = (droppedProviders ?? pasteboard.itemProviders).compactMap { provider in
                 guard Self.supportedTypes.contains(where: { supportedType in
                     provider.hasItemConformingToTypeIdentifier(
                         supportedType.type.identifier
@@ -1529,6 +1550,12 @@ final class NativePasteBridge: NativePasteHostApi {
 }
 
 extension UIResponder {
+    @objc func conduit_pasteItemProviders(_ itemProviders: [NSItemProvider]) {
+        NativePasteBridge.shared.handlePasteAction(
+            droppedProviders: itemProviders
+        ) { _ in }
+    }
+
     @objc func conduit_handlePaste(_ sender: Any?) {
         let pasteboardChangeCount = UIPasteboard.general.changeCount
         let editorContext = nativePasteEditorContext(for: self)
