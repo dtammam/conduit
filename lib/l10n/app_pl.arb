@@ -851,7 +851,7 @@
   "@voiceCallErrorHelp": {
     "description": "Guidance shown when the voice call encounters an error."
   },
-  "messageHintText": "Zapytaj Conduit",
+  "messageHintText": "Wiadomość",
   "@messageHintText": {
     "description": "Short placeholder text in the message input."
   },

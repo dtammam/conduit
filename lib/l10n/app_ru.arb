@@ -155,7 +155,7 @@
   "voicePromptTapStart": "Нажмите «Начать» для запуска",
   "voiceActionStop": "Стоп",
   "voiceActionStart": "Начать",
-  "messageHintText": "Спросите Conduit",
+  "messageHintText": "Сообщение",
   "stopGenerating": "Остановить генерацию",
   "codeCopiedToClipboard": "Код скопирован в буфер обмена.",
   "send": "Отправить",

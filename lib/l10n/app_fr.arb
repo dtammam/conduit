@@ -149,7 +149,7 @@
   "voicePromptTapStart": "Appuyez sur \"Démarrer\" pour commencer",
   "voiceActionStop": "Arrêter",
   "voiceActionStart": "Démarrer",
-  "messageHintText": "Demander à Conduit",
+  "messageHintText": "Message",
   "stopGenerating": "Arrêter la génération",
   "codeCopiedToClipboard": "Code copié dans le presse-papiers.",
   "send": "Envoyer",

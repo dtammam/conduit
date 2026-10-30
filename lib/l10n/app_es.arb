@@ -149,7 +149,7 @@
   "voicePromptTapStart": "Toca Iniciar para comenzar",
   "voiceActionStop": "Detener",
   "voiceActionStart": "Iniciar",
-  "messageHintText": "Pregunta a Conduit",
+  "messageHintText": "Mensaje",
   "stopGenerating": "Detener generación",
   "codeCopiedToClipboard": "Código copiado al portapapeles.",
   "send": "Enviar",

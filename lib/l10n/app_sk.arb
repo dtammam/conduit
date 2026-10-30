@@ -644,7 +644,7 @@
   "@voiceCallErrorHelp": {
     "description": "Guidance shown when the voice call encounters an error."
   },
-  "messageHintText": "Opýtať sa Conduitu",
+  "messageHintText": "Správa",
   "@messageHintText": {
     "description": "Short placeholder text in the message input."
   },

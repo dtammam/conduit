@@ -149,7 +149,7 @@
   "voicePromptTapStart": "Tik op Start om te beginnen",
   "voiceActionStop": "Stop",
   "voiceActionStart": "Start",
-  "messageHintText": "Vraag Conduit",
+  "messageHintText": "Bericht",
   "stopGenerating": "Stop met genereren",
   "codeCopiedToClipboard": "Code gekopieerd naar klembord.",
   "send": "Verzenden",

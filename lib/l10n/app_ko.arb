@@ -203,7 +203,7 @@
   "voiceCallSpeaking": "말하는 중",
   "voiceCallDisconnected": "연결 끊김",
   "voiceCallErrorHelp": "다음을 확인하세요:\n• 마이크 권한이 부여되었는지\n• 기기에서 음성 인식이 사용 가능한지\n• 서버에 연결되어 있는지",
-  "messageHintText": "Conduit에게 물어보기",
+  "messageHintText": "메시지",
   "stopGenerating": "생성 중지",
   "send": "전송",
   "codeCopiedToClipboard": "코드가 클립보드에 복사되었습니다.",

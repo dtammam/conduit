@@ -644,7 +644,7 @@
   "@voiceCallErrorHelp": {
     "description": "Guidance shown when the voice call encounters an error."
   },
-  "messageHintText": "Conduit に質問",
+  "messageHintText": "メッセージ",
   "@messageHintText": {
     "description": "Short placeholder text in the message input."
   },
