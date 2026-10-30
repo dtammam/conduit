@@ -5,6 +5,10 @@ import 'package:conduit_core/services/settings_service.dart';
 import 'package:conduit_core/features/notifications/models/app_notification.dart';
 import 'package:conduit_core/features/notifications/services/active_view_tracker.dart';
 
+import '../../../core/utils/current_localizations.dart';
+
+import 'package:conduit_core/features/chat/omni/omni_chat.dart';
+
 import 'local_notification_service.dart';
 import 'notification_sound_service.dart';
 
@@ -66,9 +70,10 @@ class NotificationRouter {
   /// does not mention the user: it still counts as unread, but plays no sound
   /// and shows no banner or system notification, as in Open WebUI.
   Future<NotificationSurface> route(
-    AppNotification notification, {
+    AppNotification incoming, {
     bool alert = true,
   }) async {
+    final notification = _branded(incoming);
     final settings = _readSettings();
 
     // 1. Master toggle.
@@ -133,6 +138,16 @@ class NotificationRouter {
       case NotificationKind.channelMessage:
         return settings.notificationChannelEnabled;
     }
+  }
+
+  /// The Omni chat's server title is "Omni"; its banner and notification
+  /// come from the assistant by its app name instead.
+  AppNotification _branded(AppNotification notification) {
+    if (notification.kind != NotificationKind.chatCompletion ||
+        !isOmniChatId(notification.sourceId)) {
+      return notification;
+    }
+    return notification.copyWith(title: currentAppLocalizations().omniChatName);
   }
 
   bool _isViewingTarget(AppNotification notification) {
