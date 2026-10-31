@@ -34,6 +34,15 @@ final class SpeechEngineBridge: ConduitBridge {
   private var configurationObserver: NSObjectProtocol?
   private let capture = CaptureStreamHandler()
   private var captureChannel: FlutterEventChannel?
+  /// The pending release of the device's audio after playback (on [work]).
+  private var releaseItem: DispatchWorkItem?
+  private var lastRate: Float = 1
+
+  /// How long the engine waits after the queue drains or playback stops before
+  /// it gives the audio back: long enough for the next sentence or reply to
+  /// start without the session going off and on.
+  static let releaseAfterStop: TimeInterval = 1.5
+  static let releaseAfterPause: TimeInterval = 30
 
   private init() {}
 
@@ -94,8 +103,74 @@ final class SpeechEngineBridge: ConduitBridge {
     return created
   }
 
+  /// A voice call owns the audio session (the call coordinator configures it);
+  /// read-aloud must then neither change its category nor release it.
+  private func callActive(_ speech: SpeechEngineQueue?) -> Bool {
+    if speech?.inCall == true { return true }
+    if VoiceBackgroundAudioManager.shared.isSessionActive { return true }
+    return AVAudioSession.sharedInstance().mode == .voiceChat
+  }
+
+  /// Read-aloud outside a call: plain playback that lowers other apps' audio
+  /// instead of pausing it, and no microphone (2026-10-31: Dean's YouTube paused
+  /// and other apps' dictation failed while this engine sat on playAndRecord).
+  private func usePlaybackSession() {
+    let session = AVAudioSession.sharedInstance()
+    guard session.category != .playback || session.mode != .spokenAudio
+            || !session.categoryOptions.contains(.duckOthers) else { return }
+    try? session.setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
+  }
+
+  private func scheduleRelease(after seconds: TimeInterval) {
+    work.async { [weak self] in
+      guard let self else { return }
+      self.releaseItem?.cancel()
+      let item = DispatchWorkItem { [weak self] in self?.releaseNow() }
+      self.releaseItem = item
+      self.work.asyncAfter(deadline: .now() + seconds, execute: item)
+    }
+  }
+
+  private func cancelRelease() {
+    releaseItem?.cancel()
+    releaseItem = nil
+  }
+
+  /// Stops the idle engine and gives the device's audio back to other apps
+  /// (they may resume: notifyOthersOnDeactivation). On [work].
+  private func releaseNow() {
+    releaseItem = nil
+    guard let speech, !callActive(speech) else { return }
+    guard speech.releaseIfIdle() else { return }
+    try? AVAudioSession.sharedInstance().setActive(
+      false,
+      options: .notifyOthersOnDeactivation
+    )
+  }
+
+  /// Drops the engine; the next call makes a fresh one. After a call the
+  /// engine's input stays in its graph, so it would open the microphone for
+  /// every read-aloud.
+  private func discardQueue() {
+    speech?.shutDown()
+    if let observer = configurationObserver {
+      NotificationCenter.default.removeObserver(observer)
+    }
+    configurationObserver = nil
+    speech = nil
+  }
+
   private func handle(_ method: String, _ args: [String: Any]) throws -> Any? {
+    switch method {
+    case "pause", "stop", "diagnostics", "log", "dispose": break
+    default: cancelRelease()
+    }
+    if method == "reset", let old = speech, old.inputUsed, !callActive(old) {
+      discardQueue()
+    }
+    let fresh = speech == nil
     let speech = queue()
+    if fresh, lastRate != 1 { speech.setRate(lastRate) }
     switch method {
     case "reset":
       try speech.reset()
@@ -111,20 +186,26 @@ final class SpeechEngineBridge: ConduitBridge {
       guard let item = args["item"] as? Int else { return false }
       try speech.finishItem(item)
     case "play":
+      if !callActive(speech) { usePlaybackSession() }
       try? AVAudioSession.sharedInstance().setActive(true)
       VoiceAudioRouteBridge.shared.restoreSpeakerIfNeeded(reason: "play")
       try speech.play()
     case "pause":
       try speech.pause()
+      scheduleRelease(after: Self.releaseAfterPause)
     case "stop":
       try speech.stop()
+      scheduleRelease(after: Self.releaseAfterStop)
     case "seek":
       guard let item = args["item"] as? Int else { return false }
       try speech.seek(toItem: item)
     case "setRate":
-      speech.setRate(Float(args["rate"] as? Double ?? 1))
+      lastRate = Float(args["rate"] as? Double ?? 1)
+      speech.setRate(lastRate)
     case "setVoiceProcessing":
-      try speech.setVoiceProcessing(args["on"] as? Bool ?? false)
+      let on = args["on"] as? Bool ?? false
+      try speech.setVoiceProcessing(on)
+      if !on { scheduleRelease(after: Self.releaseAfterStop) }
     case "startCapture":
       let rate = args["sampleRate"] as? Double ?? 16000
       try speech.startCapture(sampleRate: rate) { [weak self] data in
@@ -134,6 +215,7 @@ final class SpeechEngineBridge: ConduitBridge {
       }
     case "stopCapture":
       try speech.stopCapture()
+      scheduleRelease(after: Self.releaseAfterStop)
     case "diagnostics":
       return speech.diagnostics(
         reset: args["reset"] as? Bool ?? false,
@@ -142,7 +224,15 @@ final class SpeechEngineBridge: ConduitBridge {
     case "log":
       speech.logNotice(args["message"] as? String ?? "")
     case "dispose":
+      cancelRelease()
+      let call = callActive(speech)
       speech.shutDown()
+      if !call {
+        try? AVAudioSession.sharedInstance().setActive(
+          false,
+          options: .notifyOthersOnDeactivation
+        )
+      }
     default:
       return FlutterMethodNotImplemented
     }
@@ -164,7 +254,9 @@ final class SpeechEngineBridge: ConduitBridge {
     switch event {
     case .itemStarted(let item): payload = ["type": "started", "item": item]
     case .starved: payload = ["type": "starved"]
-    case .drained: payload = ["type": "drained"]
+    case .drained:
+      payload = ["type": "drained"]
+      scheduleRelease(after: Self.releaseAfterStop)
     }
     DispatchQueue.main.async { [weak self] in
       self?.methodChannel?.invokeMethod("event", arguments: payload)

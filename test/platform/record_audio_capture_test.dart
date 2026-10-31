@@ -10,7 +10,54 @@ import 'package:record/record.dart';
 /// decides what that means on each platform, so this is where the decision
 /// is worth pinning — both of these encode routing bugs that were expensive
 /// to find.
+class _StopOnlyRecorder implements AudioRecorder {
+  int stops = 0;
+  @override
+  Future<String?> stop() async {
+    stops++;
+    return null;
+  }
+
+  @override
+  RecordIos? get ios => null;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
 void main() {
+  group('iOS session release after dictation', () {
+    tearDown(() => RecordAudioCapture.isIosHost = () => false);
+
+    test('stop gives the audio session back when record owns it', () async {
+      RecordAudioCapture.isIosHost = () => true;
+      var released = 0;
+      final recorder = _StopOnlyRecorder();
+      final capture = RecordAudioCapture(recorder, () async => released++);
+      await capture.stop();
+      check(recorder.stops).equals(1);
+      check(released).equals(1);
+    });
+
+    test('a voice call owns the session: stop leaves it alone', () async {
+      RecordAudioCapture.isIosHost = () => true;
+      var released = 0;
+      final capture = RecordAudioCapture(_StopOnlyRecorder(), () async => released++);
+      await capture.manageIosAudioSession(false);
+      await capture.stop();
+      check(released).equals(0);
+    });
+
+    test('a failed release does not fail the stop', () async {
+      RecordAudioCapture.isIosHost = () => true;
+      final capture = RecordAudioCapture(
+        _StopOnlyRecorder(),
+        () async => throw StateError('busy'),
+      );
+      await capture.stop();
+    });
+  });
+
   group('android routing', () {
     test('uses speech recognition routing outside voice calls', () {
       final config = RecordAudioCapture.androidConfigFor(

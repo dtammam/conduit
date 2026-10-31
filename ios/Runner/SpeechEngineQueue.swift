@@ -202,8 +202,52 @@ final class SpeechEngineQueue {
       try wireIfNeeded()
       try startEngineIfNeeded()
       wantsPlayback = true
+      // after releaseIfIdle the player's schedule is gone: schedule again from
+      // the item that was playing
+      try scheduleReady()
       try startPlayerIfNeeded()
     }
+  }
+
+  // MARK: - Releasing the audio (2026-10-31)
+
+  /// Whether this engine's microphone was ever touched (a voice call). An engine
+  /// whose inputNode was used keeps the microphone open every time it runs, so
+  /// after a call the bridge replaces it with a fresh, output-only engine.
+  private(set) var inputUsed = false
+
+  /// A call is using this engine (voice processing on or the microphone tapped).
+  var inCall: Bool { voiceProcessing || capturing }
+
+  /// Stops the engine when nothing is playing, so the app stops holding the
+  /// device's audio (other apps' playback, dictation and recording). A paused
+  /// clip goes on from its start on the next play. Returns whether the engine
+  /// was stopped; false while a call uses it or audio is still due.
+  @discardableResult
+  func releaseIfIdle() -> Bool {
+    if inCall { return false }
+    return (try? queue.sync { () -> Bool in
+      let drained = outstanding == 0
+      guard drained || !wantsPlayback else { return false }
+      // false, so a configuration change after the release (the session going
+      // inactive) does not start the engine again
+      wantsPlayback = false
+      generation += 1
+      if !drained {
+        // paused with audio still scheduled: keep the place
+        let resume = lastStartedItem ?? scheduleItem
+        try Self.objc { self.player.stop() }
+        outstanding = 0
+        scheduleItem = resume
+        scheduledInItem = 0
+        lastStartedItem = nil
+        pendingStarts.removeAll()
+      } else {
+        try Self.objc { self.player.stop() }
+      }
+      if engine.isRunning { try Self.objc { self.engine.stop() } }
+      return true
+    }) ?? false
   }
 
   func pause() throws {
@@ -269,6 +313,7 @@ final class SpeechEngineQueue {
     }
     Self.log.notice("setVoiceProcessing \(on, privacy: .public)")
     defer { countDiag { togglingVoiceProcessing = false } }
+    inputUsed = true
     try Self.objc {
       if self.engine.isRunning { self.engine.stop() }
       try self.engine.inputNode.setVoiceProcessingEnabled(on)
@@ -284,6 +329,7 @@ final class SpeechEngineQueue {
   /// [sampleRate], the format the call's voice detection reads.
   func startCapture(sampleRate: Double, onData: @escaping (Data) -> Void) throws {
     if capturing { try stopCapture() }
+    inputUsed = true
     let input = engine.inputNode
     let inputFormat = input.outputFormat(forBus: 0)
     guard inputFormat.channelCount > 0, inputFormat.sampleRate > 0 else {
@@ -409,11 +455,14 @@ final class SpeechEngineQueue {
       "\(Int(f.sampleRate))Hz/\(f.channelCount)ch"
     }
     out["playerFormat"] = describe(format)
+    // engine.inputNode is read only when a call already uses the microphone:
+    // touching it makes the engine open the microphone whenever it runs
+    let withInput = inputUsed
     if let formats = try? Self.objc({ () -> [String] in
       [
         describe(self.engine.mainMixerNode.outputFormat(forBus: 0)),
         describe(self.engine.outputNode.outputFormat(forBus: 0)),
-        describe(self.engine.inputNode.inputFormat(forBus: 0)),
+        withInput ? describe(self.engine.inputNode.inputFormat(forBus: 0)) : "unused",
       ]
     }) {
       out["mixerOut"] = formats[0]
@@ -433,6 +482,7 @@ final class SpeechEngineQueue {
 
   func shutDown() {
     try? stop()
+    if capturing { try? stopCapture() }
     _ = try? Self.objc { self.engine.stop() }
   }
 
