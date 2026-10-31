@@ -53,7 +53,8 @@ class VoiceInputService implements VoiceModeInput {
   static const double _vadNegativeSpeechThreshold = 0.35;
   static const Duration _localeFetchTimeout = Duration(seconds: 2);
   static const Duration _vadDisposeCooldown = Duration(milliseconds: 140);
-  static const Duration _localRecognitionMaxDuration = Duration(minutes: 5);
+  static const Duration _localRecognitionMaxDuration = Duration(minutes: 10);
+  static const Duration _serverRecordingMaxDuration = Duration(minutes: 10);
   static const Duration _nativeDictationFinalSettleDelay = Duration(
     milliseconds: 900,
   );
@@ -741,7 +742,7 @@ class VoiceInputService implements VoiceModeInput {
       _usingServerStt = true;
       _listeningSpeech = _serverSpeech();
       _autoStopTimer?.cancel();
-      _autoStopTimer = Timer(const Duration(seconds: 90), () {
+      _autoStopTimer = Timer(_serverRecordingMaxDuration, () {
         if (_isListening) {
           unawaited(_stopListening());
         }
