@@ -1,5 +1,7 @@
 import AVFoundation
 import Flutter
+import UIKit
+import UniformTypeIdentifiers
 
 private let conduitSpeechEngineChannelName = "app.cogwheel.conduit/speech_engine"
 private let conduitSpeechEngineCaptureChannelName =
@@ -37,6 +39,7 @@ final class SpeechEngineBridge: ConduitBridge {
   /// The pending release of the device's audio after playback (on [work]).
   private var releaseItem: DispatchWorkItem?
   private var lastRate: Float = 1
+  private weak var host: ConduitBridgeHost?
 
   /// How long the engine waits after the queue drains or playback stops before
   /// it gives the audio back: long enough for the next sentence or reply to
@@ -52,6 +55,7 @@ final class SpeechEngineBridge: ConduitBridge {
       binaryMessenger: host.messenger
     )
     methodChannel = channel
+    self.host = host
     let events = FlutterEventChannel(
       name: conduitSpeechEngineCaptureChannelName,
       binaryMessenger: host.messenger
@@ -64,6 +68,10 @@ final class SpeechEngineBridge: ConduitBridge {
         return
       }
       let args = call.arguments as? [String: Any] ?? [:]
+      if call.method == "shareAudioFile" {
+        self.shareAudioFile(args, result: result)
+        return
+      }
       self.work.async {
         let reply: Any?
         do {
@@ -78,6 +86,68 @@ final class SpeechEngineBridge: ConduitBridge {
         DispatchQueue.main.async { result(reply) }
       }
     }
+  }
+
+  /// Shares a rendered reply (Share as MP3) as a real file: an item provider
+  /// with the file's own type (public.mp3) and name. share_plus hands share
+  /// extensions a lazily resolved file URL, and Discord's extension got no
+  /// attachment from it (2026-10-31); Messages, Mail, Files and AirDrop take
+  /// the provider as well. Answers when the sheet closes: true when shared.
+  private func shareAudioFile(_ args: [String: Any], result: @escaping FlutterResult) {
+    guard let path = args["path"] as? String, FileManager.default.fileExists(atPath: path) else {
+      result(FlutterError(code: "share", message: "The file is missing", details: nil))
+      return
+    }
+    let url = URL(fileURLWithPath: path)
+    DispatchQueue.main.async {
+      guard let root = self.topController(from: self.host?.presentingViewController) else {
+        result(FlutterError(code: "share", message: "Nothing to present from", details: nil))
+        return
+      }
+      let provider = NSItemProvider()
+      let type = UTType(filenameExtension: url.pathExtension) ?? .mp3
+      provider.registerFileRepresentation(
+        forTypeIdentifier: type.identifier, fileOptions: [], visibility: .all
+      ) { completion in
+        completion(url, false, nil)
+        return nil
+      }
+      provider.suggestedName = url.deletingPathExtension().lastPathComponent
+      let sheet = UIActivityViewController(activityItems: [provider], applicationActivities: nil)
+      if let title = args["title"] as? String, !title.isEmpty {
+        sheet.title = title
+      }
+      if let popover = sheet.popoverPresentationController {
+        popover.sourceView = root.view
+        let x = args["x"] as? Double, y = args["y"] as? Double
+        let w = args["w"] as? Double, h = args["h"] as? Double
+        if let x, let y, let w, let h {
+          popover.sourceRect = CGRect(x: x, y: y, width: w, height: h)
+        } else {
+          popover.sourceRect = CGRect(x: root.view.bounds.midX, y: root.view.bounds.midY, width: 1, height: 1)
+        }
+      }
+      var answered = false
+      sheet.completionWithItemsHandler = { _, completed, _, _ in
+        guard !answered else { return }
+        answered = true
+        result(completed)
+      }
+      root.present(sheet, animated: true)
+    }
+  }
+
+  private func topController(from root: UIViewController?) -> UIViewController? {
+    if let navigation = root as? UINavigationController {
+      return topController(from: navigation.visibleViewController)
+    }
+    if let tab = root as? UITabBarController {
+      return topController(from: tab.selectedViewController)
+    }
+    if let presented = root?.presentedViewController, !presented.isBeingDismissed {
+      return topController(from: presented)
+    }
+    return root
   }
 
   private func queue() -> SpeechEngineQueue {

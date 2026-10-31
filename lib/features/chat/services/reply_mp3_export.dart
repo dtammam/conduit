@@ -1,8 +1,9 @@
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import 'tts_manager.dart';
 
@@ -52,7 +53,7 @@ class ReplyMp3Export {
   }) : _startRelayExport = startRelayExport,
        _download = download ?? downloadSigned,
        _render = render ?? TtsManager.instance.synthesizeChunk,
-       _tempDirectory = tempDirectory ?? getTemporaryDirectory;
+       _tempDirectory = tempDirectory ?? getApplicationCacheDirectory;
 
   final Future<Mp3ExportTicket?> Function(String text)? _startRelayExport;
   final Future<Uint8List> Function(String url) _download;
@@ -116,14 +117,17 @@ class ReplyMp3Export {
     return 'about ${(seconds / 60).round()} min';
   }
 
-  /// A short file name from the reply's first words: "Heres your day.mp3".
+  /// A short file name from the reply's first words, no spaces or marks that
+  /// a share extension might trip on: "Heres-your-day.mp3".
   static String fileNameFor(String text, String extension) {
     final words = text
-        .replaceAll(RegExp(r"[^A-Za-z0-9 ]+"), ' ')
+        .replaceAll("'", '')
+        .replaceAll('’', '')
+        .replaceAll(RegExp(r'[^A-Za-z0-9 ]+'), ' ')
         .split(RegExp(r'\s+'))
         .where((w) => w.isNotEmpty)
         .take(6)
-        .join(' ');
+        .join('-');
     final base = words.isEmpty ? 'Reply' : words;
     return '$base.$extension';
   }
@@ -166,12 +170,79 @@ class ReplyMp3Export {
     }
     final ext = extensionFor(mimeType);
     final dir = await _tempDirectory();
+    final shared = Directory('${dir.path}/shared-audio');
+    await sweep(shared);
     final folder = Directory(
-      '${dir.path}/reply-audio-${DateTime.now().millisecondsSinceEpoch}',
+      '${shared.path}/${DateTime.now().millisecondsSinceEpoch}',
     );
     await folder.create(recursive: true);
     final file = File('${folder.path}/${fileNameFor(clean, ext)}');
     await file.writeAsBytes(bytes, flush: true);
     return (file: file, mimeType: mimeType);
+  }
+
+  /// Removes shared files older than a day: a file must outlive the share
+  /// sheet (an extension may read it after the sheet closes), so nothing is
+  /// deleted right after sharing.
+  static Future<void> sweep(Directory shared, {DateTime? now}) async {
+    try {
+      if (!await shared.exists()) return;
+      final cutoff = (now ?? DateTime.now()).subtract(
+        const Duration(hours: 24),
+      );
+      await for (final entry in shared.list()) {
+        final stat = await entry.stat();
+        if (stat.modified.isBefore(cutoff)) {
+          await entry.delete(recursive: true);
+        }
+      }
+    } catch (_) {
+      // Cleanup is best effort.
+    }
+  }
+
+  static const _channel = MethodChannel('app.cogwheel.conduit/speech_engine');
+
+  /// Opens the share sheet with [file] as a real .mp3 file (iOS: an item
+  /// provider with the file's type and name, which Discord's extension reads;
+  /// elsewhere share_plus). Returns whether it was shared.
+  static Future<bool> shareFile(
+    File file, {
+    required String mimeType,
+    String? title,
+    Rect? origin,
+  }) async {
+    if (Platform.isIOS) {
+      try {
+        final done = await _channel.invokeMethod<bool>('shareAudioFile', {
+          'path': file.path,
+          'title': ?title,
+          if (origin != null) ...{
+            'x': origin.left,
+            'y': origin.top,
+            'w': origin.width,
+            'h': origin.height,
+          },
+        });
+        return done ?? false;
+      } on MissingPluginException {
+        // An older native side: share_plus below.
+      }
+    }
+    final result = await SharePlus.instance.share(
+      ShareParams(
+        files: [
+          XFile(
+            file.path,
+            name: file.uri.pathSegments.last,
+            mimeType: mimeType,
+          ),
+        ],
+        title: title,
+        subject: title,
+        sharePositionOrigin: origin,
+      ),
+    );
+    return result.status == ShareResultStatus.success;
   }
 }

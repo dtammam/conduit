@@ -910,17 +910,11 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
         },
       );
       if (!mounted) return;
-      await SharePlus.instance.share(
-        ShareParams(
-          files: [
-            XFile(
-              exported.file.path,
-              name: exported.file.uri.pathSegments.last,
-              mimeType: exported.mimeType,
-            ),
-          ],
-          sharePositionOrigin: origin,
-        ),
+      await ReplyMp3Export.shareFile(
+        exported.file,
+        mimeType: exported.mimeType,
+        title: exported.file.uri.pathSegments.last,
+        origin: origin,
       );
     } catch (error) {
       if (!mounted) return;

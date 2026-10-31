@@ -130,7 +130,7 @@ void main() {
 
   test('mp3 file names come from the first words', () {
     check(ReplyMp3Export.fileNameFor("Here's your day: three things.", 'mp3'))
-        .equals('Here s your day three things.mp3');
+        .equals('Heres-your-day-three-things.mp3');
     check(ReplyMp3Export.extensionFor('audio/wav')).equals('wav');
     check(ReplyMp3Export.extensionFor('audio/mpeg')).equals('mp3');
   });
@@ -170,5 +170,19 @@ void main() {
     ).export('Short reply.');
     check(exported.file.readAsBytesSync().length).equals(2);
     check(ReplyMp3Export.etaWords(40)).equals('about 40 s');
+  });
+
+  test('the sweep removes shared files older than a day only', () async {
+    final tmp = await Directory.systemTemp.createTemp('mp3');
+    addTearDown(() => tmp.delete(recursive: true));
+    final kept = Directory('${tmp.path}/1')..createSync();
+    File('${kept.path}/a.mp3').writeAsBytesSync([1]);
+    await ReplyMp3Export.sweep(tmp);
+    check(kept.existsSync()).isTrue();
+    await ReplyMp3Export.sweep(
+      tmp,
+      now: DateTime.now().add(const Duration(hours: 25)),
+    );
+    check(kept.existsSync()).isFalse();
   });
 }
