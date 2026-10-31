@@ -91,6 +91,7 @@ import '../widgets/openwebui_chat_settings_sheet.dart';
 import '../widgets/modern_chat_input.dart';
 import '../widgets/user_message_bubble.dart';
 import '../reactions/quick_reply_reactions.dart';
+import '../providers/assistant_name_provider.dart';
 import '../avatar/assistant_action_log.dart';
 import '../avatar/assistant_avatar_strip.dart';
 import '../avatar/omni_tab_bar.dart';
@@ -4224,11 +4225,10 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                           isPreparingMessageSend: _messageSendAdmission.isHeld,
                         ),
                         bottomPadding: 0,
-                        placeholder: isOmniChatId(activeConversation?.id)
-                            ? AppLocalizations.of(context)!.omniComposerHint(
-                                AppLocalizations.of(context)!.omniChatName,
-                              )
-                            : null,
+                        placeholder: _composerHint(
+                          context,
+                          isOmni: isOmniChatId(activeConversation?.id),
+                        ),
                         managesSystemKeyboardInset: Platform.isAndroid,
                         composerTextInsertionTargetId:
                             chatComposerTextInsertionTargetId,
@@ -4265,6 +4265,15 @@ class _ChatPageState extends ConsumerState<ChatPage> {
         ),
       ),
     );
+  }
+
+  /// The composer hint: "Message NAME" once the server has told us the
+  /// assistant's name, else the omni chat's own hint, else the default.
+  String? _composerHint(BuildContext context, {required bool isOmni}) {
+    final l10n = AppLocalizations.of(context)!;
+    final name = ref.watch(assistantNameProvider);
+    if (name != null) return l10n.omniComposerHint(name);
+    return isOmni ? l10n.omniComposerHint(l10n.omniChatName) : null;
   }
 
   /// Replaces the composer while viewing another user's chat from a shared
