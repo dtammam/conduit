@@ -1351,6 +1351,39 @@
   "@ttsStop": {
     "description": "Action to stop text to speech playback"
   },
+  "ttsPause": "Pause",
+  "@ttsPause": {
+    "description": "Action to pause the message being read aloud"
+  },
+  "ttsResume": "Resume",
+  "@ttsResume": {
+    "description": "Action to resume a paused read-aloud"
+  },
+  "ttsPreviousSentence": "Previous sentence",
+  "@ttsPreviousSentence": {
+    "description": "Action to go back one sentence while a message is read aloud"
+  },
+  "ttsNextSentence": "Next sentence",
+  "@ttsNextSentence": {
+    "description": "Action to skip ahead one sentence while a message is read aloud"
+  },
+  "shareAsMp3": "Share as MP3",
+  "@shareAsMp3": {
+    "description": "Action to render the whole assistant reply as speech and share the MP3 file"
+  },
+  "shareAsMp3Preparing": "Making the MP3…",
+  "@shareAsMp3Preparing": {
+    "description": "Shown while the reply's MP3 is being rendered"
+  },
+  "shareAsMp3Failed": "Couldn't make the MP3: {error}",
+  "@shareAsMp3Failed": {
+    "description": "Shown when rendering the reply's MP3 failed",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "usageInfo": "Info",
   "@usageInfo": {
     "description": "Action to show usage/performance statistics for a response"

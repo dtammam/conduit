@@ -92,6 +92,15 @@ class TextToSpeechController extends Notifier<TextToSpeechState> {
   bool _handlersBound = false;
   Future<bool>? _initializationFuture;
 
+  /// The sentence the current playback started from: skipping restarts the
+  /// read-aloud at a later or earlier sentence, and the engine counts its
+  /// chunks from there.
+  int _sentenceOffset = 0;
+
+  /// Set while a skip stops the old playback, so its cancellation does not
+  /// end the read-aloud the skip is about to restart.
+  bool _restarting = false;
+
   @override
   TextToSpeechState build() {
     _service = ref.watch(textToSpeechServiceProvider);
@@ -234,6 +243,7 @@ class TextToSpeechController extends Notifier<TextToSpeechState> {
     if (!ref.mounted) return;
 
     // Prepare sentence split for highlighting
+    _sentenceOffset = 0;
     final cleanText = ConduitMarkdownPreprocessor.cleanText(text);
     final sentences = _service.splitTextForReadAloud(cleanText);
     final offsets = _computeOffsets(cleanText, sentences);
@@ -348,7 +358,67 @@ class TextToSpeechController extends Notifier<TextToSpeechState> {
     }
   }
 
+  /// Reads the active message aloud from sentence [index] on (skip forward or
+  /// back). Playing from a paused state resumes at that sentence.
+  Future<void> skipToSentence(int index) async {
+    final messageId = state.activeMessageId;
+    final sentences = state.sentences;
+    if (messageId == null || sentences.isEmpty) return;
+    if (state.status == TtsPlaybackStatus.idle ||
+        state.status == TtsPlaybackStatus.error) {
+      return;
+    }
+    final target = index.clamp(0, sentences.length - 1);
+    final rest = sentences.sublist(target).join(' ').trim();
+    if (rest.isEmpty) return;
+    _restarting = true;
+    try {
+      await _service.stop();
+      if (!ref.mounted) return;
+      _sentenceOffset = target;
+      state = state.copyWith(
+        status: TtsPlaybackStatus.loading,
+        activeMessageId: messageId,
+        activeSentenceIndex: target,
+        clearWord: true,
+        clearErrorMessage: true,
+      );
+      await _prepareReadAloudRoute();
+      if (!ref.mounted) return;
+      await _service.speak(rest);
+      if (!ref.mounted) return;
+      if (state.status == TtsPlaybackStatus.loading) {
+        state = state.copyWith(status: TtsPlaybackStatus.speaking);
+      }
+    } catch (e) {
+      _restarting = false;
+      if (!ref.mounted) return;
+      state = state.copyWith(
+        status: TtsPlaybackStatus.error,
+        errorMessage: e.toString(),
+        clearActiveMessageId: true,
+      );
+    }
+  }
+
+  /// The next sentence of the active read-aloud; past the last one it stops.
+  Future<void> nextSentence() async {
+    final idx = state.activeSentenceIndex;
+    if (idx + 1 >= state.sentences.length) {
+      await stop();
+      return;
+    }
+    await skipToSentence(idx < 0 ? 0 : idx + 1);
+  }
+
+  /// The previous sentence (the first one restarts).
+  Future<void> previousSentence() async {
+    final idx = state.activeSentenceIndex;
+    await skipToSentence(idx <= 0 ? 0 : idx - 1);
+  }
+
   Future<void> stop() async {
+    _restarting = false;
     await _service.stop();
     if (!ref.mounted) {
       return;
@@ -361,6 +431,7 @@ class TextToSpeechController extends Notifier<TextToSpeechState> {
   }
 
   void _handleStart() {
+    _restarting = false;
     if (!ref.mounted) {
       return;
     }
@@ -368,7 +439,7 @@ class TextToSpeechController extends Notifier<TextToSpeechState> {
   }
 
   void _handleCompletion() {
-    if (!ref.mounted) {
+    if (_restarting || !ref.mounted) {
       return;
     }
     state = state.copyWith(
@@ -378,7 +449,7 @@ class TextToSpeechController extends Notifier<TextToSpeechState> {
   }
 
   void _handleCancellation() {
-    if (!ref.mounted) {
+    if (_restarting || !ref.mounted) {
       return;
     }
     state = state.copyWith(
@@ -414,7 +485,7 @@ class TextToSpeechController extends Notifier<TextToSpeechState> {
 
   void _handleSentenceIndex(int index) {
     if (!ref.mounted) return;
-    final clamped = index.clamp(
+    final clamped = (index < 0 ? index : index + _sentenceOffset).clamp(
       -1,
       state.sentences.isEmpty ? -1 : state.sentences.length - 1,
     );

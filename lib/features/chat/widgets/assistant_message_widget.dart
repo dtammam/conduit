@@ -32,6 +32,8 @@ import 'enhanced_attachment.dart';
 import 'package:conduit/shared/widgets/chat_action_button.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../services/reply_mp3_export.dart';
+
 import 'message_action_menu.dart';
 
 import '../../../shared/widgets/model_avatar.dart';
@@ -848,6 +850,52 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
     await controller.toggleForMessage(messageId: messageId, text: speechText);
   }
 
+  bool _isExportingMp3 = false;
+
+  /// Renders the whole reply in the current voice and opens the share sheet
+  /// with the file (AirDrop, Messages, Files).
+  Future<void> _handleShareMp3() async {
+    if (_isExportingMp3) return;
+    final l10n = AppLocalizations.of(context)!;
+    final box = context.findRenderObject() as RenderBox?;
+    final origin = box != null && box.hasSize
+        ? box.localToGlobal(Offset.zero) & box.size
+        : null;
+    setState(() => _isExportingMp3 = true);
+    AdaptiveSnackBar.show(
+      context,
+      message: l10n.shareAsMp3Preparing,
+      type: AdaptiveSnackBarType.info,
+    );
+    try {
+      final speechText = await _buildTtsPlainTextOnDemand(_displayedContent);
+      if (!mounted) return;
+      final exported = await ReplyMp3Export().export(speechText);
+      if (!mounted) return;
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [
+            XFile(
+              exported.file.path,
+              name: exported.file.uri.pathSegments.last,
+              mimeType: exported.mimeType,
+            ),
+          ],
+          sharePositionOrigin: origin,
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      AdaptiveSnackBar.show(
+        context,
+        message: l10n.shareAsMp3Failed(error.toString()),
+        type: AdaptiveSnackBarType.error,
+      );
+    } finally {
+      if (mounted) setState(() => _isExportingMp3 = false);
+    }
+  }
+
   Widget _buildMessageContent(
     String displayedContent, {
     required AssistantResponseBuilder? responseBuilder,
@@ -887,6 +935,7 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
             children: [
               const SizedBox(height: Spacing.sm),
               _buildKaraokeBar(ttsState),
+              _buildReadAloudControls(ttsState),
             ],
           );
         },
@@ -925,6 +974,72 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
           child: body,
         );
       },
+    );
+  }
+
+  /// Pause or resume, a sentence back or ahead, and stop, under the sentence
+  /// being read (Dean, 2026-10-31: the controls the app used to have).
+  Widget _buildReadAloudControls(TextToSpeechState ttsState) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = context.conduitTheme;
+    final controller = ref.read(textToSpeechControllerProvider.notifier);
+    final paused = ttsState.status == TtsPlaybackStatus.paused;
+    final loading = ttsState.status == TtsPlaybackStatus.loading;
+    final idx = ttsState.activeSentenceIndex;
+    final count = ttsState.sentences.length;
+    Widget button(IconData icon, String label, VoidCallback? onTap) =>
+        IconButton(
+          icon: Icon(icon, size: 20),
+          tooltip: label,
+          color: theme.textPrimary,
+          disabledColor: theme.textSecondary.withValues(alpha: 0.4),
+          visualDensity: VisualDensity.compact,
+          onPressed: onTap,
+        );
+    return Padding(
+      padding: const EdgeInsets.only(top: Spacing.xs),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          button(
+            Platform.isIOS
+                ? CupertinoIcons.backward_end_fill
+                : Icons.skip_previous,
+            l10n.ttsPreviousSentence,
+            () => unawaited(controller.previousSentence()),
+          ),
+          button(
+            paused
+                ? (Platform.isIOS ? CupertinoIcons.play_fill : Icons.play_arrow)
+                : (Platform.isIOS ? CupertinoIcons.pause_fill : Icons.pause),
+            paused ? l10n.ttsResume : l10n.ttsPause,
+            loading
+                ? null
+                : () => unawaited(
+                    paused ? controller.resume() : controller.pause(),
+                  ),
+          ),
+          button(
+            Platform.isIOS ? CupertinoIcons.forward_end_fill : Icons.skip_next,
+            l10n.ttsNextSentence,
+            () => unawaited(controller.nextSentence()),
+          ),
+          button(
+            Platform.isIOS ? CupertinoIcons.stop_fill : Icons.stop,
+            l10n.ttsStop,
+            () => unawaited(controller.stop()),
+          ),
+          if (count > 1)
+            Padding(
+              padding: const EdgeInsets.only(left: Spacing.xs),
+              child: Text(
+                '${idx + 1}/$count',
+                style: Theme.of(context).textTheme.bodySmall
+                    ?.copyWith(color: theme.textSecondary),
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -2758,6 +2873,21 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
           sfSymbol: (showStopState || showPreparingTtsState)
               ? 'stop.fill'
               : 'speaker.wave.2',
+        ),
+      if (shouldShowTtsButton && ReplyMp3Export.available)
+        _AssistantFooterAction(
+          id: 'share-mp3',
+          icon: Platform.isIOS
+              ? CupertinoIcons.square_arrow_up
+              : Icons.ios_share,
+          label: l10n.shareAsMp3,
+          onTap:
+              _responseCompleted &&
+                  !_isExportingMp3 &&
+                  !contentActionsBlockedByStreaming
+              ? () => unawaited(_handleShareMp3())
+              : null,
+          sfSymbol: 'square.and.arrow.up',
         ),
       if (!widget.readOnly && !_isVoiceReply)
         _AssistantFooterAction(
