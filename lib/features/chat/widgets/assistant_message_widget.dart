@@ -870,6 +870,12 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
     try {
       final speechText = await _buildTtsPlainTextOnDemand(_displayedContent);
       if (!mounted) return;
+      // The voice server's speech is created on first use: set it up here so
+      // sharing works before anything was read aloud.
+      if (!ReplyMp3Export.available) {
+        await ref.read(textToSpeechControllerProvider.notifier).prepare();
+        if (!mounted) return;
+      }
       final exported = await ReplyMp3Export().export(speechText);
       if (!mounted) return;
       await SharePlus.instance.share(
@@ -1710,8 +1716,9 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
             SharePlus.instance.share(ShareParams(text: text.trim())),
           ),
         ),
+      ?fromFooter('share-mp3'),
     ];
-    const inPrimary = {'copy', 'tts'};
+    const inPrimary = {'copy', 'tts', 'share-mp3'};
     return MessageMenuSpec(
       actions: primary,
       more: [
@@ -2874,7 +2881,7 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
               ? 'stop.fill'
               : 'speaker.wave.2',
         ),
-      if (shouldShowTtsButton && ReplyMp3Export.available)
+      if (shouldShowTtsButton) // not gated on serverAvailable: the server speech engine is created lazily, so the action hid until a first read-aloud
         _AssistantFooterAction(
           id: 'share-mp3',
           icon: Platform.isIOS

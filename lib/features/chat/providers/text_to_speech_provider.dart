@@ -196,6 +196,10 @@ class TextToSpeechController extends Notifier<TextToSpeechState> {
     return future;
   }
 
+  /// Sets up speech without playing anything (Share as MP3 before any
+  /// read-aloud: the server speech is created on first use).
+  Future<bool> prepare() => _ensureInitialized();
+
   Future<void> toggleForMessage({
     required String messageId,
     required String text,
