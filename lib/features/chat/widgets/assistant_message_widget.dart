@@ -33,6 +33,10 @@ import 'package:conduit/shared/widgets/chat_action_button.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../services/reply_mp3_export.dart';
+import '../services/tts_manager.dart';
+
+import 'package:conduit_core/features/chat/server_speech/server_speech_providers.dart';
+import 'package:conduit_core/features/direct_connections/providers/direct_connection_providers.dart';
 
 import 'message_action_menu.dart';
 
@@ -870,13 +874,41 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
     try {
       final speechText = await _buildTtsPlainTextOnDemand(_displayedContent);
       if (!mounted) return;
-      // The voice server's speech is created on first use: set it up here so
-      // sharing works before anything was read aloud.
-      if (!ReplyMp3Export.available) {
-        await ref.read(textToSpeechControllerProvider.notifier).prepare();
-        if (!mounted) return;
-      }
-      final exported = await ReplyMp3Export().export(speechText);
+      // The relay's export renders any length; the voice server's speech (the
+      // fallback, created on first use) is set up only when it is needed.
+      final voice = ref.read(directVoiceProviderProvider);
+      final pool = ref.read(directHttpClientPoolProvider);
+      final exporter = ReplyMp3Export(
+        startRelayExport: voice == null
+            ? null
+            : (text) async {
+                final lease = pool.acquire(voice.profile);
+                try {
+                  return await ReplyMp3Export.startWith(lease.dio, text);
+                } finally {
+                  lease.release();
+                }
+              },
+        render: (text) async {
+          if (!ReplyMp3Export.available) {
+            await ref.read(textToSpeechControllerProvider.notifier).prepare();
+          }
+          return TtsManager.instance.synthesizeChunk(text);
+        },
+      );
+      final exported = await exporter.export(
+        speechText,
+        onEstimate: (ticket) {
+          if (!mounted) return;
+          final eta = ReplyMp3Export.etaWords(ticket.renderSeconds);
+          if (eta.isEmpty) return;
+          AdaptiveSnackBar.show(
+            context,
+            message: l10n.shareAsMp3PreparingEta(eta),
+            type: AdaptiveSnackBarType.info,
+          );
+        },
+      );
       if (!mounted) return;
       await SharePlus.instance.share(
         ShareParams(

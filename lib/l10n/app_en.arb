@@ -1375,6 +1375,15 @@
   "@shareAsMp3Preparing": {
     "description": "Shown while the reply's MP3 is being rendered"
   },
+  "shareAsMp3PreparingEta": "Making the MP3, {eta}",
+  "@shareAsMp3PreparingEta": {
+    "description": "Shown while the reply's MP3 is rendered, with the server's estimate such as 'about 2 min'",
+    "placeholders": {
+      "eta": {
+        "type": "String"
+      }
+    }
+  },
   "shareAsMp3Failed": "Couldn't make the MP3: {error}",
   "@shareAsMp3Failed": {
     "description": "Shown when rendering the reply's MP3 failed",
