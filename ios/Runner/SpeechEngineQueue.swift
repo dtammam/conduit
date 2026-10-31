@@ -318,6 +318,15 @@ final class SpeechEngineQueue {
       if self.engine.isRunning { self.engine.stop() }
       try self.engine.inputNode.setVoiceProcessingEnabled(on)
     }
+    if on {
+      // a 0 Hz input would make the next engine start raise; fail the call
+      // turn with a message instead
+      let inputFormat = try Self.objc { self.engine.inputNode.inputFormat(forBus: 0) }
+      guard inputFormat.sampleRate > 0, inputFormat.channelCount > 0 else {
+        _ = try? Self.objc { try self.engine.inputNode.setVoiceProcessingEnabled(false) }
+        throw EngineError(message: "The microphone isn't available right now")
+      }
+    }
     voiceProcessing = on
     if wasRunning || wantsPlayback {
       try queue.sync { try startEngineIfNeeded() }
@@ -330,10 +339,14 @@ final class SpeechEngineQueue {
   func startCapture(sampleRate: Double, onData: @escaping (Data) -> Void) throws {
     if capturing { try stopCapture() }
     inputUsed = true
-    let input = engine.inputNode
-    let inputFormat = input.outputFormat(forBus: 0)
+    // the input node and its format through the exception guard too: with no
+    // input in the session they raise instead of returning
+    let (input, inputFormat) = try Self.objc { () -> (AVAudioInputNode, AVAudioFormat) in
+      let node = self.engine.inputNode
+      return (node, node.outputFormat(forBus: 0))
+    }
     guard inputFormat.channelCount > 0, inputFormat.sampleRate > 0 else {
-      throw EngineError(message: "no microphone input")
+      throw EngineError(message: "The microphone isn't available right now")
     }
     guard let target = AVAudioFormat(
       commonFormat: .pcmFormatInt16,

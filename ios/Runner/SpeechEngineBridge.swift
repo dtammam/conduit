@@ -175,10 +175,38 @@ final class SpeechEngineBridge: ConduitBridge {
 
   /// A voice call owns the audio session (the call coordinator configures it);
   /// read-aloud must then neither change its category nor release it.
+  ///
+  /// A play-and-record session counts as a call whatever its mode: the call's
+  /// speaking phase can be playAndRecord with spokenAudio (when CallKit owns the
+  /// session), and read-aloud used to switch that to playback mid-call, so the
+  /// next listening turn found no microphone (crash at a call start,
+  /// 2026-10-31). Read-aloud outside a call configures playback first itself.
   private func callActive(_ speech: SpeechEngineQueue?) -> Bool {
     if speech?.inCall == true { return true }
     if VoiceBackgroundAudioManager.shared.isSessionActive { return true }
-    return AVAudioSession.sharedInstance().mode == .voiceChat
+    let session = AVAudioSession.sharedInstance()
+    return session.mode == .voiceChat || session.category == .playAndRecord
+  }
+
+  /// Before a call touches the microphone: no release may be pending, and the
+  /// session must allow input and be active, or AVAudioEngine's input node
+  /// reports 0 Hz and 0 channels. A session left on read-aloud's playback is
+  /// put on play-and-record (voice chat, Bluetooth, loudspeaker); one the call
+  /// coordinator already configured is left as it is.
+  private func prepareCallSession() throws {
+    cancelRelease()
+    let session = AVAudioSession.sharedInstance()
+    if session.category != .playAndRecord {
+      try session.setCategory(
+        .playAndRecord,
+        mode: .voiceChat,
+        options: [.allowBluetooth, .defaultToSpeaker]
+      )
+    }
+    try session.setActive(true)
+    guard session.isInputAvailable else {
+      throw SpeechEngineQueue.EngineError(message: "The microphone isn't available right now")
+    }
   }
 
   /// Read-aloud outside a call: plain playback that lowers other apps' audio
@@ -274,10 +302,12 @@ final class SpeechEngineBridge: ConduitBridge {
       speech.setRate(lastRate)
     case "setVoiceProcessing":
       let on = args["on"] as? Bool ?? false
+      if on { try prepareCallSession() }
       try speech.setVoiceProcessing(on)
       if !on { scheduleRelease(after: Self.releaseAfterStop) }
     case "startCapture":
       let rate = args["sampleRate"] as? Double ?? 16000
+      try prepareCallSession()
       try speech.startCapture(sampleRate: rate) { [weak self] data in
         DispatchQueue.main.async {
           self?.capture.sink?(FlutterStandardTypedData(bytes: data))
