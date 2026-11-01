@@ -835,6 +835,9 @@ Future<void> regenerateMessage(
     // Get conversation history for context, skipping archived variants that are
     // kept locally only for the version switcher.
     final List<ChatMessage> messages = ref.read(chatMessagesProvider);
+    final isTemporary =
+        isTemporaryChat(activeConversation.id) ||
+        ref.read(temporaryChatEnabledProvider);
     final List<Map<String, dynamic>> conversationMessages =
         <Map<String, dynamic>>[];
     var lastUserIndex = -1;
@@ -860,7 +863,8 @@ Future<void> regenerateMessage(
             ? List<String>.from(attachments)
             : (msg.attachmentIds ?? const <String>[]);
 
-        if (messageAttachments.isNotEmpty) {
+        // Server chats send only system messages; skip resolving attachments.
+        if (isTemporary && messageAttachments.isNotEmpty) {
           final messageMap = await _buildMessagePayloadWithAttachments(
             api: api,
             role: msg.role,
@@ -900,9 +904,6 @@ Future<void> regenerateMessage(
       legacyChatSystem: activeConversation.systemPrompt,
       globalSystem: userSystemPrompt,
     );
-    final isTemporary =
-        isTemporaryChat(activeConversation.id) ||
-        ref.read(temporaryChatEnabledProvider);
     final requestMessages = _withOmniSession(
       ref,
       chatId: activeConversation.id,

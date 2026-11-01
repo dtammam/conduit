@@ -577,7 +577,11 @@ Future<List<Map<String, dynamic>>> _buildCompletionRequestMessages({
     if (_isArchivedAssistantVariant(msg)) continue;
     if (!_shouldIncludeConversationHistoryMessage(msg)) continue;
     final cleaned = outboundProviderReplayText(msg);
-    final attachments = msg.attachmentIds ?? const <String>[];
+    // A server chat sends only its system messages (Open WebUI rebuilds the
+    // history itself), so its attachments are not resolved at all.
+    final attachments = isTemporary
+        ? (msg.attachmentIds ?? const <String>[])
+        : const <String>[];
     if (attachments.isNotEmpty) {
       final messageMap = await _buildMessagePayloadWithAttachments(
         api: api,
@@ -624,13 +628,16 @@ Future<List<Map<String, dynamic>>> _buildCompletionRequestMessages({
 Future<List<Map<String, dynamic>>>
 buildOpenWebUiCompletionRequestMessagesForTest({
   required List<ChatMessage> messages,
+  dynamic api,
+  bool isTemporary = true,
+  String? systemPrompt,
 }) => _buildCompletionRequestMessages(
-  api: null,
+  api: api,
   messages: messages,
   chatParams: const <String, dynamic>{},
-  conversationSystemPrompt: null,
+  conversationSystemPrompt: systemPrompt,
   userSystemPrompt: null,
-  isTemporary: true,
+  isTemporary: isTemporary,
 );
 
 /// Last `user`-role message id in [messages], scanning newest-first; `null`
