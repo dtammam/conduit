@@ -24,6 +24,10 @@ import '../core/services/media_upload_controller.dart';
 import 'package:path/path.dart' as path;
 
 import '../shared/services/navigation_service.dart';
+import '../features/navigation/providers/conversation_selection_provider.dart'
+    show conversationSelectionProvider, ConversationSelectionDisposition;
+import 'package:conduit_core/features/chat/omni/omni_chat.dart';
+import 'package:conduit_core/services/settings_service.dart';
 
 import 'package:conduit_core/services/share_staging_cleanup.dart';
 
@@ -833,7 +837,7 @@ final shareReceiverInitializerProvider = Provider<void>((ref) {
     }
 
     if (NavigationService.currentRoute == Routes.chat) {
-      startNewChat(ref);
+      await _startShareChat(ref);
       ref.read(composerRevealRequestProvider.notifier).request();
       if (importId != null) {
         preparedShareImportIds.add(importId);
@@ -1186,6 +1190,32 @@ String? _normalizeSharedFilePath(String? value) {
   return trimmed;
 }
 
+/// Shared content lands in the Omni chat when that setting is on and the chat
+/// resolves (Dean, 2026-11-01: everything shared into Musey goes to his one
+/// running chat), so he adds a line and sends it there. Otherwise, or if the
+/// Omni chat can't be opened, a fresh chat as before.
+Future<void> _startShareChat(dynamic ref) async {
+  try {
+    if (ref.read(appSettingsProvider).omniChatEnabled == true) {
+      final omni = await ref.read(omniChatProvider.future);
+      if (omni != null) {
+        final result = await ref
+            .read(conversationSelectionProvider.notifier)
+            .select(omni);
+        if (result.disposition == ConversationSelectionDisposition.committed) {
+          return;
+        }
+      }
+    }
+  } catch (e) {
+    DebugLogger.log(
+      'ShareReceiver: Omni chat unavailable, starting a new chat ($e)',
+      scope: 'share/receiver',
+    );
+  }
+  startNewChat(ref);
+}
+
 Future<SharedPayloadProcessResult> _processPayload(
   dynamic ref,
   SharedPayload payload, {
@@ -1259,7 +1289,7 @@ Future<SharedPayloadProcessResult> _processPayload(
         importStatus.id == payload.id &&
         importStatus.preparedComposer;
     if (!shouldUsePreparedComposer) {
-      startNewChat(ref);
+      await _startShareChat(ref);
     }
 
     // Prefer attaching files to the composer so user can add text before sending
