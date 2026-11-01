@@ -76,6 +76,10 @@ final class SpeechEngineBridge: ConduitBridge {
         self.saveAudioFile(args, result: result)
         return
       }
+      if call.method == "makeReplyVideo" {
+        ReplyVideoMaker.make(args) { reply in DispatchQueue.main.async { result(reply) } }
+        return
+      }
       self.work.async {
         let reply: Any?
         do {
@@ -396,4 +400,133 @@ private final class AudioSavePickerDelegate: NSObject, UIDocumentPickerDelegate 
     done?(false)
     done = nil
   }
+}
+
+/// "Share as video" (2026-10-31: Discord's share extension drops audio files):
+/// the reply's MP3 as the sound of an .mp4 (H.264 and AAC) whose picture is the
+/// persona's clip looped to the audio's length, or a still image held for it.
+/// Composing reads files and writes one; it never touches the audio session,
+/// so other apps keep playing.
+enum ReplyVideoMaker {
+  private static let work = DispatchQueue(label: "app.cogwheel.conduit.reply-video", qos: .userInitiated)
+
+  static func make(_ args: [String: Any], done: @escaping (Any?) -> Void) {
+    work.async {
+      do {
+        guard let audioPath = args["audio"] as? String, let outPath = args["out"] as? String else {
+          throw ReplyVideoError("missing paths")
+        }
+        let out = URL(fileURLWithPath: outPath)
+        try? FileManager.default.removeItem(at: out)
+        let audio = AVURLAsset(url: URL(fileURLWithPath: audioPath))
+        let audioDuration = audio.duration
+        guard audioDuration.seconds > 0, let audioTrack = audio.tracks(withMediaType: .audio).first else {
+          throw ReplyVideoError("the MP3 has no audio")
+        }
+        var clipURL: URL?
+        if let clip = args["clip"] as? String, !clip.isEmpty {
+          if args["clipIsAsset"] as? Bool == true {
+            let key = FlutterDartProject.lookupKey(forAsset: clip)
+            if let path = Bundle.main.path(forResource: key, ofType: nil) { clipURL = URL(fileURLWithPath: path) }
+          } else {
+            clipURL = URL(fileURLWithPath: clip)
+          }
+        }
+        var tempStill: URL?
+        if clipURL == nil, let image = args["image"] as? String, let picture = UIImage(contentsOfFile: image) {
+          let still = out.deletingLastPathComponent().appendingPathComponent("still.mp4")
+          try stillVideo(picture, seconds: audioDuration.seconds, to: still)
+          clipURL = still
+          tempStill = still
+        }
+        guard let clipURL else { throw ReplyVideoError("no persona clip or picture") }
+        let clip = AVURLAsset(url: clipURL)
+        guard let clipTrack = clip.tracks(withMediaType: .video).first, clip.duration.seconds > 0 else {
+          throw ReplyVideoError("the persona clip has no video")
+        }
+        let composition = AVMutableComposition()
+        guard let video = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid),
+              let sound = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)
+        else { throw ReplyVideoError("cannot compose") }
+        var at = CMTime.zero
+        let clipRange = clipTrack.timeRange
+        while at < audioDuration {
+          let left = CMTimeSubtract(audioDuration, at)
+          let length = CMTimeMinimum(clipRange.duration, left)
+          try video.insertTimeRange(CMTimeRange(start: clipRange.start, duration: length), of: clipTrack, at: at)
+          at = CMTimeAdd(at, length)
+        }
+        video.preferredTransform = clipTrack.preferredTransform
+        try sound.insertTimeRange(CMTimeRange(start: .zero, duration: audioDuration), of: audioTrack, at: .zero)
+        guard let export = AVAssetExportSession(asset: composition, presetName: AVAssetExportPreset1280x720) else {
+          throw ReplyVideoError("cannot export")
+        }
+        export.outputURL = out
+        export.outputFileType = .mp4
+        export.shouldOptimizeForNetworkUse = true
+        export.exportAsynchronously {
+          if let tempStill { try? FileManager.default.removeItem(at: tempStill) }
+          if export.status == .completed {
+            done(out.path)
+          } else {
+            done(FlutterError(code: "video", message: export.error?.localizedDescription ?? "the video export failed", details: nil))
+          }
+        }
+      } catch {
+        done(FlutterError(code: "video", message: error.localizedDescription, details: nil))
+      }
+    }
+  }
+
+  /// A silent H.264 video of [image] held for [seconds] (one frame a second).
+  private static func stillVideo(_ image: UIImage, seconds: Double, to url: URL) throws {
+    try? FileManager.default.removeItem(at: url)
+    guard let cg = image.cgImage else { throw ReplyVideoError("unreadable picture") }
+    let side = 720
+    let writer = try AVAssetWriter(outputURL: url, fileType: .mp4)
+    let input = AVAssetWriterInput(mediaType: .video, outputSettings: [
+      AVVideoCodecKey: AVVideoCodecType.h264, AVVideoWidthKey: side, AVVideoHeightKey: side,
+    ])
+    let adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: input, sourcePixelBufferAttributes: [
+      kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32ARGB,
+      kCVPixelBufferWidthKey as String: side, kCVPixelBufferHeightKey as String: side,
+    ])
+    guard writer.canAdd(input) else { throw ReplyVideoError("cannot write the still") }
+    writer.add(input)
+    writer.startWriting()
+    writer.startSession(atSourceTime: .zero)
+    var buffer: CVPixelBuffer?
+    CVPixelBufferCreate(kCFAllocatorDefault, side, side, kCVPixelFormatType_32ARGB, nil, &buffer)
+    guard let buffer else { throw ReplyVideoError("cannot draw the still") }
+    CVPixelBufferLockBaseAddress(buffer, [])
+    if let context = CGContext(
+      data: CVPixelBufferGetBaseAddress(buffer), width: side, height: side, bitsPerComponent: 8,
+      bytesPerRow: CVPixelBufferGetBytesPerRow(buffer), space: CGColorSpaceCreateDeviceRGB(),
+      bitmapInfo: CGImageAlphaInfo.noneSkipFirst.rawValue
+    ) {
+      context.setFillColor(UIColor.black.cgColor)
+      context.fill(CGRect(x: 0, y: 0, width: side, height: side))
+      let scale = min(Double(side) / Double(cg.width), Double(side) / Double(cg.height))
+      let w = Double(cg.width) * scale, h = Double(cg.height) * scale
+      context.draw(cg, in: CGRect(x: (Double(side) - w) / 2, y: (Double(side) - h) / 2, width: w, height: h))
+    }
+    CVPixelBufferUnlockBaseAddress(buffer, [])
+    let frames = max(2, Int(seconds.rounded(.up)) + 1)
+    for i in 0..<frames {
+      while !input.isReadyForMoreMediaData { Thread.sleep(forTimeInterval: 0.01) }
+      adaptor.append(buffer, withPresentationTime: CMTime(seconds: min(Double(i), seconds), preferredTimescale: 600))
+    }
+    input.markAsFinished()
+    let finished = DispatchSemaphore(value: 0)
+    writer.endSession(atSourceTime: CMTime(seconds: seconds, preferredTimescale: 600))
+    writer.finishWriting { finished.signal() }
+    finished.wait()
+    if writer.status != .completed { throw ReplyVideoError(writer.error?.localizedDescription ?? "the still failed") }
+  }
+}
+
+private struct ReplyVideoError: LocalizedError {
+  let message: String
+  init(_ message: String) { self.message = message }
+  var errorDescription: String? { message }
 }

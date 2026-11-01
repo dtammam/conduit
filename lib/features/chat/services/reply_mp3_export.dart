@@ -203,6 +203,31 @@ class ReplyMp3Export {
 
   static const _channel = MethodChannel('app.cogwheel.conduit/speech_engine');
 
+  /// Makes an .mp4 next to [mp3] whose sound is the MP3 and whose picture is
+  /// [clipPath] (a video file, or a bundled asset key with [clipIsAsset])
+  /// looped to the audio's length, or [imagePath] held still. iOS only.
+  static Future<File> makeVideo(
+    File mp3, {
+    String? clipPath,
+    bool clipIsAsset = false,
+    String? imagePath,
+  }) async {
+    final name = mp3.uri.pathSegments.last.replaceFirst(
+      RegExp(r'\.[A-Za-z0-9]+$'),
+      '',
+    );
+    final out = File('${mp3.parent.path}/$name.mp4');
+    final path = await _channel.invokeMethod<String>('makeReplyVideo', {
+      'audio': mp3.path,
+      'out': out.path,
+      'clip': ?clipPath,
+      'clipIsAsset': clipIsAsset,
+      'image': ?imagePath,
+    });
+    if (path == null) throw StateError('The video was not made');
+    return File(path);
+  }
+
   /// Save to Files (iOS export picker with a copy). Returns whether a place
   /// was picked; false where there is no native picker.
   static Future<bool> saveToFiles(File file) async {

@@ -33,6 +33,9 @@ import 'package:conduit/shared/widgets/chat_action_button.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../services/reply_mp3_export.dart';
+import '../avatar/assistant_activity.dart';
+import '../avatar/assistant_avatar_media.dart';
+import '../avatar/persona_appearance_service.dart';
 import '../services/tts_manager.dart';
 
 import 'package:conduit_core/features/chat/server_speech/server_speech_providers.dart';
@@ -86,7 +89,6 @@ import 'package:conduit_core/features/chat/utils/file_utils.dart';
 
 import '../avatar/assistant_action_log.dart';
 import 'tool_stamp.dart';
-import '../avatar/assistant_activity.dart' show toolStepLabel;
 import '../reactions/quick_reply_reactions.dart';
 import 'chat_branch_actions.dart';
 import 'chat_comparison_widgets.dart';
@@ -854,11 +856,24 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
     await controller.toggleForMessage(messageId: messageId, text: speechText);
   }
 
+  /// The picture for Share as video: the active persona's working clip, else
+  /// its idle clip (persona files, then the user's, then the bundled ones).
+  Future<AssistantAvatarMedia?> _personaClipForVideo() async {
+    final media = await AssistantAvatarMediaStore().load(
+      personaId: ref.read(activePersonaAppearanceProvider)?.id,
+    );
+    return media.resolve(AssistantActivity.working) ??
+        media.resolve(AssistantActivity.idle);
+  }
+
   bool _isExportingMp3 = false;
 
   /// Renders the whole reply in the current voice and opens the share sheet
   /// with the file (AirDrop, Messages, Files).
-  Future<void> _handleShareMp3({bool saveToFiles = false}) async {
+  Future<void> _handleShareMp3({
+    bool saveToFiles = false,
+    bool asVideo = false,
+  }) async {
     if (_isExportingMp3) return;
     final l10n = AppLocalizations.of(context)!;
     final box = context.findRenderObject() as RenderBox?;
@@ -868,7 +883,7 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
     setState(() => _isExportingMp3 = true);
     AdaptiveSnackBar.show(
       context,
-      message: l10n.shareAsMp3Preparing,
+      message: asVideo ? l10n.shareAsVideoPreparing : l10n.shareAsMp3Preparing,
       type: AdaptiveSnackBarType.info,
     );
     try {
@@ -904,13 +919,35 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
           if (eta.isEmpty) return;
           AdaptiveSnackBar.show(
             context,
-            message: l10n.shareAsMp3PreparingEta(eta),
+            message: asVideo
+                ? l10n.shareAsVideoPreparingEta(
+                    ReplyMp3Export.etaWords((ticket.renderSeconds ?? 0) + 5),
+                  )
+                : l10n.shareAsMp3PreparingEta(eta),
             type: AdaptiveSnackBarType.info,
           );
         },
       );
       if (!mounted) return;
-      if (saveToFiles) {
+      if (asVideo) {
+        final clip = await _personaClipForVideo();
+        final video = await ReplyMp3Export.makeVideo(
+          exported.file,
+          clipPath: clip?.kind == AssistantAvatarMediaKind.video
+              ? clip?.path
+              : null,
+          clipIsAsset: clip?.isBundled ?? false,
+          imagePath: clip?.kind == AssistantAvatarMediaKind.image
+              ? clip?.path
+              : null,
+        );
+        if (!mounted) return;
+        await ReplyMp3Export.shareFile(
+          video,
+          mimeType: 'video/mp4',
+          origin: origin,
+        );
+      } else if (saveToFiles) {
         await ReplyMp3Export.saveToFiles(exported.file);
       } else {
         await ReplyMp3Export.shareFile(
@@ -1746,8 +1783,9 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
           ),
         ),
       ?fromFooter('share-mp3'),
+      ?fromFooter('share-video'),
     ];
-    const inPrimary = {'copy', 'tts', 'share-mp3'};
+    const inPrimary = {'copy', 'tts', 'share-mp3', 'share-video'};
     return MessageMenuSpec(
       actions: primary,
       more: [
@@ -2924,6 +2962,19 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
               ? () => unawaited(_handleShareMp3())
               : null,
           sfSymbol: 'square.and.arrow.up',
+        ),
+      if (shouldShowTtsButton && Platform.isIOS)
+        _AssistantFooterAction(
+          id: 'share-video',
+          icon: CupertinoIcons.film,
+          label: l10n.shareAsVideo,
+          onTap:
+              _responseCompleted &&
+                  !_isExportingMp3 &&
+                  !contentActionsBlockedByStreaming
+              ? () => unawaited(_handleShareMp3(asVideo: true))
+              : null,
+          sfSymbol: 'film',
         ),
       if (shouldShowTtsButton && Platform.isIOS)
         _AssistantFooterAction(

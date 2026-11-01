@@ -1371,6 +1371,23 @@
   "@shareAsMp3": {
     "description": "Action to render the whole assistant reply as speech and share the MP3 file"
   },
+  "shareAsVideo": "Share as video",
+  "@shareAsVideo": {
+    "description": "Action to render the reply as speech over the persona's clip and share the video"
+  },
+  "shareAsVideoPreparing": "Making the video…",
+  "@shareAsVideoPreparing": {
+    "description": "Shown while the reply's video is being made"
+  },
+  "shareAsVideoPreparingEta": "Making the video, {eta}",
+  "@shareAsVideoPreparingEta": {
+    "description": "Shown while the reply's video is made, with an estimate such as 'about 40 s'",
+    "placeholders": {
+      "eta": {
+        "type": "String"
+      }
+    }
+  },
   "saveMp3ToFiles": "Save MP3 to Files",
   "@saveMp3ToFiles": {
     "description": "Action to render the whole assistant reply as speech and save the MP3 in the Files app"
