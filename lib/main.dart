@@ -130,6 +130,7 @@ import 'features/chat/avatar/persona_appearance_service.dart';
 import 'features/chat/providers/text_to_speech_provider.dart';
 import 'core/services/callkit_service.dart';
 import 'features/chat/services/voice_input_service.dart';
+import 'core/startup/omni_launch_gate.dart';
 import 'features/chat/voice_mode/chat_voice_audio_session_coordinator.dart';
 import 'features/chat/voice_mode/chat_voice_mode_controller.dart';
 
@@ -569,6 +570,9 @@ void main() {
       installConduitErrorWidgetBuilder();
 
       await modelLogosLoaded;
+      // The Musey launch screen stays up until the Omni chat is open, so a cold
+      // start goes straight to it (no empty chat and greeting first).
+      OmniLaunchGate.holdIfOmni();
       runApp(
         UncontrolledProviderScope(
           container: providerContainer,

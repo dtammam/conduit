@@ -58,6 +58,7 @@ import 'package:conduit_core/models/server_config.dart';
 
 import 'package:conduit_core/features/tools/providers/tools_providers.dart';
 
+import 'package:conduit/core/startup/omni_launch_gate.dart';
 import 'package:conduit/features/chat/omni/omni_refresh.dart';
 import 'package:conduit/features/routines/push_registration.dart';
 import 'package:conduit_core/features/chat/omni/omni_chat.dart';
@@ -1168,6 +1169,7 @@ class AppStartupFlow extends _$AppStartupFlow {
   }) async {
     final api = await _waitForApiService(timeout: apiWaitTimeout);
     if (!_hasAuthenticatedSession()) {
+      OmniLaunchGate.release('signed-out');
       return;
     }
     if (api == null) {
@@ -1175,6 +1177,7 @@ class AppStartupFlow extends _$AppStartupFlow {
         'API service not available for startup flow',
         scope: 'startup',
       );
+      OmniLaunchGate.release('no-api');
       return;
     }
 
@@ -1224,12 +1227,21 @@ class AppStartupFlow extends _$AppStartupFlow {
   void _openOmniChatAtLaunch({required Future<void> afterLaunchTap}) {
     if (_omniLaunchHandled) return;
     _omniLaunchHandled = true;
-    if (!ref.read(appSettingsProvider).omniChatEnabled) return;
+    if (!ref.read(appSettingsProvider).omniChatEnabled) {
+      OmniLaunchGate.release('omni-off');
+      return;
+    }
     unawaited(
       afterLaunchTap
           .catchError((Object _) {})
           .then(
             (_) => openOmniAtLaunch(
+              // the launch screen is up while the first frame is held: a
+              // shared payload or a tapped notification has already been
+              // claimed by then, so the grace can be short
+              grace: OmniLaunchGate.isHeld
+                  ? const Duration(milliseconds: 120)
+                  : const Duration(milliseconds: 400),
               shouldOpen: () =>
                   ref.mounted &&
                   shouldOpenOmniAtLaunch(
@@ -1251,6 +1263,12 @@ class AppStartupFlow extends _$AppStartupFlow {
                     ConversationSelectionDisposition.committed;
               },
             ),
+          )
+          .then(
+            (opened) => OmniLaunchGate.release(
+              opened ? 'omni-opened' : 'omni-skipped',
+            ),
+            onError: (Object _) => OmniLaunchGate.release('omni-error'),
           ),
     );
   }
@@ -1298,6 +1316,12 @@ class AppStartupFlow extends _$AppStartupFlow {
       if (next == AuthNavigationState.authenticated) {
         _requestPostAuthenticationStartup(apiWaitTimeout: apiWaitTimeout);
       } else {
+        // a login screen or an auth error is shown at once, never held behind
+        // the launch screen
+        if (next == AuthNavigationState.needsLogin ||
+            next == AuthNavigationState.error) {
+          OmniLaunchGate.release('auth-${next.name}');
+        }
         _stopDirectCompletionRelay();
         _clearQueuedAuthenticatedStartupWork();
         _resetConversationWarmup(ref);

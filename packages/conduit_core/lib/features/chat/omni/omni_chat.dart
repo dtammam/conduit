@@ -53,6 +53,7 @@ Future<Conversation> resolveOmniChat({
   required String? storedId,
   required Future<void> Function(String id) storeId,
   String? model,
+  Future<String?> Function()? loadModel,
 }) async {
   if (storedId != null && storedId.isNotEmpty) {
     final stored = await gateway.fetchChat(storedId);
@@ -63,7 +64,11 @@ Future<Conversation> resolveOmniChat({
     await storeId(tagged.id);
     return tagged;
   }
-  final created = await gateway.createTaggedChat(model: model);
+  // the default model is only needed to create the chat, so it is looked up
+  // here and not before the stored chat is tried (it cost a launch round trip)
+  final created = await gateway.createTaggedChat(
+    model: model ?? (loadModel == null ? null : await loadModel()),
+  );
   await storeId(created.id);
   return created;
 }
@@ -181,12 +186,11 @@ final omniChatProvider = FutureProvider<Conversation?>((ref) async {
   ref.keepAlive();
   final api = ref.watch(apiServiceProvider);
   if (!enabled || api == null) return null;
-  final model = await ref.read(defaultModelProvider.future);
   return resolveOmniChat(
     gateway: ApiOmniChatGateway(api),
     storedId: storedOmniChatId(),
     storeId: storeOmniChatId,
-    model: model?.id,
+    loadModel: () async => (await ref.read(defaultModelProvider.future))?.id,
   );
 });
 

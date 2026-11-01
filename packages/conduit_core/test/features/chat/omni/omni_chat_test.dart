@@ -48,6 +48,34 @@ void main() {
 
     setUp(() => stored = []);
 
+    test('looks the default model up only when it has to create the chat', () async {
+      var asked = 0;
+      Future<String?> loadModel() async {
+        asked++;
+        return 'bobby';
+      }
+
+      final kept = await resolveOmniChat(
+        gateway: _FakeGateway(existing: {'kept'}),
+        storedId: 'kept',
+        storeId: storeId,
+        loadModel: loadModel,
+      );
+      check(kept.id).equals('kept');
+      check(asked).equals(0);
+
+      final gateway = _FakeGateway();
+      final created = await resolveOmniChat(
+        gateway: gateway,
+        storedId: null,
+        storeId: storeId,
+        loadModel: loadModel,
+      );
+      check(created.id).equals('created');
+      check(asked).equals(1);
+      check(gateway.calls).deepEquals(['find-tagged', 'create:bobby']);
+    });
+
     test('keeps a stored id whose chat still exists', () async {
       final gateway = _FakeGateway(existing: {'kept'});
       final chat = await resolveOmniChat(
