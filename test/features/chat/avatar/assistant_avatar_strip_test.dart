@@ -481,8 +481,17 @@ void main() {
       find.byKey(const ValueKey('assistant-avatar-circle')),
     );
     final pill = tester.getRect(pillSurface);
-    // Muse's effect (2026-11-01): the pill's middle on the circle's edge.
-    check(pill.center.dy).equals(circle.bottom);
+    // The pill sits behind the circle: only its top 4 points are hidden, so
+    // its middle is 8 points below the circle's bottom edge and the name
+    // (centered in the pill) is fully below the circle.
+    check(pill.top).equals(circle.bottom - 4);
+    check(pill.center.dy).equals(circle.bottom + 8);
+    final nameBox = tester.getRect(
+      find.byKey(const ValueKey('assistant-avatar-pill-name')),
+    );
+    check(nameBox.top >= circle.bottom).isTrue();
+    check(nameBox.center.dy).equals(pill.center.dy);
+    check(nameBox.center.dx).equals(pill.center.dx);
     check(pill.center.dx).equals(circle.center.dx);
     // And it still opens the picker.
     await tester.tap(pillSurface);

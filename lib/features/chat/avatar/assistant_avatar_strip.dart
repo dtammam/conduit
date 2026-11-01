@@ -46,8 +46,8 @@ class AssistantAvatarStrip extends ConsumerStatefulWidget {
     this.doneHold = kAssistantActivityDoneHold,
   });
 
-  /// Total height of the strip: the circle and the name pill tucked up over
-  /// its bottom edge (as Muse does it, 2026-11-01), down to the two-line busy
+  /// Total height of the strip: the circle and the name pill tucked behind
+  /// its bottom edge (2026-11-01), down to the two-line busy
   /// pill. The pill is shorter while idle; the slack stays reserved so the
   /// transcript does not shift when the state line appears.
   static const double height = avatarSize - _pillOverlap + _pillMaxHeight;
@@ -55,9 +55,10 @@ class AssistantAvatarStrip extends ConsumerStatefulWidget {
   /// Diameter of the avatar circle.
   static const double avatarSize = 72;
 
-  /// Height of the idle one-line pill; its middle sits on the circle's edge.
+  /// Height of the idle one-line pill. It sits behind the circle: only its top
+  /// [_pillOverlap] points are hidden, so the name clears the circle's edge.
   static const double _pillHeight = 24;
-  static const double _pillOverlap = _pillHeight / 2;
+  static const double _pillOverlap = 4;
   static const double _pillMaxHeight = 38;
   static const double _pillMaxWidth = 240;
 
@@ -585,49 +586,6 @@ class _AssistantAvatarStripState extends ConsumerState<AssistantAvatarStrip>
               clipBehavior: Clip.none,
               alignment: Alignment.topCenter,
               children: [
-                Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    Semantics(
-                      button: true,
-                      label: l10n.assistantAvatarEditLabel(
-                        displayName ?? l10n.assistantAvatar,
-                        word,
-                      ),
-                      excludeSemantics: true,
-                      child: GestureDetector(
-                        key: const ValueKey('assistant-avatar-circle'),
-                        behavior: HitTestBehavior.opaque,
-                        onTap: () => unawaited(_openSheet()),
-                        child: Container(
-                          width: AssistantAvatarStrip.avatarSize,
-                          height: AssistantAvatarStrip.avatarSize,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: theme.surfaceContainer,
-                            border: Border.all(color: theme.cardBorder),
-                          ),
-                          child: ClipOval(
-                            child: RepaintBoundary(
-                              key: _mediaBoundaryKey,
-                              child:
-                                  content ??
-                                  _AvatarInitial(name: widget.modelName),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      top: -2,
-                      right: -2,
-                      child: _AvatarBadge(
-                        failures: unseenFailures,
-                        approval: approvalPending,
-                      ),
-                    ),
-                  ],
-                ),
                 // The pill names the assistant and, while it is busy, says what it
                 // is doing, naming the tool step when there is one. Idle it is
                 // the model selector; busy it jumps to the live reply, where the
@@ -716,6 +674,49 @@ class _AssistantAvatarStripState extends ConsumerState<AssistantAvatarStrip>
                       ),
                     ),
                   ),
+                ),
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Semantics(
+                      button: true,
+                      label: l10n.assistantAvatarEditLabel(
+                        displayName ?? l10n.assistantAvatar,
+                        word,
+                      ),
+                      excludeSemantics: true,
+                      child: GestureDetector(
+                        key: const ValueKey('assistant-avatar-circle'),
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => unawaited(_openSheet()),
+                        child: Container(
+                          width: AssistantAvatarStrip.avatarSize,
+                          height: AssistantAvatarStrip.avatarSize,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: theme.surfaceContainer,
+                            border: Border.all(color: theme.cardBorder),
+                          ),
+                          child: ClipOval(
+                            child: RepaintBoundary(
+                              key: _mediaBoundaryKey,
+                              child:
+                                  content ??
+                                  _AvatarInitial(name: widget.modelName),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      top: -2,
+                      right: -2,
+                      child: _AvatarBadge(
+                        failures: unseenFailures,
+                        approval: approvalPending,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
