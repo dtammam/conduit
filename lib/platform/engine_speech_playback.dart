@@ -16,7 +16,7 @@ import 'just_audio_playback.dart';
 /// [EngineSpeechPlayback], one continuous waveform; any other queue, such as
 /// a message read aloud as whole clips, stays on [JustAudioPlayback]. The
 /// choice is made when a queue is set and holds until the next one.
-class HybridSpeechPlayback implements AudioPlaybackPort {
+class HybridSpeechPlayback implements AudioPlaybackPort, AudioItemEndReporting {
   HybridSpeechPlayback({AudioPlaybackPort? files, EngineSpeechPlayback? engine})
     : _files = files ?? JustAudioPlayback(),
       _engine = engine ?? EngineSpeechPlayback() {
@@ -30,6 +30,11 @@ class HybridSpeechPlayback implements AudioPlaybackPort {
         _engine.currentIndexChanges.listen(
           (i) => _forward(_engine, i, _indices),
         ),
+      )
+      ..add(
+        _engine.itemEnds.listen((i) {
+          if (identical(_active, _engine) && !_ends.isClosed) _ends.add(i);
+        }),
       )
       ..add(_engine.failures.listen((_) => unawaited(_fallBack())));
   }
@@ -65,6 +70,14 @@ class HybridSpeechPlayback implements AudioPlaybackPort {
   final _subs = <StreamSubscription<Object?>>[];
   final _states = StreamController<AudioPlaybackState>.broadcast();
   final _indices = StreamController<int?>.broadcast();
+  final _ends = StreamController<int>.broadcast();
+
+  @override
+  Stream<int> get itemEnds => _ends.stream;
+  @override
+  bool get endsAreNative => identical(_active, _engine);
+  @override
+  int? get lastStartGapMs => _engine.lastStartGapMs;
 
   void _forward<T>(AudioPlaybackPort from, T value, StreamController<T> into) {
     if (identical(from, _active) && !into.isClosed) into.add(value);
@@ -159,6 +172,7 @@ class HybridSpeechPlayback implements AudioPlaybackPort {
     await _engine.dispose();
     await _states.close();
     await _indices.close();
+    await _ends.close();
   }
 }
 
@@ -168,7 +182,7 @@ class HybridSpeechPlayback implements AudioPlaybackPort {
 /// decodes each, drops the encoder's lead-in and flush samples, and plays
 /// them as one waveform, so the half-second joins are seamless. A whole clip
 /// (a file, or a body that cannot be cut) plays as it is.
-class EngineSpeechPlayback implements AudioPlaybackPort {
+class EngineSpeechPlayback implements AudioPlaybackPort, AudioItemEndReporting {
   EngineSpeechPlayback({MethodChannel? channel})
     : _channel = channel ?? const MethodChannel(channelName) {
     _channel.setMethodCallHandler(_onCall);
@@ -194,6 +208,8 @@ class EngineSpeechPlayback implements AudioPlaybackPort {
 
   final _states = StreamController<AudioPlaybackState>.broadcast();
   final _indices = StreamController<int?>.broadcast();
+  final _ends = StreamController<int>.broadcast();
+  int? _gapMs;
   final _feeds = <StreamSubscription<Uint8List>>[];
 
   /// Every call to the engine, in order: pieces must land in queue order.
@@ -212,6 +228,12 @@ class EngineSpeechPlayback implements AudioPlaybackPort {
   int? get currentIndex => _currentIndex;
   @override
   AudioProcessingState get processingState => _processing;
+  @override
+  Stream<int> get itemEnds => _ends.stream;
+  @override
+  bool get endsAreNative => true;
+  @override
+  int? get lastStartGapMs => _gapMs;
 
   Future<void> _call(String method, [Map<String, Object?>? args]) {
     if (_failed) return Future<void>.value();
@@ -241,6 +263,8 @@ class EngineSpeechPlayback implements AudioPlaybackPort {
         _fail(StateError('${args['message'] ?? 'speech engine failed'}'));
       case 'started':
         final item = args['item'];
+        final gap = args['gapMs'];
+        _gapMs = gap is int ? gap : null;
         if (item is int && item != _currentIndex) {
           _currentIndex = item;
           if (!_indices.isClosed) _indices.add(item);
@@ -248,6 +272,9 @@ class EngineSpeechPlayback implements AudioPlaybackPort {
         if (_processing != AudioProcessingState.ready) {
           _emit(AudioProcessingState.ready);
         }
+      case 'ended':
+        final item = args['item'];
+        if (item is int && !_ends.isClosed) _ends.add(item);
       case 'streamScheduled':
         VoiceEventLog.instance.add('stream-scheduled', <String, Object?>{
           'part': args['item'],
@@ -432,6 +459,7 @@ class EngineSpeechPlayback implements AudioPlaybackPort {
     await _call('dispose');
     await _states.close();
     await _indices.close();
+    await _ends.close();
     await _failures.close();
   }
 }

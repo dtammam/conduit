@@ -381,7 +381,11 @@ final class SpeechEngineBridge: ConduitBridge {
   private func send(_ event: SpeechEngineQueue.Event) {
     let payload: [String: Any]
     switch event {
-    case .itemStarted(let item): payload = ["type": "started", "item": item]
+    case .itemStarted(let item, let gapMs):
+      var started: [String: Any] = ["type": "started", "item": item]
+      if let gapMs { started["gapMs"] = gapMs }
+      payload = started
+    case .itemEnded(let item): payload = ["type": "ended", "item": item]
     case .streamScheduled(let item):
       payload = ["type": "streamScheduled", "item": item]
     case .starved: payload = ["type": "starved"]

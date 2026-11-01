@@ -67,6 +67,24 @@ abstract interface class AudioPlaybackPort {
   static AudioPlaybackPort Function() hostFactory = NullAudioPlayback.new;
 }
 
+/// A player that reports when an item's audio finishes playing, not when its
+/// bytes finish arriving (the native speech engine does).
+///
+/// Used for voice-call timing: `play-end` must mark the heard end of a part,
+/// so the gap to the next part's `play-start` is the silence Dean heard.
+abstract interface class AudioItemEndReporting {
+  /// Index of an item whose last buffer just finished playing.
+  Stream<int> get itemEnds;
+
+  /// Whether the queue now playing reports [itemEnds]. False when it plays on
+  /// a player that only reports index changes (just_audio).
+  bool get endsAreNative;
+
+  /// Milliseconds between the previous item's audio ending and the item that
+  /// just started, as measured natively; null when unknown.
+  int? get lastStartGapMs;
+}
+
 /// Accepts a queue and never plays it.
 ///
 /// The right behaviour for a host with no audio output -- the daemon -- and

@@ -36,8 +36,12 @@ final class SpeechEngineQueue {
   }
 
   enum Event {
-    /// Item [index] began playing.
-    case itemStarted(Int)
+    /// Item [index] began playing; [gapMs] is the time since the previous
+    /// item's last buffer finished playing (nil for the first item).
+    case itemStarted(Int, gapMs: Int?)
+    /// The last buffer of item [index] finished playing (the audio ended, not
+    /// the feed).
+    case itemEnded(Int)
     /// The first audio of a continuous stream (item [index]) was scheduled
     /// on the player.
     case streamScheduled(Int)
@@ -82,6 +86,12 @@ final class SpeechEngineQueue {
   private var outstanding = 0
   private var generation = 0
   private var lastStartedItem: Int?
+  /// Per item: buffers scheduled and buffers played back, for [itemEnded].
+  private var scheduledCount: [Int: Int] = [:]
+  private var playedCount: [Int: Int] = [:]
+  private var endedItems: Set<Int> = []
+  /// When the last item ended (ProcessInfo uptime), for the next start's gap.
+  private var lastEndUptime: TimeInterval?
   /// Items waiting to be reported as started, with how many buffers must play
   /// back first.
   private var pendingStarts: [(item: Int, ahead: Int)] = []
@@ -121,6 +131,7 @@ final class SpeechEngineQueue {
       outstanding = 0
       lastStartedItem = nil
       pendingStarts.removeAll()
+      resetEndTracking()
     }
   }
 
@@ -234,6 +245,7 @@ final class SpeechEngineQueue {
       scheduledInItem = 0
       lastStartedItem = nil
       pendingStarts.removeAll()
+      resetEndTracking()
       try scheduleReady()
       if wantsPlayback { try startPlayerIfNeeded() }
     }
@@ -310,6 +322,7 @@ final class SpeechEngineQueue {
       scheduledInItem = 0
       lastStartedItem = nil
       pendingStarts.removeAll()
+      resetEndTracking()
     }
   }
 
@@ -561,6 +574,24 @@ final class SpeechEngineQueue {
     return value!
   }
 
+  private func resetEndTracking() {
+    scheduledCount.removeAll()
+    playedCount.removeAll()
+    endedItems.removeAll()
+    lastEndUptime = nil
+  }
+
+  /// Reports [item] ended once every buffer is scheduled and played back.
+  private func reportEndIfDone(_ item: Int) {
+    guard !endedItems.contains(item), item < items.count, items[item].finished,
+          item < scheduleItem || (item == scheduleItem && scheduledInItem >= items[item].buffers.count),
+          let scheduled = scheduledCount[item], scheduled > 0,
+          playedCount[item, default: 0] >= scheduled else { return }
+    endedItems.insert(item)
+    lastEndUptime = ProcessInfo.processInfo.systemUptime
+    onEvent?(.itemEnded(item))
+  }
+
   private func ensureItem(_ index: Int) {
     while items.count <= index { items.append(Item()) }
   }
@@ -620,6 +651,7 @@ final class SpeechEngineQueue {
         scheduledInItem += 1
       }
       guard item.finished else { return }
+      reportEndIfDone(scheduleItem)
       scheduleItem += 1
       scheduledInItem = 0
     }
@@ -636,12 +668,15 @@ final class SpeechEngineQueue {
         self.queue.async {
           guard scheduledGeneration == self.generation else { return }
           self.outstanding -= 1
+          self.playedCount[item, default: 0] += 1
+          self.reportEndIfDone(item)
           self.advancePendingStarts()
           self.reportIfIdle()
         }
       }
     }
     outstanding += 1
+    scheduledCount[item, default: 0] += 1
     if first, streamItems.contains(item) { onEvent?(.streamScheduled(item)) }
     if first {
       // The item starts when everything scheduled before it has played.
@@ -668,7 +703,11 @@ final class SpeechEngineQueue {
   private func reportStarted(_ item: Int) {
     guard lastStartedItem != item else { return }
     lastStartedItem = item
-    onEvent?(.itemStarted(item))
+    var gap: Int?
+    if item > 0, let ended = lastEndUptime {
+      gap = max(0, Int(((ProcessInfo.processInfo.systemUptime - ended) * 1000).rounded()))
+    }
+    onEvent?(.itemStarted(item, gapMs: gap))
   }
 
   private func reportIfIdle() {

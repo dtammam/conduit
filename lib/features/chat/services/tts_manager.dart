@@ -205,6 +205,8 @@ class TtsManager {
   // Voice-call timing (VoiceEventLog): the index last reported as ended, and
   // when the queue ran dry (null while audio is queued).
   int _loggedPlayEnd = -1;
+  int? _lastPlayEndMs;
+  StreamSubscription<int>? _playerEndSub;
   int? _starvedSinceMs;
   bool _deviceEngineAvailable = false;
   bool _voiceConfigured = false;
@@ -367,6 +369,12 @@ class TtsManager {
           _emitEvent(const TtsPaused());
         }
       });
+      final reporter = _endReporter;
+      if (reporter != null) {
+        _playerEndSub = reporter.itemEnds.listen(
+          (i) => _logPlayEnd(i, fromNative: true),
+        );
+      }
       _playerIndexSub = _player.currentIndexChanges.listen((index) {
         final session = _activeSession;
         if (session == null || !session.useServerTts || index == null) {
@@ -381,8 +389,10 @@ class TtsManager {
         _logPlayEnd(_serverCurrentIndex);
         _serverCurrentIndex = index;
         _clearStarved();
+        final gap = _startGapMs(index);
         VoiceEventLog.instance.add('play-start', <String, Object?>{
           'part': index,
+          'gap-ms': ?gap,
         });
         _emitEvent(TtsChunkStarted(index));
       });
@@ -650,6 +660,7 @@ class TtsManager {
     _nativeTtsSub = null;
     await _playerStateSub?.cancel();
     await _playerIndexSub?.cancel();
+    await _playerEndSub?.cancel();
     await _player.dispose();
     await _eventController.close();
   }
@@ -1520,9 +1531,34 @@ class TtsManager {
     return serverAvailable;
   }
 
-  void _logPlayEnd(int index) {
+  /// Milliseconds of silence before part [index] (N>0): the native engine's
+  /// own measure when it plays the queue, else the time since the previous
+  /// part's play-end. Null for part 0 or when unknown.
+  int? _startGapMs(int index) {
+    if (index <= 0) return null;
+    final reporter = _endReporter;
+    if (reporter != null && reporter.endsAreNative) {
+      return reporter.lastStartGapMs;
+    }
+    final ended = _lastPlayEndMs;
+    if (ended == null) return null;
+    return DateTime.now().millisecondsSinceEpoch - ended;
+  }
+
+  /// Whether play-end comes from the player's audio-finished event, so the
+  /// index-change and completed fallbacks must stay quiet.
+  bool get _nativeEnds => _endReporter?.endsAreNative ?? false;
+
+  AudioItemEndReporting? get _endReporter {
+    final Object player = _player;
+    return player is AudioItemEndReporting ? player : null;
+  }
+
+  void _logPlayEnd(int index, {bool fromNative = false}) {
     if (index < 0 || index == _loggedPlayEnd) return;
+    if (_nativeEnds && !fromNative) return;
     _loggedPlayEnd = index;
+    _lastPlayEndMs = DateTime.now().millisecondsSinceEpoch;
     VoiceEventLog.instance.add('play-end', <String, Object?>{'part': index});
   }
 
@@ -1541,6 +1577,7 @@ class TtsManager {
 
   void _resetPlaybackState() {
     _loggedPlayEnd = -1;
+    _lastPlayEndMs = null;
     _starvedSinceMs = null;
     _currentChunkIndex = -1;
     _serverCurrentIndex = -1;

@@ -167,6 +167,20 @@ void main() {
     check(engine.failed).isFalse();
   });
 
+  test('ended events surface as item ends, started carries the gap', () async {
+    final engine = EngineSpeechPlayback();
+    final ends = <int>[];
+    engine.itemEnds.listen(ends.add);
+    await engine.setClips(const []);
+    await engineEvent({'type': 'started', 'item': 0});
+    await engineEvent({'type': 'ended', 'item': 0});
+    await engineEvent({'type': 'started', 'item': 1, 'gapMs': 350});
+    await settle();
+    check(ends).deepEquals([0]);
+    check(engine.lastStartGapMs).equals(350);
+    check(engine.endsAreNative).isTrue();
+  });
+
   test('engine events become the clip index and the queue state', () async {
     final engine = EngineSpeechPlayback();
     final indices = <int?>[];
