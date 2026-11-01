@@ -283,9 +283,17 @@ class _AssistantAvatarStripState extends ConsumerState<AssistantAvatarStrip>
     if (existing != null) return existing;
     final VideoPlayerController controller;
     try {
+      // The clips are silent: they must mix with other apps' audio. Without
+      // mixWithOthers the video plugin puts the session on plain playback and
+      // a muted clip starting paused FileTube's audio the moment Musey opened
+      // (2026-10-31).
+      final options = VideoPlayerOptions(mixWithOthers: true);
       controller = media.isBundled
-          ? VideoPlayerController.asset(media.path)
-          : VideoPlayerController.file(File(media.path));
+          ? VideoPlayerController.asset(media.path, videoPlayerOptions: options)
+          : VideoPlayerController.file(
+              File(media.path),
+              videoPlayerOptions: options,
+            );
     } catch (error, stackTrace) {
       DebugLogger.error(
         'video-create-failed',
