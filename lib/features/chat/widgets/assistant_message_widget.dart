@@ -1815,6 +1815,9 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
         id.isNotEmpty &&
         text.trim().isNotEmpty;
     final primary = <MessageMenuAction>[
+      ?fromFooter('discord-test-a'),
+      ?fromFooter('discord-test-b'),
+      ?fromFooter('discord-test-c'),
       if (canReply)
         MessageMenuAction(
           id: 'reply',
@@ -1835,9 +1838,6 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
         ),
       ?fromFooter('share-mp3'),
       ?fromFooter('share-video'),
-      ?fromFooter('discord-test-a'),
-      ?fromFooter('discord-test-b'),
-      ?fromFooter('discord-test-c'),
     ];
     const inPrimary = {
       'copy',
