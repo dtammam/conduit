@@ -172,19 +172,24 @@ Widget _buildArchivedAssistantPlaceholder({Key? key}) =>
 Widget debugBuildArchivedAssistantPlaceholderForTesting({Key? key}) =>
     _buildArchivedAssistantPlaceholder(key: key);
 
-/// Whether a send pins its new turn to the top of the viewport. A reaction
-/// turn draws nothing, so pinning it would only jump the transcript; its
-/// reply follows the bottom like any other.
-bool shouldPinSentTurn({
-  required String text,
-  required bool includeComposerContext,
-  required bool quickRepliesEnabled,
-  required List<ChatMessage> messagesBeforeSend,
-}) =>
-    includeComposerContext ||
-    !quickRepliesEnabled ||
-    quickReplyReactionForText(text) == null ||
-    messagesBeforeSend.lastOrNull?.role != 'assistant';
+/// How near the bottom (in logical pixels) the view must be to keep following
+/// new content, like iMessage: a reader further up is never pulled down.
+const double _nearBottomFollowThreshold = 80.0;
+
+/// Whether a new row should carry the view to the bottom. A user dragging
+/// never moves; voice mode always follows (and never scrolls up); otherwise
+/// only a reader at or near the bottom follows.
+@visibleForTesting
+bool debugShouldFollowAppendedRowForTesting({
+  required bool voiceActive,
+  required bool userInteracting,
+  required double distanceFromLatest,
+  required bool sentByUser,
+}) {
+  if (userInteracting) return false;
+  if (voiceActive || sentByUser) return true;
+  return distanceFromLatest <= _nearBottomFollowThreshold;
+}
 
 /// The tool ids a send names. The composer's turns carry the chat's selected
 /// tools; follow-up suggestions carry none; a quick reply asks for them
@@ -551,10 +556,8 @@ class ChatPage extends ConsumerStatefulWidget {
 class _ChatPageState extends ConsumerState<ChatPage> {
   static const double _scrollButtonShowThreshold = 48.0;
   static const double _scrollButtonHideThreshold = 12.0;
-  static const int _pinScrollMaxAttempts = 12;
   static const double _scrollCorrectionEpsilon = 1.0;
   static const double _pinnedMeasurementEpsilon = 0.5;
-  static const Duration _pinTransitionDuration = Duration(milliseconds: 220);
 
   final ChatTimelineViewportController _timelineViewportController =
       ChatTimelineViewportController();
@@ -591,10 +594,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   // Pin-to-top: scroll user message to top of viewport when sending
   _PinToTopState _pinToTopState = const _PinToTopState.inactive();
   double _pinToTopEndSpaceExtent = 0;
-  bool _pinGeometryReady = false;
   bool _pinShouldSettleImmediately = false;
   bool _pinToTopPositionSettled = false;
-  bool _pinPrepositionAttempted = false;
   int? _pinLifecycleReconciliationGeneration;
   int _pinPositionGeneration = 0;
   _ChatTimelineScrollMode _timelineScrollMode =
@@ -621,6 +622,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   ProviderSubscription<String?>? _screenContextSub;
   ProviderSubscription<bool>? _conversationLoadingSub;
   ProviderSubscription<RoutineReplyRequest?>? _routineReplySub;
+  ProviderSubscription<List<ChatMessage>>? _messagesAppendSub;
+  ProviderSubscription<(bool, bool)>? _voiceLayoutSub;
   bool _routineReplySending = false;
   ProviderSubscription<bool>? _reviewerModeSub;
   ProviderSubscription<String?>? _conversationIdSub;
@@ -971,6 +974,26 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       routineReplyProvider,
       (_, _) => _drainRoutineReply(),
     );
+    _messagesAppendSub = ref.listenManual(
+      chatMessagesProvider,
+      _handleMessagesAppended,
+    );
+    _voiceLayoutSub = ref.listenManual(
+      chatVoiceModeControllerProvider.select(
+        (voice) => (voice.isActive, voice.isCollapsed),
+      ),
+      (previous, next) {
+        // The voice panel changes the bottom padding: keep the newest content
+        // above it. Only ever toward the bottom, never up.
+        if (!mounted || previous == next) return;
+        if (_isUserInteractingWithScroll) return;
+        if (next.$1 ||
+            _timelineViewportController.distanceFromLatest <=
+                _nearBottomFollowThreshold) {
+          _followAppendedRows();
+        }
+      },
+    );
     _reviewerModeSub = ref.listenManual(reviewerModeProvider, (_, next) {
       if (!next || ref.read(selectedModelProvider) != null) return;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1068,6 +1091,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     _screenContextSub?.close();
     _conversationLoadingSub?.close();
     _routineReplySub?.close();
+    _messagesAppendSub?.close();
+    _voiceLayoutSub?.close();
     _reviewerModeSub?.close();
     _conversationIdSub?.close();
     _authEpochSub?.close();
@@ -1352,40 +1377,41 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     });
   }
 
-  void _activatePinToTopAnchor(
-    ChatSendPlaceholderHandle handle, {
-    required bool settleImmediately,
-  }) {
-    final userMessageId = handle.userMessageId;
-    if (!mounted || userMessageId == null) return;
-
+  /// A sent turn brings the view smoothly to the bottom, so the newest
+  /// message sits just above the composer. Nothing is pinned to the top and no
+  /// blank space is reserved for the reply.
+  void _followAppendedRows() {
+    if (!mounted) return;
     _cancelExplicitLatestNavigation();
-    _cancelPendingViewportNavigation();
-    _bottomAnchorController.requestBottomAnchor();
-    final generation = ++_pinPositionGeneration;
-    final topInset =
-        MediaQuery.paddingOf(context).top +
-        conduitAdaptiveToolbarHeightOf(context) +
-        _assistantAvatarInset +
-        Spacing.md;
-    _pinToTopEndSpaceExtent = math.max(
-      0,
-      MediaQuery.sizeOf(context).height - topInset,
-    );
-    _pinGeometryReady = false;
-    _pinShouldSettleImmediately = settleImmediately;
-    _pinToTopPositionSettled = false;
-    _pinPrepositionAttempted = false;
-    _pinLifecycleReconciliationGeneration = null;
-    _timelineScrollMode = _ChatTimelineScrollMode.anchoringNewTurn;
-    setState(() {
-      _pinToTopState = _PinToTopState.active(
-        userMessageId: userMessageId,
-        streamingMessageId: handle.assistantMessageId,
-      );
+    _resumeLatestPresentation();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _scrollToBottom(smooth: true);
     });
-    _syncLayoutBottomAnchor();
-    _scrollToUserMessage(generation: generation);
+    WidgetsBinding.instance.scheduleFrame();
+  }
+
+  void _handleMessagesAppended(
+    List<ChatMessage>? previous,
+    List<ChatMessage> next,
+  ) {
+    if (!mounted || previous == null || previous.isEmpty || next.isEmpty) {
+      return;
+    }
+    if (ref.read(isLoadingConversationProvider)) return;
+    final lastId = next.last.id;
+    if (lastId == previous.last.id) return;
+    // Only an append: the old last row must still be in the list.
+    if (!next.any((m) => m.id == previous.last.id)) return;
+    if (!debugShouldFollowAppendedRowForTesting(
+      voiceActive: ref.read(chatVoiceModeControllerProvider).isActive,
+      userInteracting: _isUserInteractingWithScroll,
+      distanceFromLatest: _timelineViewportController.distanceFromLatest,
+      sentByUser: next.last.role == 'user',
+    )) {
+      return;
+    }
+    _followAppendedRows();
   }
 
   void _cancelPinnedTurnAutomaticFollow() {
@@ -1481,17 +1507,6 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     List<Model>? compareModels,
     void Function(ChatSendPlaceholderHandle committed)? onComparisonCommitted,
   }) async {
-    final settlePinImmediately = debugShouldSettlePinImmediatelyForTesting(
-      transcriptWasEmpty: ref.read(chatMessagesProvider).isEmpty,
-    );
-    final pinSentTurn = shouldPinSentTurn(
-      text: text,
-      includeComposerContext: includeComposerContext,
-      quickRepliesEnabled: ref
-          .read(appSettingsProvider)
-          .quickReplyReactionsEnabled,
-      messagesBeforeSend: ref.read(chatMessagesProvider),
-    );
     dynamic selectedModel = ref.read(selectedModelProvider);
 
     // Resolve model on-demand if none selected yet
@@ -1564,10 +1579,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
         pendingSends = handles;
         onComparisonCommitted?.call(handles.first);
         _releaseMessageSendAdmission(sendOwner);
-        _activatePinToTopAnchor(
-          handles.first,
-          settleImmediately: settlePinImmediately,
-        );
+        _followAppendedRows();
       } else {
         await durableSend(
           ref,
@@ -1578,12 +1590,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
             didDispatch = true;
             _releaseMessageSendAdmission(sendOwner);
             pendingSend = handle;
-            if (pinSentTurn) {
-              _activatePinToTopAnchor(
-                handle,
-                settleImmediately: settlePinImmediately,
-              );
-            }
+            _followAppendedRows();
           },
         );
       }
@@ -2148,7 +2155,6 @@ class _ChatPageState extends ConsumerState<ChatPage> {
 
   void _handlePinEndSpaceChanged(double extent) {
     if (!mounted || !_wantsPinToTop) return;
-    _pinGeometryReady = true;
     final exhausted = extent <= _pinnedMeasurementEpsilon;
     final wasExhausted = _pinToTopEndSpaceExtent <= _pinnedMeasurementEpsilon;
     final changed =
@@ -2754,151 +2760,6 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     });
   }
 
-  void _scrollToUserMessage({required int generation, int attempt = 0}) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted ||
-          generation != _pinPositionGeneration ||
-          !_shouldAutoFollowPinnedTurn) {
-        return;
-      }
-
-      final targetId = _pinnedUserMessageId;
-      if (targetId == null) {
-        _cancelFailedPinToTopSettlement(
-          generation: generation,
-          reason: 'target-missing',
-        );
-        return;
-      }
-      final targetRowMounted =
-          _timelineViewportController.rowRect(targetId) != null;
-      final geometryReady = _pinGeometryReady && targetRowMounted;
-      if ((!_timelineViewportController.hasClients || !geometryReady) &&
-          attempt < _pinScrollMaxAttempts) {
-        if (debugShouldPrepositionPinnedTurnForTesting(
-          hasClients: _timelineViewportController.hasClients,
-          targetRowMounted: targetRowMounted,
-          prepositionAttempted: _pinPrepositionAttempted,
-        )) {
-          // A send from deep history can append the target outside the lazy
-          // build range. Pre-position once at the trailing viewport so the
-          // exact row and end sentinel exist before the single pin animation.
-          _pinPrepositionAttempted = true;
-          _timelineViewportController.prepositionOneViewportFromLatest();
-        }
-        _scrollToUserMessage(generation: generation, attempt: attempt + 1);
-        WidgetsBinding.instance.scheduleFrame();
-        return;
-      }
-      if (!_timelineViewportController.hasClients) {
-        _cancelFailedPinToTopSettlement(
-          generation: generation,
-          reason: 'controller-not-attached',
-        );
-        return;
-      }
-      if (!geometryReady) {
-        DebugLogger.log(
-          'pin-measurement-timeout',
-          scope: 'chat/scroll',
-          data: {'attempts': attempt},
-        );
-        _cancelFailedPinToTopSettlement(
-          generation: generation,
-          reason: 'measurements-unavailable',
-        );
-        return;
-      }
-
-      if (context.reduceMotion || _pinShouldSettleImmediately) {
-        unawaited(
-          _timelineViewportController
-              .jumpMessageToTop(targetId)
-              .then(
-                (moved) {
-                  if (moved) {
-                    _markPinToTopPositionSettled(generation);
-                  } else {
-                    _cancelFailedPinToTopSettlement(
-                      generation: generation,
-                      reason: 'target-not-visible',
-                    );
-                  }
-                },
-                onError: (Object error, StackTrace stackTrace) {
-                  DebugLogger.error(
-                    'pin-jump-failed',
-                    scope: 'chat/scroll',
-                    error: error,
-                    stackTrace: stackTrace,
-                  );
-                  _cancelFailedPinToTopSettlement(
-                    generation: generation,
-                    reason: 'jump-failed',
-                  );
-                },
-              ),
-        );
-        return;
-      }
-      unawaited(
-        _timelineViewportController
-            .animateMessageToTop(
-              targetId,
-              duration: _pinTransitionDuration,
-              curve: Curves.easeOutCubic,
-            )
-            .then(
-              (moved) {
-                if (moved) {
-                  _markPinToTopPositionSettled(generation);
-                } else {
-                  _cancelFailedPinToTopSettlement(
-                    generation: generation,
-                    reason: 'target-not-visible',
-                  );
-                }
-              },
-              onError: (Object error, StackTrace stackTrace) {
-                DebugLogger.error(
-                  'pin-animation-failed',
-                  scope: 'chat/scroll',
-                  error: error,
-                  stackTrace: stackTrace,
-                );
-                _cancelFailedPinToTopSettlement(
-                  generation: generation,
-                  reason: 'animation-failed',
-                );
-              },
-            ),
-      );
-    });
-  }
-
-  void _cancelFailedPinToTopSettlement({
-    required int generation,
-    required String reason,
-  }) {
-    if (!mounted || generation != _pinPositionGeneration) return;
-    DebugLogger.log(
-      'pin-settlement-cancelled',
-      scope: 'chat/scroll',
-      data: {'reason': reason},
-    );
-    setState(_clearPinToTopAnchor);
-  }
-
-  void _markPinToTopPositionSettled(int generation) {
-    if (!mounted ||
-        generation != _pinPositionGeneration ||
-        !_shouldAutoFollowPinnedTurn ||
-        _pinToTopPositionSettled) {
-      return;
-    }
-    setState(() => _pinToTopPositionSettled = true);
-  }
-
   void _clearPinToTopAnchor({
     _ChatTimelineScrollMode nextMode = _ChatTimelineScrollMode.followingLatest,
   }) {
@@ -2906,10 +2767,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     _pinPositionGeneration += 1;
     _pinToTopState = const _PinToTopState.inactive();
     _pinToTopEndSpaceExtent = 0;
-    _pinGeometryReady = false;
     _pinShouldSettleImmediately = false;
     _pinToTopPositionSettled = false;
-    _pinPrepositionAttempted = false;
     _pinLifecycleReconciliationGeneration = null;
     _timelineScrollMode = nextMode;
     _syncLayoutBottomAnchor();
@@ -3288,7 +3147,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
             ? (_pinnedPresentationDistance() ?? double.infinity) <=
                   _scrollButtonHideThreshold
             : _timelineViewportController.distanceFromLatest <=
-                  _scrollButtonHideThreshold;
+                  _nearBottomFollowThreshold;
         if (naturallyReturnedToLatest) {
           _resumeLatestPresentation();
         }

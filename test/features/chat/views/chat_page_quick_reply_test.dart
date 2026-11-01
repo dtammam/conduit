@@ -227,52 +227,6 @@ void main() {
     ).length.equals(1);
   });
 
-  test('a reaction send does not pin its hidden turn to the top', () {
-    final beforeReaction = transcript.sublist(0, 2);
-    check(
-      shouldPinSentTurn(
-        text: 'Yes',
-        includeComposerContext: false,
-        quickRepliesEnabled: true,
-        messagesBeforeSend: beforeReaction,
-      ),
-    ).isFalse();
-    // A typed "Yes" from the composer, the setting off, or a "Yes" that does
-    // not answer a reply all pin as usual.
-    check(
-      shouldPinSentTurn(
-        text: 'Yes',
-        includeComposerContext: true,
-        quickRepliesEnabled: true,
-        messagesBeforeSend: beforeReaction,
-      ),
-    ).isTrue();
-    check(
-      shouldPinSentTurn(
-        text: 'Yes',
-        includeComposerContext: false,
-        quickRepliesEnabled: false,
-        messagesBeforeSend: beforeReaction,
-      ),
-    ).isTrue();
-    check(
-      shouldPinSentTurn(
-        text: 'Yes',
-        includeComposerContext: false,
-        quickRepliesEnabled: true,
-        messagesBeforeSend: const [],
-      ),
-    ).isTrue();
-    check(
-      shouldPinSentTurn(
-        text: 'Tell me more',
-        includeComposerContext: false,
-        quickRepliesEnabled: true,
-        messagesBeforeSend: beforeReaction,
-      ),
-    ).isTrue();
-  });
-
   test('a reaction that failed to send stays visible with its failure', () {
     bool hidden(List<ChatMessage> messages, int index) =>
         isQuickReplyTurn(messages, index, failedSendMessageId: 'u2');

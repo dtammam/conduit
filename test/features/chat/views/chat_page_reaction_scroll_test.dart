@@ -243,19 +243,6 @@ void main() {
     check(composerFocused(tester)).equals(focusedBefore);
     await finish(tester, container);
   });
-
-  testWidgets('a typed send still pins its turn to the top', (tester) async {
-    final container = await mountPage(tester);
-
-    await tester.enterText(find.byType(TextField), 'One more thing');
-    await frames(tester, 2);
-    await tester.tap(find.byKey(const ValueKey('primary-btn-send')));
-    await frames(tester, 6);
-
-    check(container.read(chatMessagesProvider).length).equals(6);
-    check(pinnedId(tester)).equals(container.read(chatMessagesProvider)[4].id);
-    await finish(tester, container);
-  });
 }
 
 class _Conversations extends Conversations {
