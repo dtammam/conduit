@@ -290,12 +290,123 @@ const int _voiceFirstClauseMinSentenceWords = 8;
 List<String> splitFirstClause(String sentence) {
   final text = sentence.trim();
   if (_wordCount(text) <= _voiceFirstClauseMinSentenceWords) return [text];
-  final match = RegExp(r'(?<=[,;:])\s+|\s+(?=[—–-]\s)').firstMatch(text);
-  if (match == null) return [text];
-  final first = text.substring(0, match.start).trim();
-  final rest = text.substring(match.end).trim();
-  if (rest.isEmpty || _wordCount(first) < _voiceClauseMinWords) return [text];
-  return [first, rest];
+  final clauses = <String>[];
+  var start = 0;
+  for (final match in RegExp(
+    r'(?<=[,;:])\s+|\s+(?=[—–-]\s)',
+  ).allMatches(text)) {
+    clauses.add(text.substring(start, match.start).trim());
+    start = match.end;
+  }
+  if (start == 0) return [text];
+  clauses.add(text.substring(start).trim());
+  // A first clause of fewer than four words ("Dude,") joins the following
+  // clauses while the unit stays within about ten words.
+  var first = clauses.first;
+  var used = 1;
+  while (_wordCount(first) < _voiceClauseMinWords && used < clauses.length) {
+    first = '$first ${clauses[used]}';
+    used++;
+  }
+  if (_wordCount(first) < _voiceClauseMinWords ||
+      _wordCount(first) > _voiceFirstMergeMaxWords + 2 ||
+      used >= clauses.length) {
+    return [text];
+  }
+  return [first, clauses.sublist(used).join(' ')];
+}
+
+/// A merged short first clause stays within about this many words.
+const int _voiceFirstMergeMaxWords = 10;
+
+/// In voice calls a unit longer than this many words is split further.
+const int _voiceUnitMaxWords = 22;
+
+/// Pieces of a split unit have at least this many words.
+const int _voiceUnitMinWords = 6;
+
+/// Where a unit with no boundary is cut, and the piece size boundaries aim
+/// for.
+const int _voiceUnitForcedWords = 18;
+const int _voiceUnitTargetWords = 16;
+
+/// [text] as pieces of about six to twenty-two words, cut after a comma,
+/// semicolon or colon, before a spaced dash or before "and", "but", "so" or
+/// "which" (in that order of preference), and at the word nearest eighteen
+/// when no boundary fits. Cuts never fall inside a word (so numbers, times,
+/// money and abbreviations stay whole) or inside quotes. Joining the pieces
+/// with single spaces gives back the text with its whitespace collapsed.
+List<String> splitLongUnit(String text) {
+  final words = text.trim().split(RegExp(r'\s+'));
+  if (text.trim().isEmpty || words.length <= _voiceUnitMaxWords) {
+    return [text.trim()];
+  }
+  // quoted[i]: a quote is open before word i.
+  final quoted = List<bool>.filled(words.length + 1, false);
+  var open = false;
+  for (var i = 0; i < words.length; i++) {
+    quoted[i] = open;
+    final marks = RegExp('["\u201C\u201D]').allMatches(words[i]).length;
+    if (marks.isOdd) open = !open;
+  }
+  quoted[words.length] = open;
+
+  // Priority of a cut before word i (1 <= i < length); 0 means no cut.
+  int priority(int i) {
+    if (quoted[i]) return 0;
+    final prev = words[i - 1];
+    final next = words[i].toLowerCase().replaceAll(RegExp(r'[^a-z\-—–]'), '');
+    if (RegExp(r'[,;:]$').hasMatch(prev) &&
+        !RegExp(r'\d[,:]$').hasMatch(prev)) {
+      return 3;
+    }
+    if (RegExp(r'^[—–-]$').hasMatch(words[i])) return 3;
+    if (next == 'and' || next == 'but' || next == 'so' || next == 'which') {
+      return 2;
+    }
+    return 0;
+  }
+
+  final out = <String>[];
+  var from = 0;
+  while (words.length - from > _voiceUnitMaxWords) {
+    final remaining = words.length - from;
+    int? best;
+    for (final level in [3, 2]) {
+      var bestDist = 1 << 30;
+      for (var k = _voiceUnitMinWords; k <= _voiceUnitMaxWords; k++) {
+        if (remaining - k < _voiceUnitMinWords) break;
+        if (priority(from + k) != level) continue;
+        final dist = (k - _voiceUnitTargetWords).abs();
+        if (dist < bestDist) {
+          bestDist = dist;
+          best = k;
+        }
+      }
+      if (best != null) break;
+    }
+    var k = best ?? _voiceUnitForcedWords;
+    if (best == null) {
+      // Nearest word to eighteen that is not inside quotes, else eighteen.
+      for (var d = 0; d <= 6; d++) {
+        final a = _voiceUnitForcedWords - d;
+        final b = _voiceUnitForcedWords + d;
+        if (!quoted[from + a]) {
+          k = a;
+          break;
+        }
+        if (b <= _voiceUnitMaxWords && !quoted[from + b]) {
+          k = b;
+          break;
+        }
+      }
+    }
+    if (remaining - k < _voiceUnitMinWords) k = remaining - _voiceUnitMinWords;
+    out.add(words.sublist(from, from + k).join(' '));
+    from += k;
+  }
+  out.add(words.sublist(from).join(' '));
+  return out;
 }
 
 /// [sentences] (unmerged) as voice units; see [getVoiceContentParts].
@@ -327,7 +438,7 @@ List<String> splitIntoVoiceUnits(
     }
   }
   out.addAll(merged);
-  return out;
+  return [for (final unit in out) ...splitLongUnit(unit)];
 }
 
 int _wordCount(String text) =>
