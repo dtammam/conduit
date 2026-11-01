@@ -1304,6 +1304,29 @@ void main() {
     expect(find.byIcon(Icons.volume_up_outlined), findsOneWidget);
   });
 
+  testWidgets('menu offers the temporary Discord share tests', (tester) async {
+    final message = ChatMessage(
+      id: 'assistant-discord-tests',
+      role: 'assistant',
+      content: 'Share this reply.',
+      timestamp: DateTime(2024, 1, 1),
+      isStreaming: false,
+      metadata: const {'responseDone': true},
+    );
+
+    await tester.pumpWidget(_buildAssistantHarness(message));
+    await tester.pumpAndSettle();
+
+    await openMessageMenu(tester);
+    expect(menuAction('share-mp3'), findsOneWidget);
+    expect(menuAction('discord-test-a'), findsOneWidget);
+    expect(menuAction('discord-test-b'), findsOneWidget);
+    expect(menuAction('discord-test-c'), findsOneWidget);
+    expect(find.text('Discord test A (m4a)'), findsOneWidget);
+    expect(find.text('Discord test B (mp3 typed)'), findsOneWidget);
+    expect(find.text('Discord test C (mp3 from tmp)'), findsOneWidget);
+  });
+
   testWidgets(
     'completed response-done metadata re-enables attachment animations',
     (tester) async {

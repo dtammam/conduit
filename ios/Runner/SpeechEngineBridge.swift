@@ -72,6 +72,10 @@ final class SpeechEngineBridge: ConduitBridge {
         self.shareAudioFile(args, result: result)
         return
       }
+      if call.method == "shareDiscordTest" {
+        self.shareDiscordTest(args, result: result)
+        return
+      }
       if call.method == "saveAudioFile" {
         self.saveAudioFile(args, result: result)
         return
@@ -133,6 +137,94 @@ final class SpeechEngineBridge: ConduitBridge {
         result(completed)
       }
       root.present(sheet, animated: true)
+    }
+  }
+
+  /// TEMPORARY (Discord share tests, 2026-11-01; remove once a variant wins).
+  /// A: the MP3 as an AAC .m4a. B: the staged MP3 through an activity item
+  /// source that hands out an NSItemProvider typed public.mp3. C: the staged
+  /// MP3 as a plain file URL. A, B and C live in NSTemporaryDirectory()/share
+  /// (outside Caches); the app's 24 h sweep of shared-audio does not touch
+  /// them and iOS clears tmp only when the app is not running. Answers a map
+  /// with variant, path, size, completed and activityType.
+  private func shareDiscordTest(_ args: [String: Any], result: @escaping FlutterResult) {
+    guard let variant = args["variant"] as? String, ["A", "B", "C"].contains(variant),
+          let path = args["path"] as? String, FileManager.default.fileExists(atPath: path)
+    else {
+      result(FlutterError(code: "share", message: "The file or variant is missing", details: nil))
+      return
+    }
+    let source = URL(fileURLWithPath: path)
+    let base = source.deletingPathExtension().lastPathComponent
+    let dir = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("share", isDirectory: true)
+    do {
+      try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    } catch {
+      result(FlutterError(code: "share", message: error.localizedDescription, details: nil))
+      return
+    }
+    let present: (URL) -> Void = { staged in
+      DispatchQueue.main.async {
+        guard let root = self.topController(from: self.host?.presentingViewController) else {
+          result(FlutterError(code: "share", message: "Nothing to present from", details: nil))
+          return
+        }
+        let items: [Any] = variant == "B" ? [Mp3ItemSource(url: staged)] : [staged]
+        let sheet = UIActivityViewController(activityItems: items, applicationActivities: nil)
+        if let popover = sheet.popoverPresentationController {
+          popover.sourceView = root.view
+          let x = args["x"] as? Double, y = args["y"] as? Double
+          let w = args["w"] as? Double, h = args["h"] as? Double
+          if let x, let y, let w, let h {
+            popover.sourceRect = CGRect(x: x, y: y, width: w, height: h)
+          } else {
+            popover.sourceRect = CGRect(x: root.view.bounds.midX, y: root.view.bounds.midY, width: 1, height: 1)
+          }
+        }
+        var answered = false
+        sheet.completionWithItemsHandler = { activity, completed, _, error in
+          guard !answered else { return }
+          answered = true
+          let size = (try? FileManager.default.attributesOfItem(atPath: staged.path)[.size] as? Int) ?? 0
+          result([
+            "variant": variant,
+            "path": staged.path,
+            "size": size,
+            "completed": completed,
+            "activityType": activity?.rawValue ?? "",
+            "error": error?.localizedDescription ?? "",
+          ] as [String: Any])
+        }
+        root.present(sheet, animated: true)
+      }
+    }
+    if variant == "A" {
+      let out = dir.appendingPathComponent("\(base).m4a")
+      try? FileManager.default.removeItem(at: out)
+      let asset = AVURLAsset(url: source)
+      guard let export = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetAppleM4A) else {
+        result(FlutterError(code: "share", message: "cannot export m4a", details: nil))
+        return
+      }
+      export.outputURL = out
+      export.outputFileType = .m4a
+      export.exportAsynchronously {
+        if export.status == .completed {
+          present(out)
+        } else {
+          result(FlutterError(code: "share", message: export.error?.localizedDescription ?? "the m4a export failed", details: nil))
+        }
+      }
+    } else {
+      let staged = dir.appendingPathComponent("\(base).mp3")
+      do {
+        try? FileManager.default.removeItem(at: staged)
+        try FileManager.default.copyItem(at: source, to: staged)
+      } catch {
+        result(FlutterError(code: "share", message: error.localizedDescription, details: nil))
+        return
+      }
+      present(staged)
     }
   }
 
@@ -544,4 +636,36 @@ private struct ReplyVideoError: LocalizedError {
   let message: String
   init(_ message: String) { self.message = message }
   var errorDescription: String? { message }
+}
+
+/// TEMPORARY (Discord share test B): the MP3 as an item provider with its file
+/// representation, typed public.mp3, named after the file; no title, no
+/// subject. The sheet keeps this object alive for its whole life.
+final class Mp3ItemSource: NSObject, UIActivityItemSource {
+  private let url: URL
+  init(url: URL) { self.url = url }
+
+  func activityViewControllerPlaceholderItem(_ activityViewController: UIActivityViewController) -> Any {
+    url
+  }
+
+  func activityViewController(
+    _ activityViewController: UIActivityViewController, itemForActivityType activityType: UIActivity.ActivityType?
+  ) -> Any? {
+    guard let provider = NSItemProvider(contentsOf: url) else { return url }
+    provider.suggestedName = url.deletingPathExtension().lastPathComponent
+    return provider
+  }
+
+  func activityViewController(
+    _ activityViewController: UIActivityViewController, dataTypeIdentifierForActivityType activityType: UIActivity.ActivityType?
+  ) -> String {
+    "public.mp3"
+  }
+
+  func activityViewController(
+    _ activityViewController: UIActivityViewController, subjectForActivityType activityType: UIActivity.ActivityType?
+  ) -> String {
+    ""
+  }
 }

@@ -282,4 +282,33 @@ class ReplyMp3Export {
     );
     return result.status == ShareResultStatus.success;
   }
+
+  /// TEMPORARY (Discord share tests, 2026-11-01): opens the share sheet for
+  /// [variant] 'A' (m4a), 'B' (mp3 through a typed item source) or 'C' (mp3
+  /// from tmp). Returns what iOS reported: variant, path, size, completed,
+  /// activityType, error. Null where there is no native side.
+  static Future<Map<String, Object?>?> shareDiscordTest(
+    String variant,
+    File file, {
+    Rect? origin,
+  }) async {
+    try {
+      final reply = await _channel.invokeMapMethod<String, Object?>(
+        'shareDiscordTest',
+        {
+          'variant': variant,
+          'path': file.path,
+          if (origin != null) ...{
+            'x': origin.left,
+            'y': origin.top,
+            'w': origin.width,
+            'h': origin.height,
+          },
+        },
+      );
+      return reply;
+    } on MissingPluginException {
+      return null;
+    }
+  }
 }
