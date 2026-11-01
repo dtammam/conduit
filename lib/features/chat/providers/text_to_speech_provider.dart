@@ -531,6 +531,11 @@ final textToSpeechServiceProvider = Provider<TextToSpeechService>((ref) {
   ref.listen(serverSpeechProviderProvider, (_, next) {
     TtsManager.instance.setServerSpeech(next);
   });
+  ref.listen(
+    appSettingsProvider.select((settings) => settings.voiceShortFirstClause),
+    (_, next) => TtsManager.instance.shortFirstClause = next,
+    fireImmediately: true,
+  );
   ref.listen(backendConfigProvider, (_, next) {
     service.setBackendConfig(
       next.maybeWhen(data: (value) => value, orElse: () => null),

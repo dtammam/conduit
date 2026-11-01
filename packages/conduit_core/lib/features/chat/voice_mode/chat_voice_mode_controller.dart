@@ -44,7 +44,11 @@ import 'package:conduit_core/features/chat/realtime_call/realtime_bridge_transpo
 import 'package:conduit_core/features/chat/realtime_call/realtime_call_availability.dart';
 import 'package:conduit_core/features/chat/realtime_call/realtime_call_state.dart';
 import 'package:conduit_core/features/chat/voice_call/voice_call_eligibility.dart';
+import 'package:conduit_core/features/chat/voice_mode/voice_event_log.dart';
+import 'package:conduit_core/features/chat/voice_mode/voice_event_sender.dart';
 import 'package:conduit_core/features/chat/voice_mode/voice_mode_ports.dart';
+import 'package:conduit_core/features/chat/server_speech/server_speech_providers.dart'
+    show directVoiceProviderProvider;
 
 import 'package:conduit_core/features/tools/providers/tools_providers.dart';
 
@@ -571,6 +575,7 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
           if (lostOwnership()) return;
           cancelIfRequested();
           _startElapsedTimer(startToken);
+          await _beginVoiceEventLog(settings);
           await _startListening(
             startToken,
             beforeAcceptingTranscripts: startNewConversation
@@ -1166,6 +1171,33 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
     }
   }
 
+  /// Starts the call's timing log (voice_event_log.dart) when a Voice
+  /// provider can take it. Reads only; nothing here touches the audio.
+  Future<void> _beginVoiceEventLog(AppSettings settings) async {
+    try {
+      final sender = voiceEventSenderFor(ref);
+      if (sender == null) return;
+      final voice = ref.read(directVoiceProviderProvider);
+      final route = await _currentRouteClass();
+      VoiceEventLog.instance.start(
+        sender: sender,
+        info: <String, Object?>{
+          'silenceMs': settings.voiceSilenceDuration,
+          'bargeIn': settings.voiceBargeInEnabled,
+          'streamSpeech': voice?.settings.streamSpeech,
+          'echoCancel': settings.voiceEngineEchoCancel,
+          'firstClause': settings.voiceShortFirstClause,
+          'prefetch': kTtsServerPrefetchParallelism,
+          'route': route.name,
+          'stt': settings.sttPreference.name,
+          'sttServer': _voiceInput?.prefersServerOnly,
+        },
+      );
+    } catch (_) {
+      // A call is never held up by its log.
+    }
+  }
+
   Future<void> _initializeTts(VoiceModeSpeech tts, AppSettings settings) {
     tts.setVoiceCallActive(true);
     return tts.initialize(
@@ -1725,9 +1757,7 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
     if (_bargeInProvisional) {
       final routeClass = await _currentRouteClass();
       final profile = VoiceRouteProfile.forClass(routeClass);
-      final confidence = TranscriptionConfidenceLog.instance.lookup(
-        transcript,
-      );
+      final confidence = TranscriptionConfidenceLog.instance.lookup(transcript);
       final echo =
           !profile.bargeInAllowed ||
           isBargeInEcho(
@@ -1736,17 +1766,19 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
             confidence: confidence,
             profile: profile,
           );
+      final decisionData = <String, Object?>{
+        'route': routeClass.name,
+        'decision': echo ? 'echo' : 'user',
+        'words': _wordsOf(transcript).length,
+        'avgLogprob': ?confidence?.avgLogprob,
+        'noSpeechProb': ?confidence?.noSpeechProb,
+      };
       DebugLogger.info(
         'barge-in-decision',
         scope: 'chat/voice_mode',
-        data: {
-          'route': routeClass.name,
-          'decision': echo ? 'echo' : 'user',
-          'words': _wordsOf(transcript).length,
-          'avgLogprob': ?confidence?.avgLogprob,
-          'noSpeechProb': ?confidence?.noSpeechProb,
-        },
+        data: decisionData,
       );
+      VoiceEventLog.instance.add('barge-in-decision', decisionData);
       if (echo) {
         _ignoredEchoTranscript = transcript;
         await _resumeAfterBargeInEcho(token, transcript);
@@ -2044,6 +2076,7 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
     final tts = _textToSpeech!;
     await tts.stopStreamingTts();
     await tts.stop();
+    VoiceEventLog.instance.add('barge-in-stop');
     if (!_isCurrent(token)) return;
 
     try {
@@ -2081,6 +2114,9 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
       return;
     }
 
+    if (_lastFedAssistantText.isEmpty && text.trim().isNotEmpty) {
+      VoiceEventLog.instance.add('chat-first-token');
+    }
     _syncAssistantSpeechChunks(text);
     state = state.copyWith(assistantPreview: text);
     if (state.phase == ChatVoiceModePhase.paused) {
@@ -2403,6 +2439,7 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
     required bool endCallKit,
     required int ownershipToken,
   }) async {
+    VoiceEventLog.instance.stop();
     final input = _voiceInput;
     final tts = _textToSpeech;
     final callKit = _callKit;

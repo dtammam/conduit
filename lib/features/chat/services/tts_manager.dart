@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io' show Directory, File, Platform;
 
+import 'package:conduit_core/features/chat/voice_mode/voice_event_log.dart';
 import 'package:conduit_core/conduit_core.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
@@ -162,7 +163,7 @@ class TtsConfig {
 /// only one playback session is active at a time. Events are emitted via
 /// a stream that consumers can listen to.
 class TtsManager {
-  static const int _serverPrefetchParallelism = 3;
+  static const int _serverPrefetchParallelism = kTtsServerPrefetchParallelism;
   static const Duration _serverInitialLookaheadTimeout = Duration(
     milliseconds: 220,
   );
@@ -196,6 +197,15 @@ class TtsManager {
 
   // Configuration
   TtsConfig _config = const TtsConfig();
+
+  /// Whether a voice reply's first unit ends at its first clause boundary
+  /// (the "Short first clause" setting, kept in step by the TTS provider).
+  bool shortFirstClause = false;
+
+  // Voice-call timing (VoiceEventLog): the index last reported as ended, and
+  // when the queue ran dry (null while audio is queued).
+  int _loggedPlayEnd = -1;
+  int? _starvedSinceMs;
   bool _deviceEngineAvailable = false;
   bool _voiceConfigured = false;
   bool _voiceCallActive = false;
@@ -368,7 +378,12 @@ class TtsManager {
         if (_serverCurrentIndex == index) {
           return;
         }
+        _logPlayEnd(_serverCurrentIndex);
         _serverCurrentIndex = index;
+        _clearStarved();
+        VoiceEventLog.instance.add('play-start', <String, Object?>{
+          'part': index,
+        });
         _emitEvent(TtsChunkStarted(index));
       });
       await _player.setSpeed(_serverPlaybackRate);
@@ -652,7 +667,7 @@ class TtsManager {
   /// they are.
   List<String> splitTextForStreamingSpeech(String text) {
     return _config.splitOn == splitOnPunctuation
-        ? getVoiceContentParts(text)
+        ? getVoiceContentParts(text, shortFirstClause: shortFirstClause)
         : splitTextForSpeech(text);
   }
 
@@ -841,6 +856,7 @@ class TtsManager {
           session.serverSpeech,
           session.chunks[index],
           voice,
+          part: index,
         );
         if (_activeSession?.id != session.id) return;
         _setBufferedServerChunk(index, chunk);
@@ -1032,6 +1048,7 @@ class TtsManager {
       session.serverSpeech,
       session.chunks.first,
       voice,
+      part: 0,
     );
     if (_activeSession?.id != session.id) return; // Cancelled
 
@@ -1051,6 +1068,7 @@ class TtsManager {
           session.serverSpeech,
           session.chunks[1],
           voice,
+          part: 1,
         ).timeout(_serverInitialLookaheadTimeout);
         if (_activeSession?.id == session.id) {
           _setBufferedServerChunk(1, secondChunk);
@@ -1112,6 +1130,7 @@ class TtsManager {
             session.serverSpeech,
             session.chunks[i],
             voice,
+            part: i,
           );
           if (_activeSession?.id != session.id) {
             return;
@@ -1175,8 +1194,18 @@ class TtsManager {
   Future<_AudioChunk> _fetchServerAudioWithRetry(
     ServerSpeechProvider? speech,
     String text,
-    String? voice,
-  ) async {
+    String? voice, {
+    int? part,
+  }) async {
+    final log = VoiceEventLog.instance;
+    if (log.active && part != null) {
+      log.add('tts-request', <String, Object?>{
+        'part': part,
+        'words': text.trim().isEmpty
+            ? 0
+            : text.trim().split(RegExp(r'\s+')).length,
+      });
+    }
     const maxAttempts = 4;
     Object? lastError;
     var requestText = text.trim();
@@ -1187,7 +1216,15 @@ class TtsManager {
 
     for (var attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
-        return await _fetchServerAudio(speech, requestText, requestVoice);
+        final fetched = await _fetchServerAudio(
+          speech,
+          requestText,
+          requestVoice,
+        );
+        if (part != null) {
+          log.add('tts-first-byte', <String, Object?>{'part': part});
+        }
+        return fetched;
       } catch (error) {
         lastError = error;
 
@@ -1223,6 +1260,7 @@ class TtsManager {
 
     final currentIndex = _player.currentIndex ?? _serverCurrentIndex;
     final lastChunkIndex = session.chunks.length - 1;
+    _logPlayEnd(currentIndex);
 
     // Complete only when the final session chunk has been enqueued and the
     // player reports that playlist playback has actually finished.
@@ -1237,6 +1275,7 @@ class TtsManager {
               _serverFetchingIndices.isNotEmpty ||
               _streamingFeedsPending > 0)) {
         _serverWaitingForNext = true;
+        _markStarved();
         return;
       }
       _activeSession = null;
@@ -1261,6 +1300,7 @@ class TtsManager {
       unawaited(_enqueueBufferedServerChunks(session));
     } else {
       _serverWaitingForNext = true;
+      _markStarved();
       final voice = _serverPlaybackVoice ?? _config.serverVoice;
       unawaited(_recoverMissingServerChunk(session, voice, nextIndex));
     }
@@ -1288,6 +1328,7 @@ class TtsManager {
         session.serverSpeech,
         session.chunks[index],
         voice,
+        part: index,
       );
       if (_activeSession?.id != session.id) {
         return;
@@ -1479,7 +1520,28 @@ class TtsManager {
     return serverAvailable;
   }
 
+  void _logPlayEnd(int index) {
+    if (index < 0 || index == _loggedPlayEnd) return;
+    _loggedPlayEnd = index;
+    VoiceEventLog.instance.add('play-end', <String, Object?>{'part': index});
+  }
+
+  void _markStarved() {
+    _starvedSinceMs ??= DateTime.now().millisecondsSinceEpoch;
+  }
+
+  void _clearStarved() {
+    final since = _starvedSinceMs;
+    _starvedSinceMs = null;
+    if (since == null) return;
+    VoiceEventLog.instance.add('starved', <String, Object?>{
+      'ms': DateTime.now().millisecondsSinceEpoch - since,
+    });
+  }
+
   void _resetPlaybackState() {
+    _loggedPlayEnd = -1;
+    _starvedSinceMs = null;
     _currentChunkIndex = -1;
     _serverCurrentIndex = -1;
     _serverLastEnqueuedIndex = -1;
@@ -1512,6 +1574,7 @@ class TtsManager {
   }
 
   void _setBufferedServerChunk(int index, _AudioChunk chunk) {
+    VoiceEventLog.instance.add('tts-ready', <String, Object?>{'part': index});
     while (_serverAudioBuffer.length <= index) {
       _serverAudioBuffer.add(null);
     }

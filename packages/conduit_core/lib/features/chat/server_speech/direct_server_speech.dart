@@ -7,6 +7,7 @@ import 'package:dio/dio.dart';
 
 import 'package:conduit_core/features/direct_connections/models/direct_connection_profile.dart';
 import 'package:conduit_core/features/direct_connections/services/direct_http_client.dart';
+import 'package:conduit_core/features/chat/voice_mode/voice_event_log.dart';
 import 'package:conduit_core/ports/progressive_audio.dart';
 import 'package:conduit_core/utils/debug_logger.dart';
 
@@ -73,6 +74,7 @@ final class DirectServerSpeech implements StreamingServerSpeech {
             'language': language.trim(),
           'response_format': format,
         }),
+        options: Options(headers: VoiceEventLog.instance.turnHeaders),
       );
       // The verbose answer carries Whisper's confidence, which tells a real
       // interruption from the assistant's own voice; a server that does not
@@ -123,7 +125,10 @@ final class DirectServerSpeech implements StreamingServerSpeech {
         },
         options: Options(
           responseType: ResponseType.bytes,
-          headers: {'Accept': 'audio/mpeg'},
+          headers: {
+            'Accept': 'audio/mpeg',
+            ...VoiceEventLog.instance.turnHeaders,
+          },
         ),
       );
       final bytes = response.data;
@@ -180,7 +185,10 @@ final class DirectServerSpeech implements StreamingServerSpeech {
         cancelToken: cancel,
         options: Options(
           responseType: ResponseType.stream,
-          headers: {'Accept': 'audio/mpeg'},
+          headers: {
+            'Accept': 'audio/mpeg',
+            ...VoiceEventLog.instance.turnHeaders,
+          },
         ),
       );
       final body = response.data;

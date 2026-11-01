@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:developer' as developer;
 
+import 'package:conduit_core/features/chat/voice_mode/voice_event_log.dart';
 import 'package:conduit_core/conduit_core.dart';
 import 'package:conduit/shared/widgets/platform_ui/platform_ui.dart';
 import 'package:drift/drift.dart';
@@ -233,6 +234,8 @@ Future<void> _configureUserAgent() async {
   try {
     final packageInfo = await PackageInfo.fromPlatform();
     ConduitUserAgent.configure(appVersion: packageInfo.version);
+    VoiceEventLog.instance.build =
+        '${packageInfo.version}+${packageInfo.buildNumber}';
     _startupTimeline?.instant('user_agent_ready');
   } catch (error, stackTrace) {
     DebugLogger.error(
@@ -1036,6 +1039,12 @@ class _ConduitAppState extends ConsumerState<ConduitApp> {
             await ref
                 .read(appSettingsProvider.notifier)
                 .setVoiceCallKitEnabled(value);
+          }
+        case 'voice-short-first-clause':
+          if (value is bool) {
+            await ref
+                .read(appSettingsProvider.notifier)
+                .setVoiceShortFirstClause(value);
           }
         case 'voice-engine-echo-cancel':
           if (value is bool) {

@@ -13,6 +13,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:vad/vad.dart' show VadHandler;
 
+import 'package:conduit_core/features/chat/voice_mode/voice_event_log.dart';
 import 'package:conduit_core/features/chat/voice_mode/voice_mode_ports.dart';
 import 'package:conduit_core/features/chat/server_speech/server_speech.dart';
 import 'package:conduit_core/features/chat/server_speech/server_speech_providers.dart';
@@ -1150,11 +1151,28 @@ class VoiceInputService implements VoiceModeInput {
     );
   }
 
+  /// A user turn ends here: its id is made and the timing log gets the VAD's
+  /// end, with the estimated end of speech (the silence window earlier).
+  void _logVadEnd() {
+    final log = VoiceEventLog.instance;
+    if (!log.active) return;
+    final silenceMs =
+        _ref?.read(appSettingsProvider).voiceSilenceDuration ??
+        SettingsService.defaultVoiceSilenceDurationMs;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    log.beginTurn();
+    log.add('vad-end', <String, Object?>{
+      'silenceMs': silenceMs,
+      'speechEndT': now - silenceMs,
+    }, now);
+  }
+
   Future<void> _setupVadStreams(VadHandler vad) async {
     await _vadSpeechEndSub?.cancel();
     _vadSpeechEndSub = vad.onSpeechEnd.listen((samples) {
       if (!_isListening || !_usingServerStt) return;
       if (samples.isEmpty) return;
+      _logVadEnd();
       _vadPendingSamples = samples;
       if (_isListening) {
         unawaited(
@@ -1260,12 +1278,20 @@ class VoiceInputService implements VoiceModeInput {
       final fileName =
           'conduit_voice_${DateTime.now().millisecondsSinceEpoch}.wav';
 
+      VoiceEventLog.instance.add('upload-start');
       final transcript = await speech.transcribe(
         wavBytes,
         fileName: fileName,
         mimeType: 'audio/wav',
         language: _languageForServer(),
       );
+      VoiceEventLog.instance.add('transcript', <String, Object?>{
+        'words': transcript
+            .trim()
+            .split(RegExp(r'\s+'))
+            .where((w) => w.isNotEmpty)
+            .length,
+      });
 
       if (transcript.trim().isNotEmpty) {
         _currentText = transcript.trim();
