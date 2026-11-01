@@ -2231,6 +2231,76 @@ void main() {
       });
     }
 
+    test('a provisional barge-in whose take never ends resumes playback '
+        'by itself', () async {
+      final input = serverInput();
+      final tts = _FakeTextToSpeechService()..holdCompletion = true;
+      final call = setUpCall(input, tts, settings: serverBargeIn);
+
+      await call.controller.start(startNewConversation: false);
+      await input.completeCurrent('tell me a long story');
+      await _until(
+        () =>
+            call.container.read(chatVoiceModeControllerProvider).phase ==
+            ChatVoiceModePhase.speaking,
+      );
+      await input.emitLevels(-60, 20);
+      await input.emitLevels(-25, 10);
+      await _until(() => input.beginCalls == 2);
+      check(tts.pauseCalls).equals(1);
+      check(tts.resumeCalls).equals(0);
+
+      // No transcript, no end of take, no sound: the safety net resumes.
+      await Future<void>.delayed(
+        ChatVoiceModeController.provisionalBargeInTimeout +
+            const Duration(milliseconds: 400),
+      );
+      check(tts.resumeCalls).equals(1);
+      check(tts.stopCalls).equals(0);
+      check(call.stopGenerationCalls()).equals(0);
+      final state = call.container.read(chatVoiceModeControllerProvider);
+      check(state.phase).equals(ChatVoiceModePhase.speaking);
+      check(state.assistantPreview).isNotEmpty();
+      check(userTurns(call.container)).deepEquals(<String>[
+        'tell me a long story',
+      ]);
+      await call.controller.stop();
+    });
+
+    test('a provisional barge-in stays paused while the user is talking',
+        () async {
+      final input = serverInput();
+      final tts = _FakeTextToSpeechService()..holdCompletion = true;
+      final call = setUpCall(input, tts, settings: serverBargeIn);
+
+      await call.controller.start(startNewConversation: false);
+      await input.completeCurrent('tell me a long story');
+      await _until(
+        () =>
+            call.container.read(chatVoiceModeControllerProvider).phase ==
+            ChatVoiceModePhase.speaking,
+      );
+      await input.emitLevels(-60, 20);
+      await input.emitLevels(-25, 10);
+      await _until(() => input.beginCalls == 2);
+
+      // Loud listen frames keep coming past the timeout: still the user.
+      final end = DateTime.now().add(
+        ChatVoiceModeController.provisionalBargeInTimeout +
+            const Duration(milliseconds: 800),
+      );
+      while (DateTime.now().isBefore(end)) {
+        input.emitIntensity(6);
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      }
+      check(tts.resumeCalls).equals(0);
+
+      await input.completeCurrent('actually, stop there');
+      await _until(() => userTurns(call.container).length == 2);
+      check(tts.stopCalls).equals(1);
+      await call.controller.stop();
+    });
+
     test('a chunk starting moves the panel from Thinking to Speaking', () async {
       final input = serverInput();
       final tts = _FakeTextToSpeechService()
@@ -3816,6 +3886,8 @@ class _FakeVoiceInputService implements VoiceModeInput {
       iosAudioSessionManagedExternally: iosAudioSessionManagedExternally,
     );
   }
+
+  void emitIntensity(int value) => _intensityController?.add(value);
 
   /// Feeds [frames] 32 ms frames at [dbfs] to whoever listens for a barge-in.
   Future<void> emitLevels(double dbfs, int frames) async {

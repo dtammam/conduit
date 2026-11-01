@@ -203,6 +203,27 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
   /// The reply preview when a provisional barge-in began, restored on resume.
   String _previewBeforeBargeIn = '';
 
+  /// How long a provisional barge-in may hold playback paused with no sign of
+  /// the user talking before it is treated as the assistant's own echo.
+  /// 2026-11-01: on the loudspeaker a take could hear one word of the
+  /// assistant, never end, and leave playback paused for 25 s.
+  @visibleForTesting
+  static const Duration provisionalBargeInTimeout = Duration(
+    milliseconds: 1500,
+  );
+
+  /// The longest a provisional barge-in is kept alive while the user is
+  /// audibly talking (the transcript is then due).
+  static const Duration _provisionalBargeInHardLimit = Duration(seconds: 12);
+
+  /// Loudness (0 to 10, the listen's own meter) that counts as the user
+  /// talking while the assistant is paused.
+  static const int _provisionalSpeechIntensity = 3;
+
+  Timer? _provisionalWatchdog;
+  DateTime? _provisionalStartedAt;
+  DateTime? _lastProvisionalSpeechAt;
+
   /// The last take dropped as echo, so a second report of it is dropped too.
   String? _ignoredEchoTranscript;
   DateTime? _assistantSpeechStartedAt;
@@ -1563,6 +1584,9 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
     await _intensitySub?.cancel();
     if (!_isCurrent(token)) return;
     _intensitySub = input.intensityStream.listen((intensity) {
+      if (_bargeInProvisional && intensity >= _provisionalSpeechIntensity) {
+        _lastProvisionalSpeechAt = DateTime.now();
+      }
       if (_isCurrent(token) && state.phase == ChatVoiceModePhase.listening) {
         state = state.copyWith(intensity: intensity);
       }
@@ -1732,7 +1756,14 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
         // assistant's own voice, playback carries on where it was.
         _bargeInProvisional = true;
         _previewBeforeBargeIn = state.assistantPreview;
+        _provisionalStartedAt = DateTime.now();
+        _lastProvisionalSpeechAt = null;
+        VoiceEventLog.instance.add('barge-in-provisional', <String, Object?>{
+          'lookbackMs': lookback.inMilliseconds,
+          'preview': _clip(_previewBeforeBargeIn),
+        });
         await _textToSpeech!.pause();
+        _armProvisionalWatchdog(token, provisionalBargeInTimeout);
         if (!_isCurrent(token)) return;
         _pendingFinalTranscripts.clear();
         _lastSubmittedTranscript = null;
@@ -1759,6 +1790,12 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
 
     final transcript = text.trim();
     if (transcript.isEmpty) {
+      if (_bargeInProvisional) {
+        VoiceEventLog.instance.add('barge-in-dropped', <String, Object?>{
+          'reason': 'empty',
+          'words': 0,
+        });
+      }
       return;
     }
 
@@ -1789,7 +1826,12 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
       VoiceEventLog.instance.add('barge-in-decision', decisionData);
       if (echo) {
         _ignoredEchoTranscript = transcript;
-        await _resumeAfterBargeInEcho(token, transcript);
+        VoiceEventLog.instance.add('barge-in-dropped', <String, Object?>{
+          'reason': profile.bargeInAllowed ? 'echo' : 'route-no-barge-in',
+          'words': _wordsOf(transcript).length,
+          'text': _clip(transcript),
+        });
+        await _resumeAfterBargeInEcho(token, transcript, reason: 'echo');
         return;
       }
       // Real words: the drain below stops the assistant and sends them.
@@ -1818,7 +1860,11 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
         : '';
     if (transcript.isEmpty) {
       if (_bargeInProvisional) {
-        await _resumeAfterBargeInEcho(token, '');
+        VoiceEventLog.instance.add('barge-in-dropped', <String, Object?>{
+          'reason': 'empty-take',
+          'words': 0,
+        });
+        await _resumeAfterBargeInEcho(token, '', reason: 'empty-take');
         return;
       }
       await _restartAfterEmptyTranscript(token);
@@ -2036,9 +2082,18 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
 
   /// A provisional barge-in heard only the assistant (or nothing): drop the
   /// take, hold the recorder for the response again and resume playback.
-  Future<void> _resumeAfterBargeInEcho(int token, String transcript) async {
+  Future<void> _resumeAfterBargeInEcho(
+    int token,
+    String transcript, {
+    String reason = 'echo',
+  }) async {
     if (!_isCurrent(token) || !_bargeInProvisional) return;
     _bargeInProvisional = false;
+    _cancelProvisionalWatchdog();
+    VoiceEventLog.instance.add('barge-in-resume', <String, Object?>{
+      'reason': reason,
+      'pausedMs': ?_provisionalPausedMs(),
+    });
     DebugLogger.info(
       'barge-in-echo-ignored',
       scope: 'chat/voice_mode',
@@ -2091,11 +2146,56 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
     }
   }
 
+  static String _clip(String text) =>
+      text.length <= 80 ? text : '${text.substring(0, 80)}...';
+
+  int? _provisionalPausedMs() {
+    final startedAt = _provisionalStartedAt;
+    return startedAt == null
+        ? null
+        : DateTime.now().difference(startedAt).inMilliseconds;
+  }
+
+  void _cancelProvisionalWatchdog() {
+    _provisionalWatchdog?.cancel();
+    _provisionalWatchdog = null;
+  }
+
+  /// Safety net for a provisional barge-in: playback stays paused only while
+  /// the user is audibly talking (up to [_provisionalBargeInHardLimit]).
+  /// With no sign of speech after [delay] it resumes where it paused, however
+  /// the take is going (a take that never ends was heard on the loudspeaker).
+  void _armProvisionalWatchdog(int token, Duration delay) {
+    _cancelProvisionalWatchdog();
+    if (!_bargeInProvisional || !_isCurrent(token)) return;
+    _provisionalWatchdog = Timer(delay, () {
+      _provisionalWatchdog = null;
+      if (!_bargeInProvisional || !_isCurrent(token)) return;
+      final now = DateTime.now();
+      final startedAt = _provisionalStartedAt ?? now;
+      final lastSpeech = _lastProvisionalSpeechAt;
+      final talking =
+          lastSpeech != null &&
+          now.difference(lastSpeech) < provisionalBargeInTimeout &&
+          now.difference(startedAt) < _provisionalBargeInHardLimit;
+      if (talking) {
+        _armProvisionalWatchdog(token, const Duration(milliseconds: 500));
+        return;
+      }
+      VoiceEventLog.instance.add('barge-in-dropped', <String, Object?>{
+        'reason': 'timeout',
+        'words': 0,
+      });
+      unawaited(_resumeAfterBargeInEcho(token, '', reason: 'timeout'));
+    });
+  }
+
   Future<void> _interruptAssistantForBargeIn(int token) async {
     if (!_isCurrent(token)) return;
 
     DebugLogger.info('barge-in', scope: 'chat/voice_mode');
     _bargeInProvisional = false;
+    _cancelProvisionalWatchdog();
     final tts = _textToSpeech!;
     await tts.stopStreamingTts();
     await tts.stop();
@@ -2507,6 +2607,7 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
     _selectedModelSub = null;
     _bargeInLevelSub = null;
     _bargeInDetector = null;
+    _cancelProvisionalWatchdog();
     _backgroundKeepAliveTimer = null;
     _backgroundLeaseId = null;
     _socketBackgroundLease = null;

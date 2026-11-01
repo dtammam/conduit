@@ -280,6 +280,9 @@ class EngineSpeechPlayback implements AudioPlaybackPort, AudioItemEndReporting {
           'part': args['item'],
         });
       case 'starved':
+        VoiceEventLog.instance.add('starved', <String, Object?>{
+          'item': args['item'] ?? _currentIndex,
+        });
         _emit(AudioProcessingState.buffering);
       case 'drained':
         _emit(AudioProcessingState.completed);
@@ -413,6 +416,9 @@ class EngineSpeechPlayback implements AudioPlaybackPort, AudioItemEndReporting {
   @override
   Future<void> play() async {
     _playing = true;
+    VoiceEventLog.instance.add('playback-resumed', <String, Object?>{
+      'item': _currentIndex,
+    });
     await _call('play');
     if (_processing == AudioProcessingState.idle ||
         _processing == AudioProcessingState.loading) {
@@ -425,6 +431,9 @@ class EngineSpeechPlayback implements AudioPlaybackPort, AudioItemEndReporting {
   @override
   Future<void> pause() async {
     _playing = false;
+    VoiceEventLog.instance.add('playback-paused', <String, Object?>{
+      'item': _currentIndex,
+    });
     await _call('pause');
     _emit(
       _processing == AudioProcessingState.completed
