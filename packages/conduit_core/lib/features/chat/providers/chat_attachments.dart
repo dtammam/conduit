@@ -13,11 +13,136 @@ bool validateFileCount(int currentCount, int newFilesCount, int? maxCount) {
   return (currentCount + newFilesCount) <= maxCount;
 }
 
+// Files of earlier turns are kept for the session (see
+// attachment_payload_cache.dart); at most four uncached fetches run at once.
+AttachmentPayloadCache _attachmentCache = AttachmentPayloadCache();
+final AsyncLimiter _attachmentFetchLimiter = AsyncLimiter(4);
+
+@visibleForTesting
+void setAttachmentCacheForTest(AttachmentPayloadCache cache) {
+  _attachmentCache = cache;
+}
+
+@visibleForTesting
+Future<Map<String, dynamic>> buildMessagePayloadWithAttachmentsForTest({
+  required dynamic api,
+  required String role,
+  required String cleanedText,
+  required List<String> attachmentIds,
+}) => _buildMessagePayloadWithAttachments(
+  api: api,
+  role: role,
+  cleanedText: cleanedText,
+  attachmentIds: attachmentIds,
+);
+
+// One attachment as the request carries it: an image part, a file entry, or
+// nothing when it could not be resolved.
+class _ResolvedAttachment {
+  const _ResolvedAttachment.image(this.imagePart) : filePart = null;
+  const _ResolvedAttachment.file(this.filePart) : imagePart = null;
+
+  final Map<String, dynamic>? imagePart;
+  final Map<String, dynamic>? filePart;
+}
+
+Future<_ResolvedAttachment?> _resolveAttachment(
+  dynamic api,
+  String attachmentId,
+) async {
+  try {
+    // Check if this is a base64 data URL (legacy or inline)
+    if (attachmentId.startsWith('data:image/')) {
+      // Inline image data URL - add directly to content array for LLM vision
+      return _ResolvedAttachment.image({
+        'type': 'image_url',
+        'image_url': {'url': attachmentId},
+      });
+    }
+
+    final cache = _attachmentCache;
+    // For server-stored files, fetch info to determine type
+    var entry = cache.get(attachmentId);
+    if (entry == null) {
+      entry = await cache.shared<AttachmentFileEntry>(
+        'info:$attachmentId',
+        () => _attachmentFetchLimiter.run(() async {
+          final fileInfo = await api.getFileInfo(attachmentId);
+          return AttachmentFileEntry(
+            fileName: fileInfo['filename'] ?? fileInfo['name'] ?? 'Unknown',
+            fileSize: fileInfo['size'] ?? fileInfo['meta']?['size'],
+            contentType:
+                fileInfo['meta']?['content_type'] ??
+                fileInfo['content_type'] ??
+                '',
+          );
+        }),
+      );
+      cache.put(attachmentId, entry);
+    }
+    final fileName = entry.fileName;
+    final fileSize = entry.fileSize;
+    final contentType = entry.contentType;
+
+    // Check if this is an image file
+    final isImage = contentType.toString().startsWith('image/');
+
+    if (isImage) {
+      // Images must be in content array as image_url for LLM vision
+      // Fetch the image content from server and convert to base64 data URL
+      try {
+        var dataUrl = entry.dataUrl;
+        if (dataUrl == null) {
+          dataUrl = await cache.shared<String>(
+            'content:$attachmentId',
+            () => _attachmentFetchLimiter.run(() async {
+              final fileContent = await api.getFileContent(attachmentId);
+              if (fileContent.startsWith('data:')) {
+                return fileContent as String;
+              }
+              // Determine MIME type from content type or file extension
+              final mimeType = contentType.isNotEmpty
+                  ? contentType.toString()
+                  : _getMimeTypeFromFileName(fileName) ?? 'image/png';
+              return 'data:$mimeType;base64,$fileContent';
+            }),
+          );
+          cache.putDataUrl(attachmentId, dataUrl);
+        }
+        return _ResolvedAttachment.image({
+          'type': 'image_url',
+          'image_url': {'url': dataUrl},
+        });
+      } catch (error) {
+        // If we can't fetch the image, skip it
+        return null;
+      }
+    }
+    // Non-image files go to files array for RAG/server-side processing
+    final filePayload = <String, dynamic>{
+      'type': 'file',
+      'id': attachmentId,
+      // OpenWebUI now stores just the file ID, not the full URL path
+      'url': attachmentId,
+      'name': fileName,
+    };
+    if (fileSize != null) {
+      filePayload['size'] = fileSize;
+    }
+    return _ResolvedAttachment.file(filePayload);
+  } catch (_) {
+    // Swallow and continue to keep regeneration robust
+    return null;
+  }
+}
+
 // Small internal helper to convert a message with attachments into the
 // OpenWebUI content payload format (text + image_url + files).
 // - Adds text first (if non-empty)
 // - Images (base64 or server-stored) go into content array as image_url
 // - Non-image files go into files array for RAG/server-side resolution
+// Attachments are resolved together (cached, four fetches at a time) and put
+// in the request in the order they were attached.
 Future<Map<String, dynamic>> _buildMessagePayloadWithAttachments({
   required dynamic api,
   required String role,
@@ -33,67 +158,16 @@ Future<Map<String, dynamic>> _buildMessagePayloadWithAttachments({
   // Collect non-image files for the files array
   final allFiles = <Map<String, dynamic>>[];
 
-  for (final attachmentId in attachmentIds) {
-    try {
-      // Check if this is a base64 data URL (legacy or inline)
-      if (attachmentId.startsWith('data:image/')) {
-        // Inline image data URL - add directly to content array for LLM vision
-        contentArray.add({
-          'type': 'image_url',
-          'image_url': {'url': attachmentId},
-        });
-        continue;
-      }
-
-      // For server-stored files, fetch info to determine type
-      final fileInfo = await api.getFileInfo(attachmentId);
-      final fileName = fileInfo['filename'] ?? fileInfo['name'] ?? 'Unknown';
-      final fileSize = fileInfo['size'] ?? fileInfo['meta']?['size'];
-      final contentType =
-          fileInfo['meta']?['content_type'] ?? fileInfo['content_type'] ?? '';
-
-      // Check if this is an image file
-      final isImage = contentType.toString().startsWith('image/');
-
-      if (isImage) {
-        // Images must be in content array as image_url for LLM vision
-        // Fetch the image content from server and convert to base64 data URL
-        try {
-          final fileContent = await api.getFileContent(attachmentId);
-          String dataUrl;
-          if (fileContent.startsWith('data:')) {
-            dataUrl = fileContent;
-          } else {
-            // Determine MIME type from content type or file extension
-            final mimeType = contentType.isNotEmpty
-                ? contentType.toString()
-                : _getMimeTypeFromFileName(fileName) ?? 'image/png';
-            dataUrl = 'data:$mimeType;base64,$fileContent';
-          }
-          contentArray.add({
-            'type': 'image_url',
-            'image_url': {'url': dataUrl},
-          });
-        } catch (error) {
-          // If we can't fetch the image, skip it
-        }
-      } else {
-        // Non-image files go to files array for RAG/server-side processing
-        final filePayload = <String, dynamic>{
-          'type': 'file',
-          'id': attachmentId,
-          // OpenWebUI now stores just the file ID, not the full URL path
-          'url': attachmentId,
-          'name': fileName,
-        };
-        if (fileSize != null) {
-          filePayload['size'] = fileSize;
-        }
-        allFiles.add(filePayload);
-      }
-    } catch (_) {
-      // Swallow and continue to keep regeneration robust
-    }
+  if (api != null) _attachmentCache.bind(api as Object);
+  final resolved = await Future.wait(
+    attachmentIds.map((id) => _resolveAttachment(api, id)),
+  );
+  for (final attachment in resolved) {
+    if (attachment == null) continue;
+    final image = attachment.imagePart;
+    if (image != null) contentArray.add(image);
+    final file = attachment.filePart;
+    if (file != null) allFiles.add(file);
   }
 
   final messageMap = <String, dynamic>{

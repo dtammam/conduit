@@ -23,6 +23,9 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart' show CancelToken;
 import 'package:drift/drift.dart' show Value;
 import 'package:meta/meta.dart';
+
+import 'attachment_payload_cache.dart';
+
 import 'package:conduit_core/utils/openwebui_request_variables.dart';
 import 'package:conduit_core/features/chat/omni/omni_chat.dart';
 import 'package:conduit_core/features/chat/omni/omni_session.dart';
@@ -33,7 +36,6 @@ import 'package:conduit_core/ports/wakelock_port.dart';
 import 'package:riverpod/riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:uuid/uuid.dart';
-
 
 import 'package:conduit_core/auth/api_auth_interceptor.dart';
 import 'package:conduit_core/auth/openwebui_account_owner_marker.dart';
