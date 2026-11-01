@@ -11,6 +11,12 @@ void main() {
     expect(OmniLaunchGate.isHeld, isFalse);
   });
 
+  test('settled starts true and settle is idempotent', () {
+    expect(OmniLaunchGate.settled.value, isTrue);
+    OmniLaunchGate.settle('x');
+    expect(OmniLaunchGate.settled.value, isTrue);
+  });
+
   test('without preferences the first frame is never held', () {
     OmniLaunchGate.holdIfOmni();
     expect(OmniLaunchGate.isHeld, isFalse);

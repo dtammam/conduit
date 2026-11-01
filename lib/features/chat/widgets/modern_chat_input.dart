@@ -1,3 +1,4 @@
+import 'package:conduit/core/startup/omni_launch_gate.dart';
 import 'package:conduit/shared/widgets/platform_ui/platform_ui.dart';
 import 'package:flutter/foundation.dart'
     show ValueNotifier, kIsWeb, visibleForTesting;
@@ -748,6 +749,10 @@ class _ModernChatInputState extends ConsumerState<ModernChatInput>
 
   @override
   void dispose() {
+    final launchListener = _launchListener;
+    if (launchListener != null) {
+      OmniLaunchGate.settled.removeListener(launchListener);
+    }
     // Note: Avoid using ref in dispose as per Riverpod best practices
     // The focus state will be naturally cleared when the widget is disposed
     _controller.removeListener(_handleComposerChanged);
@@ -809,7 +814,32 @@ class _ModernChatInputState extends ConsumerState<ModernChatInput>
     setState(() {});
   }
 
+  VoidCallback? _launchListener;
+
+  void _focusAfterLaunch() {
+    if (_launchListener != null) return;
+    void onSettled() {
+      if (!OmniLaunchGate.settled.value) return;
+      OmniLaunchGate.settled.removeListener(onSettled);
+      _launchListener = null;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _isDeactivated) return;
+        _ensureFocusedIfEnabled();
+      });
+    }
+
+    _launchListener = onSettled;
+    OmniLaunchGate.settled.addListener(onSettled);
+  }
+
   void _ensureFocusedIfEnabled() {
+    // A cold start into the Omni chat: no focus until the launch has its final
+    // chat on screen, then once (the keyboard flashed up for the chat being
+    // left, dropped, and came back, 2026-11-01)
+    if (!OmniLaunchGate.settled.value) {
+      _focusAfterLaunch();
+      return;
+    }
     // Respect global suppression flag to avoid re-opening keyboard
     final autofocusEnabled = ref.read(composerAutofocusEnabledProvider);
     final hasFocus = _focusNode.hasFocus;

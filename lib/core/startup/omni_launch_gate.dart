@@ -22,7 +22,14 @@ class OmniLaunchGate {
 
   static bool _held = false;
   static Timer? _cap;
+  static Timer? _settleCap;
   static final Stopwatch _clock = Stopwatch();
+
+  /// False from a held cold start until the launch has picked its final chat
+  /// (the Omni chat opened, or startup decided not to open it). The composer
+  /// does not take focus before then, so the keyboard does not flash up for
+  /// the chat the launch is about to leave (2026-11-01).
+  static final ValueNotifier<bool> settled = ValueNotifier<bool>(true);
 
   /// Whether the first frame is being held right now.
   static bool get isHeld => _held;
@@ -43,6 +50,21 @@ class OmniLaunchGate {
       ..start();
     (binding ?? WidgetsBinding.instance).deferFirstFrame();
     _cap = Timer(cap, () => release('cap', binding: binding));
+    settled.value = false;
+    _settleCap = Timer(const Duration(seconds: 8), () => settle('cap'));
+  }
+
+  /// The launch has picked its final chat: autofocus may run again.
+  static void settle(String reason) {
+    _settleCap?.cancel();
+    _settleCap = null;
+    if (settled.value) return;
+    settled.value = true;
+    DebugLogger.log(
+      'omni-launch-settled',
+      scope: 'startup',
+      data: {'reason': reason, 'ms': _clock.elapsedMilliseconds},
+    );
   }
 
   /// Lets the first frame through. Safe to call any number of times.

@@ -1170,6 +1170,7 @@ class AppStartupFlow extends _$AppStartupFlow {
     final api = await _waitForApiService(timeout: apiWaitTimeout);
     if (!_hasAuthenticatedSession()) {
       OmniLaunchGate.release('signed-out');
+      OmniLaunchGate.settle('signed-out');
       return;
     }
     if (api == null) {
@@ -1178,6 +1179,7 @@ class AppStartupFlow extends _$AppStartupFlow {
         scope: 'startup',
       );
       OmniLaunchGate.release('no-api');
+      OmniLaunchGate.settle('no-api');
       return;
     }
 
@@ -1229,6 +1231,7 @@ class AppStartupFlow extends _$AppStartupFlow {
     _omniLaunchHandled = true;
     if (!ref.read(appSettingsProvider).omniChatEnabled) {
       OmniLaunchGate.release('omni-off');
+      OmniLaunchGate.settle('omni-off');
       return;
     }
     unawaited(
@@ -1265,10 +1268,15 @@ class AppStartupFlow extends _$AppStartupFlow {
             ),
           )
           .then(
-            (opened) => OmniLaunchGate.release(
-              opened ? 'omni-opened' : 'omni-skipped',
-            ),
-            onError: (Object _) => OmniLaunchGate.release('omni-error'),
+            (opened) {
+              final reason = opened ? 'omni-opened' : 'omni-skipped';
+              OmniLaunchGate.release(reason);
+              OmniLaunchGate.settle(reason);
+            },
+            onError: (Object _) {
+              OmniLaunchGate.release('omni-error');
+              OmniLaunchGate.settle('omni-error');
+            },
           ),
     );
   }
@@ -1321,6 +1329,7 @@ class AppStartupFlow extends _$AppStartupFlow {
         if (next == AuthNavigationState.needsLogin ||
             next == AuthNavigationState.error) {
           OmniLaunchGate.release('auth-${next.name}');
+          OmniLaunchGate.settle('auth-${next.name}');
         }
         _stopDirectCompletionRelay();
         _clearQueuedAuthenticatedStartupWork();
