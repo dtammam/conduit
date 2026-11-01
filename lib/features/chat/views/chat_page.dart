@@ -131,6 +131,7 @@ import '../providers/context_usage_providers.dart';
 import '../widgets/context_usage_ring.dart';
 import '../../routines/push_registration.dart';
 import '../widgets/omni_session_divider.dart';
+import '../omni/open_posts.dart';
 import '../widgets/reply_to_bar.dart';
 import '../../../shared/widgets/server_version_warning_card.dart';
 import '../../../shared/widgets/adaptive_toolbar_components.dart';
@@ -3588,16 +3589,21 @@ class _ChatPageState extends ConsumerState<ChatPage> {
         groupIds.isEmpty ? <String>[messageId] : groupIds,
       ),
     );
-    if (!quickRepliesEnabled) return buildRow(null);
+    final omni = isOmniChatId(rowRef.read(activeConversationProvider)?.id);
+    Widget framed(Widget row) =>
+        omni ? OpenPostHighlight(messageId: messageId, child: row) : row;
+    if (!quickRepliesEnabled) return framed(buildRow(null));
     // A reaction that failed to send shows its own bubble and failure, not a
     // badge here.
     return ValueListenableBuilder<String?>(
       valueListenable: _failedSendMessageId,
-      builder: (context, failedSendMessageId, _) => buildRow(
-        quickReplyAnswer == null ||
-                quickReplyAnswer.turnId == failedSendMessageId
-            ? null
-            : quickReplyAnswer.reaction,
+      builder: (context, failedSendMessageId, _) => framed(
+        buildRow(
+          quickReplyAnswer == null ||
+                  quickReplyAnswer.turnId == failedSendMessageId
+              ? null
+              : quickReplyAnswer.reaction,
+        ),
       ),
     );
   }
@@ -4102,6 +4108,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                         onWebAttachment: _promptAttachWebpage,
                         onPastedAttachments: _handlePastedAttachments,
                       ),
+                      if (isOmniChatId(activeConversation?.id))
+                        const OpenPostsRefresher(),
                       if (isOmniChatId(activeConversation?.id) &&
                           composerRef.watch(
                             appSettingsProvider.select(
