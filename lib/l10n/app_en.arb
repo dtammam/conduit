@@ -9479,6 +9479,14 @@
   "@voiceEngineEchoCancelDescription": {
     "description": "Explains the toggle for echo cancellation on the speech engine."
   },
+  "voiceShortFirstClause": "Short first clause",
+  "@voiceShortFirstClause": {
+    "description": "Toggle: a voice reply starts speaking after its first clause instead of its first sentence."
+  },
+  "voiceShortFirstClauseDescription": "Speaks the first clause of a long opening sentence on its own, so the reply starts sooner. Takes effect at the next reply.",
+  "@voiceShortFirstClauseDescription": {
+    "description": "Explains the toggle that splits the first spoken unit at its first clause."
+  },
   "personaAppearance": "Match persona from Switchboard",
   "@personaAppearance": {
     "description": "Toggle title: the avatar clips and bubble color follow the persona active on a Switchboard server."

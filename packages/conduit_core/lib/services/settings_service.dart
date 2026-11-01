@@ -343,6 +343,7 @@ class SettingsService {
       PreferenceKeys.voiceProviderForAllChats:
           settings.voiceProviderForAllChats,
       PreferenceKeys.voiceEngineEchoCancel: settings.voiceEngineEchoCancel,
+      PreferenceKeys.voiceShortFirstClause: settings.voiceShortFirstClause,
       PreferenceKeys.voiceCallMode: settings.voiceCallMode.name,
       _socketTransportModeKey: settings.socketTransportMode,
       _quickPillsKey: settings.quickPills.toList(),
@@ -839,6 +840,8 @@ class SettingsService {
           get<bool>(PreferenceKeys.voiceProviderForAllChats) ?? true,
       voiceEngineEchoCancel:
           get<bool>(PreferenceKeys.voiceEngineEchoCancel) ?? true,
+      voiceShortFirstClause:
+          get<bool>(PreferenceKeys.voiceShortFirstClause) ?? false,
       voiceCallMode: VoiceCallMode.values.firstWhere(
         (mode) => mode.name == get<String>(PreferenceKeys.voiceCallMode),
         orElse: () => VoiceCallMode.auto,
@@ -1028,6 +1031,11 @@ class AppSettings {
   /// `record` plugin and the engine plays without voice processing. Read when
   /// a call starts. No effect elsewhere.
   final bool voiceEngineEchoCancel;
+
+  /// Whether a voice reply's first spoken unit ends at its first clause
+  /// boundary (comma, semicolon, colon, dash) when the sentence is long, so
+  /// speech starts sooner. Off by default.
+  final bool voiceShortFirstClause;
   final VoiceCallMode voiceCallMode;
   final String socketTransportMode; // 'polling' or 'ws'
   final List<String> quickPills; // e.g., ['web','image']
@@ -1105,6 +1113,7 @@ class AppSettings {
     this.voiceCallKitEnabled = false,
     this.voiceProviderForAllChats = true,
     this.voiceEngineEchoCancel = true,
+    this.voiceShortFirstClause = false,
     this.voiceCallMode = VoiceCallMode.auto,
     this.socketTransportMode = 'ws',
     this.quickPills = const [],
@@ -1174,6 +1183,7 @@ class AppSettings {
     bool? voiceCallKitEnabled,
     bool? voiceProviderForAllChats,
     bool? voiceEngineEchoCancel,
+    bool? voiceShortFirstClause,
     VoiceCallMode? voiceCallMode,
     String? socketTransportMode,
     List<String>? quickPills,
@@ -1258,6 +1268,8 @@ class AppSettings {
           voiceProviderForAllChats ?? this.voiceProviderForAllChats,
       voiceEngineEchoCancel:
           voiceEngineEchoCancel ?? this.voiceEngineEchoCancel,
+      voiceShortFirstClause:
+          voiceShortFirstClause ?? this.voiceShortFirstClause,
       voiceCallMode: voiceCallMode ?? this.voiceCallMode,
       socketTransportMode: socketTransportMode ?? this.socketTransportMode,
       quickPills: quickPills ?? this.quickPills,
@@ -1354,6 +1366,7 @@ class AppSettings {
         other.voiceCallKitEnabled == voiceCallKitEnabled &&
         other.voiceProviderForAllChats == voiceProviderForAllChats &&
         other.voiceEngineEchoCancel == voiceEngineEchoCancel &&
+        other.voiceShortFirstClause == voiceShortFirstClause &&
         other.voiceCallMode == voiceCallMode &&
         other.chatWebSearchEnabled == chatWebSearchEnabled &&
         other.chatImageGenerationEnabled == chatImageGenerationEnabled &&
@@ -1426,6 +1439,7 @@ class AppSettings {
       voiceCallKitEnabled,
       voiceProviderForAllChats,
       voiceEngineEchoCancel,
+      voiceShortFirstClause,
       voiceCallMode,
       chatWebSearchEnabled,
       chatImageGenerationEnabled,
@@ -1951,6 +1965,11 @@ class AppSettingsNotifier extends _$AppSettingsNotifier {
 
   Future<void> setVoiceProviderForAllChats(bool value) async {
     state = state.copyWith(voiceProviderForAllChats: value);
+    await SettingsService.saveSettings(state);
+  }
+
+  Future<void> setVoiceShortFirstClause(bool value) async {
+    state = state.copyWith(voiceShortFirstClause: value);
     await SettingsService.saveSettings(state);
   }
 

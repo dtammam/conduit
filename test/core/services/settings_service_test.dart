@@ -141,6 +141,13 @@ void main() {
         ).equals(false);
       });
 
+      test('voiceShortFirstClause defaults to off and copies', () {
+        check(settings.voiceShortFirstClause).equals(false);
+        check(
+          settings.copyWith(voiceShortFirstClause: true).voiceShortFirstClause,
+        ).equals(true);
+      });
+
       test('voiceEngineEchoCancel defaults to on in this build', () {
         check(settings.voiceEngineEchoCancel).equals(true);
         check(

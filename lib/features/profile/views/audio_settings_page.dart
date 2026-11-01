@@ -303,6 +303,26 @@ class AudioSettingsPage extends ConsumerWidget {
           onTap: () =>
               notifier.setVoiceBargeInEnabled(!settings.voiceBargeInEnabled),
         ),
+        const SizedBox(height: Spacing.sm),
+        CustomizationTile(
+          leading: SettingsIconBadge(
+            icon: UiUtils.platformIcon(
+              ios: CupertinoIcons.text_quote,
+              android: Icons.short_text,
+            ),
+            color: theme.buttonPrimary,
+          ),
+          title: l10n.voiceShortFirstClause,
+          subtitle: l10n.voiceShortFirstClauseDescription,
+          trailing: AdaptiveSwitch(
+            value: settings.voiceShortFirstClause,
+            onChanged: notifier.setVoiceShortFirstClause,
+          ),
+          showChevron: false,
+          onTap: () => notifier.setVoiceShortFirstClause(
+            !settings.voiceShortFirstClause,
+          ),
+        ),
         if (Platform.isIOS) ...[
           const SizedBox(height: Spacing.sm),
           CustomizationTile(

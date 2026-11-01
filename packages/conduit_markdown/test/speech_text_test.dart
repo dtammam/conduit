@@ -25,10 +25,9 @@ void main() {
         ),
         ['First paragraph', 'Second paragraph'],
       );
-      expect(
-        getMessageContentParts('One.\nTwo.', splitOn: speechSplitOnNone),
-        ['One.\nTwo.'],
-      );
+      expect(getMessageContentParts('One.\nTwo.', splitOn: speechSplitOnNone), [
+        'One.\nTwo.',
+      ]);
     });
 
     test('never speaks a reasoning block, even an open one', () {
@@ -145,6 +144,97 @@ void main() {
     test('rejoining the units gives the text back', () {
       final units = splitIntoVoiceUnits([first, long, long, long]);
       expect(units.join(' '), [first, long, long, long].join(' '));
+    });
+  });
+
+  group('short first clause', () {
+    List<String> split(List<String> sentences) =>
+        splitIntoVoiceUnits(sentences, shortFirstClause: true);
+
+    test('off by default: the first sentence stays whole', () {
+      const s = 'Yes, that works fine for the three of us on Tuesday morning.';
+      expect(splitIntoVoiceUnits([s]), [s]);
+      expect(getVoiceContentParts(s), [s]);
+    });
+
+    test('a clause under four words is not split off', () {
+      const s = 'Sure, I can move that to Tuesday at three for you.';
+      expect(split([s]), [s]);
+    });
+
+    test('a long first sentence ends its first unit at the first comma', () {
+      expect(
+        split([
+          'Your meeting with the design team is moved to Tuesday, and I '
+              'also told everyone on the invite about the change.',
+        ]),
+        [
+          'Your meeting with the design team is moved to Tuesday,',
+          'and I also told everyone on the invite about the change.',
+        ],
+      );
+    });
+
+    test('a sentence of eight words or fewer stays whole', () {
+      const s = 'I moved your meeting to Tuesday, as asked.';
+      expect(split([s]), [s]);
+    });
+
+    test('semicolon, colon and spaced dash are boundaries too', () {
+      expect(
+        split(['The report is ready for you to read; I put it in your notes.']),
+        ['The report is ready for you to read;', 'I put it in your notes.'],
+      );
+      expect(
+        split([
+          'Here is what I found about the trip: flights are cheaper now.',
+        ]),
+        ['Here is what I found about the trip:', 'flights are cheaper now.'],
+      );
+      expect(
+        split([
+          'The new schedule starts on Monday — I will remind you then ok.',
+        ]),
+        ['The new schedule starts on Monday', '— I will remind you then ok.'],
+      );
+    });
+
+    test('only the first boundary is tried', () {
+      const s =
+          'Well, the plan we talked about on Monday is still on, so go ahead.';
+      expect(split([s]), [s]);
+    });
+
+    test('the rest of the reply is split as before and text is kept', () {
+      const first =
+          'Your meeting with the design team is moved to Tuesday, and I '
+          'also told everyone on the invite about the change.';
+      final units = split([first, 'It is at three.', 'Bring the deck.']);
+      expect(units, [
+        'Your meeting with the design team is moved to Tuesday,',
+        'and I also told everyone on the invite about the change.',
+        'It is at three.',
+        'Bring the deck.',
+      ]);
+      expect(
+        units.join(' '),
+        [first, 'It is at three.', 'Bring the deck.'].join(' '),
+      );
+    });
+
+    test('getVoiceContentParts passes the option through', () {
+      expect(
+        getVoiceContentParts(
+          'Your meeting with the design team is moved to Tuesday, and I '
+          'also told everyone on the invite. Bring the deck.',
+          shortFirstClause: true,
+        ),
+        [
+          'Your meeting with the design team is moved to Tuesday,',
+          'and I also told everyone on the invite.',
+          'Bring the deck.',
+        ],
+      );
     });
   });
 }

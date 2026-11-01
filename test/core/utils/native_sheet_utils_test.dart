@@ -115,6 +115,23 @@ void main() {
     check(const AppSettings().voiceCallKitEnabled).equals(false);
   });
 
+  test('native short first clause toggle follows the setting, default off', () {
+    for (final enabled in [true, false]) {
+      final parts = buildNativeAudioSheetParts(
+        l10n,
+        AppSettings(voiceShortFirstClause: enabled),
+      );
+      final item = parts.mainSections
+          .expand((section) => section.items)
+          .singleWhere((item) => item.id == 'voice-short-first-clause');
+
+      check(item.kind).equals(NativeSheetItemKind.toggle);
+      check(item.title).equals(l10n.voiceShortFirstClause);
+      check(item.value).equals(enabled);
+    }
+    check(const AppSettings().voiceShortFirstClause).equals(false);
+  });
+
   test('native engine echo cancellation toggle follows the setting', () {
     for (final enabled in [true, false]) {
       final parts = buildNativeAudioSheetParts(

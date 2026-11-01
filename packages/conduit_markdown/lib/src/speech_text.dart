@@ -268,18 +268,48 @@ const int _voiceClauseMinWords = 4;
 /// A first unit that is only the first sentence starts sooner, and shorter
 /// units right after it keep the queue ahead; once it is ahead, whole
 /// sentences sound more natural.
-List<String> getVoiceContentParts(String content) =>
-    splitIntoVoiceUnits(extractSentences(stripDetailsForSpeech(content)));
+///
+/// With [shortFirstClause] the first unit also ends at its sentence's first
+/// clause boundary when that sentence is long; see [splitFirstClause].
+List<String> getVoiceContentParts(
+  String content, {
+  bool shortFirstClause = false,
+}) => splitIntoVoiceUnits(
+  extractSentences(stripDetailsForSpeech(content)),
+  shortFirstClause: shortFirstClause,
+);
+
+/// A first sentence longer than this many words may lose its first clause as
+/// a unit of its own (see [splitFirstClause]).
+const int _voiceFirstClauseMinSentenceWords = 8;
+
+/// [sentence] cut at its first comma, semicolon, colon or spaced dash when it
+/// has more than eight words and the words before the cut number at least
+/// four; otherwise just the sentence. The cut keeps its punctuation with the
+/// clause, and the rest of the sentence is the second element.
+List<String> splitFirstClause(String sentence) {
+  final text = sentence.trim();
+  if (_wordCount(text) <= _voiceFirstClauseMinSentenceWords) return [text];
+  final match = RegExp(r'(?<=[,;:])\s+|\s+(?=[—–-]\s)').firstMatch(text);
+  if (match == null) return [text];
+  final first = text.substring(0, match.start).trim();
+  final rest = text.substring(match.end).trim();
+  if (rest.isEmpty || _wordCount(first) < _voiceClauseMinWords) return [text];
+  return [first, rest];
+}
 
 /// [sentences] (unmerged) as voice units; see [getVoiceContentParts].
-List<String> splitIntoVoiceUnits(List<String> sentences) {
+List<String> splitIntoVoiceUnits(
+  List<String> sentences, {
+  bool shortFirstClause = false,
+}) {
   final out = <String>[];
   final rest = <String>[];
   for (var i = 0; i < sentences.length; i++) {
     final sentence = sentences[i].trim();
     if (sentence.isEmpty) continue;
     if (out.isEmpty) {
-      out.add(sentence);
+      out.addAll(shortFirstClause ? splitFirstClause(sentence) : [sentence]);
     } else if (i <= _voiceClauseSentences) {
       out.addAll(splitSentenceIntoClauses(sentence));
     } else {

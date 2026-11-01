@@ -967,6 +967,14 @@ NativeAudioSheetParts buildNativeAudioSheetParts(
       value: appSettings.voiceBargeInEnabled,
     ),
     NativeSheetItemConfig(
+      id: 'voice-short-first-clause',
+      title: l10n.voiceShortFirstClause,
+      subtitle: l10n.voiceShortFirstClauseDescription,
+      sfSymbol: 'text.quote',
+      kind: NativeSheetItemKind.toggle,
+      value: appSettings.voiceShortFirstClause,
+    ),
+    NativeSheetItemConfig(
       id: 'voice-callkit',
       title: l10n.voiceShowAsPhoneCall,
       subtitle: l10n.voiceShowAsPhoneCallDescription,
