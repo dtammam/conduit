@@ -1367,7 +1367,7 @@
   "@ttsNextSentence": {
     "description": "Action to skip ahead one sentence while a message is read aloud"
   },
-  "shareAsMp3": "Share as MP3",
+  "shareAsMp3": "Share audio",
   "@shareAsMp3": {
     "description": "Action to render the whole assistant reply as speech and share the MP3 file"
   },
@@ -1388,15 +1388,15 @@
       }
     }
   },
-  "saveMp3ToFiles": "Save MP3 to Files",
+  "saveMp3ToFiles": "Save audio to Files",
   "@saveMp3ToFiles": {
     "description": "Action to render the whole assistant reply as speech and save the MP3 in the Files app"
   },
-  "shareAsMp3Preparing": "Making the MP3…",
+  "shareAsMp3Preparing": "Making the audio…",
   "@shareAsMp3Preparing": {
     "description": "Shown while the reply's MP3 is being rendered"
   },
-  "shareAsMp3PreparingEta": "Making the MP3, {eta}",
+  "shareAsMp3PreparingEta": "Making the audio, {eta}",
   "@shareAsMp3PreparingEta": {
     "description": "Shown while the reply's MP3 is rendered, with the server's estimate such as 'about 2 min'",
     "placeholders": {
@@ -1405,7 +1405,7 @@
       }
     }
   },
-  "shareAsMp3Failed": "Couldn't make the MP3: {error}",
+  "shareAsMp3Failed": "Couldn't make the audio: {error}",
   "@shareAsMp3Failed": {
     "description": "Shown when rendering the reply's MP3 failed",
     "placeholders": {

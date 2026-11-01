@@ -416,23 +416,33 @@ class _MessageMenuState extends State<_MessageMenu> {
   Widget _actionRow(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final spec = widget.spec;
-    return Row(
-      key: const ValueKey<String>('message-menu-actions'),
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        for (final action in spec.actions) _actionButton(context, action),
-        if (spec.more.isNotEmpty && spec.moreIcon != null)
-          _actionButton(
-            context,
-            MessageMenuAction(
-              id: 'more',
-              icon: spec.moreIcon!,
-              label: l10n.more,
-              onTap: () => setState(() => _showingMore = true),
+    final media = MediaQuery.of(context);
+    // The card never grows past the screen: the row scrolls sideways instead
+    // of clipping its last buttons, with an edge fade where more is hidden.
+    final maxWidth =
+        media.size.width -
+        media.padding.horizontal -
+        2 * Spacing.sm -
+        2 * Spacing.xxs;
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxWidth: maxWidth > 0 ? maxWidth : 0),
+      child: _ScrollingActionRow(
+        key: const ValueKey<String>('message-menu-actions'),
+        children: [
+          for (final action in spec.actions) _actionButton(context, action),
+          if (spec.more.isNotEmpty && spec.moreIcon != null)
+            _actionButton(
+              context,
+              MessageMenuAction(
+                id: 'more',
+                icon: spec.moreIcon!,
+                label: l10n.more,
+                onTap: () => setState(() => _showingMore = true),
+              ),
+              closesMenu: false,
             ),
-            closesMenu: false,
-          ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -546,6 +556,77 @@ class _MessageMenuState extends State<_MessageMenu> {
             },
           ),
       ],
+    );
+  }
+}
+
+/// A horizontally scrollable row of menu buttons. A soft fade on each edge
+/// that has more behind it shows the row scrolls.
+class _ScrollingActionRow extends StatefulWidget {
+  const _ScrollingActionRow({super.key, required this.children});
+
+  final List<Widget> children;
+
+  @override
+  State<_ScrollingActionRow> createState() => _ScrollingActionRowState();
+}
+
+class _ScrollingActionRowState extends State<_ScrollingActionRow> {
+  static const double _fade = 24;
+
+  final ScrollController _controller = ScrollController();
+  bool _fadeStart = false;
+  bool _fadeEnd = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.addListener(_update);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _update());
+  }
+
+  @override
+  void dispose() {
+    _controller.removeListener(_update);
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _update() {
+    if (!mounted || !_controller.hasClients) return;
+    final position = _controller.position;
+    final start = position.pixels > 1;
+    final end = position.pixels < position.maxScrollExtent - 1;
+    if (start != _fadeStart || end != _fadeEnd) {
+      setState(() {
+        _fadeStart = start;
+        _fadeEnd = end;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final row = SingleChildScrollView(
+      controller: _controller,
+      scrollDirection: Axis.horizontal,
+      child: Row(mainAxisSize: MainAxisSize.min, children: widget.children),
+    );
+    return ShaderMask(
+      blendMode: BlendMode.dstIn,
+      shaderCallback: (bounds) {
+        final fade = bounds.width <= 0 ? 0.0 : _fade / bounds.width;
+        return LinearGradient(
+          colors: [
+            _fadeStart ? const Color(0x00FFFFFF) : const Color(0xFFFFFFFF),
+            const Color(0xFFFFFFFF),
+            const Color(0xFFFFFFFF),
+            _fadeEnd ? const Color(0x00FFFFFF) : const Color(0xFFFFFFFF),
+          ],
+          stops: [0, fade, 1 - fade, 1],
+        ).createShader(bounds);
+      },
+      child: row,
     );
   }
 }

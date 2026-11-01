@@ -120,6 +120,41 @@ void main() {
     check(menuAction('regenerate').evaluate()).isEmpty();
   });
 
+  testWidgets('on a 390 px phone the row is in order and every action is '
+      'reachable', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      _app([_row(_assistant('a1', 'Hello there'), onReply: (_, _) {})]),
+    );
+    await tester.pumpAndSettle();
+    await openMessageMenu(tester);
+
+    const order = ['reply', 'copy', 'tts', 'share', 'share-mp3', 'more'];
+    for (final id in order) {
+      check(menuAction(id).evaluate()).length.equals(1);
+    }
+    final xs = [for (final id in order) tester.getTopLeft(menuAction(id)).dx];
+    for (var i = 1; i < xs.length; i++) {
+      check(xs[i]).isGreaterThan(xs[i - 1]);
+    }
+    // The card stays inside the screen; the row scrolls instead of clipping.
+    final card = tester.getRect(
+      find.byKey(const ValueKey('message-menu-actions')),
+    );
+    check(card.left).isGreaterOrEqual(0);
+    check(card.right).isLessOrEqual(390);
+    final last = menuAction('more');
+    // Scrolled into view, the last button is fully on screen and tappable.
+    await tester.ensureVisible(last);
+    await tester.pumpAndSettle();
+    check(tester.getRect(last).right).isLessOrEqual(card.right + 0.5);
+    await tester.tap(last);
+    await tester.pumpAndSettle();
+    check(menuAction('delete').evaluate()).length.equals(1);
+  });
+
   testWidgets('no action bar under the reply', (tester) async {
     await tester.pumpWidget(_app([_row(_assistant('a1', 'Hello there'))]));
     await tester.pumpAndSettle();

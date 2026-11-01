@@ -13,45 +13,42 @@ void main() {
         .setMockMethodCallHandler(channel, null);
   });
 
-  for (final variant in ['A', 'B', 'C']) {
-    test(
-      'Discord test $variant calls shareDiscordTest with the variant',
-      () async {
-        MethodCall? seen;
-        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-            .setMockMethodCallHandler(channel, (call) async {
-              seen = call;
-              return <String, Object?>{
-                'variant': variant,
-                'path': '/tmp/share/x.mp3',
-                'size': 12,
-                'completed': true,
-                'activityType': 'com.hammerandchisel.discord.Share',
-                'error': '',
-              };
-            });
-        final reply = await ReplyMp3Export.shareDiscordTest(
-          variant,
-          File('/tmp/in/x.mp3'),
-          origin: const Rect.fromLTWH(1, 2, 3, 4),
-        );
-        expect(seen!.method, 'shareDiscordTest');
-        final args = seen!.arguments as Map;
-        expect(args['variant'], variant);
-        expect(args['path'], '/tmp/in/x.mp3');
-        expect(args['x'], 1.0);
-        expect(args['h'], 4.0);
-        expect(reply!['completed'], true);
-        expect(reply['activityType'], contains('discord'));
-      },
-    );
-  }
+  test('toM4a goes through the native exportM4a call on iOS', () async {
+    // Platform.isIOS is false on the test host, so this checks the fallback:
+    // the MP3 comes back unchanged and no channel call is made.
+    final calls = <MethodCall>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          calls.add(call);
+          return '/tmp/share/x.m4a';
+        });
+    final out = await ReplyMp3Export.toM4a(File('/tmp/in/x.mp3'));
+    if (Platform.isIOS) {
+      expect(calls.single.method, 'exportM4a');
+      expect(out.path, '/tmp/share/x.m4a');
+    } else {
+      expect(calls, isEmpty);
+      expect(out.path, '/tmp/in/x.mp3');
+    }
+  });
 
-  test('Discord test returns null without a native side', () async {
-    final reply = await ReplyMp3Export.shareDiscordTest(
-      'A',
-      File('/tmp/in/x.mp3'),
+  test('shareFile on iOS sends the file path only', () async {
+    if (!Platform.isIOS) return;
+    MethodCall? seen;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          seen = call;
+          return <String, Object?>{
+            'completed': true,
+            'activityType': 'com.hammerandchisel.discord.Share',
+          };
+        });
+    final done = await ReplyMp3Export.shareFile(
+      File('/tmp/share/x.m4a'),
+      mimeType: 'audio/mp4',
     );
-    expect(reply, isNull);
+    expect(done, isTrue);
+    expect(seen!.method, 'shareAudioFile');
+    expect((seen!.arguments as Map)['path'], '/tmp/share/x.m4a');
   });
 }

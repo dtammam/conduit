@@ -1304,9 +1304,11 @@ void main() {
     expect(find.byIcon(Icons.volume_up_outlined), findsOneWidget);
   });
 
-  testWidgets('menu offers the temporary Discord share tests', (tester) async {
+  testWidgets('menu offers Share audio, labelled as audio not MP3', (
+    tester,
+  ) async {
     final message = ChatMessage(
-      id: 'assistant-discord-tests',
+      id: 'assistant-share-audio',
       role: 'assistant',
       content: 'Share this reply.',
       timestamp: DateTime(2024, 1, 1),
@@ -1319,12 +1321,9 @@ void main() {
 
     await openMessageMenu(tester);
     expect(menuAction('share-mp3'), findsOneWidget);
-    expect(menuAction('discord-test-a'), findsOneWidget);
-    expect(menuAction('discord-test-b'), findsOneWidget);
-    expect(menuAction('discord-test-c'), findsOneWidget);
-    expect(find.text('Discord test A (m4a)'), findsOneWidget);
-    expect(find.text('Discord test B (mp3 typed)'), findsOneWidget);
-    expect(find.text('Discord test C (mp3 from tmp)'), findsOneWidget);
+    expect(find.text('Share audio'), findsOneWidget);
+    expect(find.text('Share as MP3'), findsNothing);
+    expect(menuAction('discord-test-a'), findsNothing);
   });
 
   testWidgets(

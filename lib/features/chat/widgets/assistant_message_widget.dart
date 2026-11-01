@@ -39,8 +39,6 @@ import '../avatar/persona_appearance_service.dart';
 import '../services/tts_manager.dart';
 
 import 'package:conduit_core/features/chat/server_speech/server_speech_providers.dart';
-import 'package:dio/dio.dart' show Options;
-import 'package:conduit_core/features/chat/voice_mode/voice_event_log.dart';
 import 'package:conduit_core/features/direct_connections/providers/direct_connection_providers.dart';
 
 import 'message_action_menu.dart';
@@ -871,11 +869,10 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
   bool _isExportingMp3 = false;
 
   /// Renders the whole reply in the current voice and opens the share sheet
-  /// with the file (AirDrop, Messages, Files).
+  /// with an .m4a file (AirDrop, Messages, Discord, Files).
   Future<void> _handleShareMp3({
     bool saveToFiles = false,
     bool asVideo = false,
-    String? discordTest,
   }) async {
     if (_isExportingMp3) return;
     final l10n = AppLocalizations.of(context)!;
@@ -950,19 +947,19 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
           mimeType: 'video/mp4',
           origin: origin,
         );
-      } else if (discordTest != null) {
-        final reply = await ReplyMp3Export.shareDiscordTest(
-          discordTest,
-          exported.file,
-          origin: origin,
-        );
-        if (reply != null) await _logDiscordTest(reply);
       } else if (saveToFiles) {
-        await ReplyMp3Export.saveToFiles(exported.file);
+        await ReplyMp3Export.saveToFiles(
+          await ReplyMp3Export.toM4a(exported.file),
+        );
       } else {
+        // An .m4a shared as a plain file: Discord attaches it, an MP3 not.
+        final audio = await ReplyMp3Export.toM4a(exported.file);
+        if (!mounted) return;
         await ReplyMp3Export.shareFile(
-          exported.file,
-          mimeType: exported.mimeType,
+          audio,
+          mimeType: audio.path.endsWith('.m4a')
+              ? 'audio/mp4'
+              : exported.mimeType,
           origin: origin,
         );
       }
@@ -975,47 +972,6 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
       );
     } finally {
       if (mounted) setState(() => _isExportingMp3 = false);
-    }
-  }
-
-  /// TEMPORARY (Discord share tests): one log line per share with what iOS
-  /// reported, posted to the relay's voice-log when a Voice provider is set.
-  Future<void> _logDiscordTest(Map<String, Object?> reply) async {
-    DebugLogger.info('discord-share-test', scope: 'chat/share', data: reply);
-    try {
-      final voice = ref.read(directVoiceProviderProvider);
-      if (voice == null) return;
-      final pool = ref.read(directHttpClientPoolProvider);
-      final lease = pool.acquire(voice.profile);
-      try {
-        final url = voice.profile.requestBaseUri().replace(
-          path: '/musey/voice-log',
-          query: '',
-          fragment: '',
-        );
-        await lease.dio.postUri<Object?>(
-          url,
-          data: <String, Object?>{
-            'device': 'musey-ios',
-            'build': VoiceEventLog.instance.build,
-            'events': [
-              {
-                't': DateTime.now().millisecondsSinceEpoch,
-                'kind': 'discord-share-test',
-                ...reply,
-              },
-            ],
-          },
-          options: Options(
-            sendTimeout: const Duration(seconds: 5),
-            receiveTimeout: const Duration(seconds: 5),
-          ),
-        );
-      } finally {
-        lease.release();
-      }
-    } catch (_) {
-      // The log line is best effort.
     }
   }
 
@@ -1815,9 +1771,6 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
         id.isNotEmpty &&
         text.trim().isNotEmpty;
     final primary = <MessageMenuAction>[
-      ?fromFooter('discord-test-a'),
-      ?fromFooter('discord-test-b'),
-      ?fromFooter('discord-test-c'),
       if (canReply)
         MessageMenuAction(
           id: 'reply',
@@ -1839,15 +1792,7 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
       ?fromFooter('share-mp3'),
       ?fromFooter('share-video'),
     ];
-    const inPrimary = {
-      'copy',
-      'tts',
-      'share-mp3',
-      'share-video',
-      'discord-test-a',
-      'discord-test-b',
-      'discord-test-c',
-    };
+    const inPrimary = {'copy', 'tts', 'share-mp3', 'share-video'};
     return MessageMenuSpec(
       actions: primary,
       more: [
@@ -3022,45 +2967,6 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
                   !_isExportingMp3 &&
                   !contentActionsBlockedByStreaming
               ? () => unawaited(_handleShareMp3())
-              : null,
-          sfSymbol: 'square.and.arrow.up',
-        ),
-      if (shouldShowTtsButton)
-        _AssistantFooterAction(
-          id: 'discord-test-a',
-          icon: CupertinoIcons.square_arrow_up,
-          label: 'Discord test A (m4a)',
-          onTap:
-              _responseCompleted &&
-                  !_isExportingMp3 &&
-                  !contentActionsBlockedByStreaming
-              ? () => unawaited(_handleShareMp3(discordTest: 'A'))
-              : null,
-          sfSymbol: 'square.and.arrow.up',
-        ),
-      if (shouldShowTtsButton)
-        _AssistantFooterAction(
-          id: 'discord-test-b',
-          icon: CupertinoIcons.square_arrow_up,
-          label: 'Discord test B (mp3 typed)',
-          onTap:
-              _responseCompleted &&
-                  !_isExportingMp3 &&
-                  !contentActionsBlockedByStreaming
-              ? () => unawaited(_handleShareMp3(discordTest: 'B'))
-              : null,
-          sfSymbol: 'square.and.arrow.up',
-        ),
-      if (shouldShowTtsButton)
-        _AssistantFooterAction(
-          id: 'discord-test-c',
-          icon: CupertinoIcons.square_arrow_up,
-          label: 'Discord test C (mp3 from tmp)',
-          onTap:
-              _responseCompleted &&
-                  !_isExportingMp3 &&
-                  !contentActionsBlockedByStreaming
-              ? () => unawaited(_handleShareMp3(discordTest: 'C'))
               : null,
           sfSymbol: 'square.and.arrow.up',
         ),

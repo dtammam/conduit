@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:conduit_core/utils/debug_logger.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
@@ -242,9 +243,25 @@ class ReplyMp3Export {
     }
   }
 
-  /// Opens the share sheet with [file] as a real .mp3 file (iOS: an item
-  /// provider with the file's type and name, which Discord's extension reads;
-  /// elsewhere share_plus). Returns whether it was shared.
+  /// Converts the rendered MP3 to an AAC .m4a (iOS, AVAssetExportPresetAppleM4A,
+  /// staged in tmp/share/). Discord attaches an m4a shared as a plain file and
+  /// does not attach an MP3 (2026-11-01); iMessage takes m4a. Elsewhere, or on
+  /// an older native side, the MP3 comes back unchanged.
+  static Future<File> toM4a(File file) async {
+    if (!Platform.isIOS) return file;
+    try {
+      final path = await _channel.invokeMethod<String>('exportM4a', {
+        'path': file.path,
+      });
+      return path == null ? file : File(path);
+    } on MissingPluginException {
+      return file;
+    }
+  }
+
+  /// Opens the share sheet with [file] as a plain file (iOS: a file URL only,
+  /// which Discord's extension reads; elsewhere share_plus). Logs what iOS
+  /// reported (activityType, completed). Returns whether it was shared.
   static Future<bool> shareFile(
     File file, {
     required String mimeType,
@@ -253,17 +270,30 @@ class ReplyMp3Export {
   }) async {
     if (Platform.isIOS) {
       try {
-        final done = await _channel.invokeMethod<bool>('shareAudioFile', {
-          'path': file.path,
-          'title': ?title,
-          if (origin != null) ...{
-            'x': origin.left,
-            'y': origin.top,
-            'w': origin.width,
-            'h': origin.height,
+        final done = await _channel.invokeMapMethod<String, Object?>(
+          'shareAudioFile',
+          {
+            'path': file.path,
+            'title': ?title,
+            if (origin != null) ...{
+              'x': origin.left,
+              'y': origin.top,
+              'w': origin.width,
+              'h': origin.height,
+            },
           },
-        });
-        return done ?? false;
+        );
+        final completed = done?['completed'] == true;
+        DebugLogger.info(
+          'share-result',
+          scope: 'chat/share',
+          data: {
+            'completed': completed,
+            'activityType': done?['activityType'] ?? '',
+            'file': file.uri.pathSegments.last,
+          },
+        );
+        return completed;
       } on MissingPluginException {
         // An older native side: share_plus below.
       }
@@ -281,34 +311,5 @@ class ReplyMp3Export {
       ),
     );
     return result.status == ShareResultStatus.success;
-  }
-
-  /// TEMPORARY (Discord share tests, 2026-11-01): opens the share sheet for
-  /// [variant] 'A' (m4a), 'B' (mp3 through a typed item source) or 'C' (mp3
-  /// from tmp). Returns what iOS reported: variant, path, size, completed,
-  /// activityType, error. Null where there is no native side.
-  static Future<Map<String, Object?>?> shareDiscordTest(
-    String variant,
-    File file, {
-    Rect? origin,
-  }) async {
-    try {
-      final reply = await _channel.invokeMapMethod<String, Object?>(
-        'shareDiscordTest',
-        {
-          'variant': variant,
-          'path': file.path,
-          if (origin != null) ...{
-            'x': origin.left,
-            'y': origin.top,
-            'w': origin.width,
-            'h': origin.height,
-          },
-        },
-      );
-      return reply;
-    } on MissingPluginException {
-      return null;
-    }
   }
 }
