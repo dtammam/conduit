@@ -5,6 +5,7 @@ import 'package:conduit_core/database/mappers/chat_blob_mapper.dart';
 import 'package:conduit_core/database/mappers/conversation_assembler.dart';
 
 import 'package:conduit_core/utils/debug_logger.dart';
+import 'package:conduit_core/features/chat/voice_mode/voice_event_log.dart';
 
 import 'package:conduit_core/sync/chat_locks.dart';
 
@@ -211,7 +212,11 @@ class PushSync {
       final rows = chatRowsFromDb(chat, messages);
       final blob = ChatBlobMapper.rowsToBlob(rows);
 
+      final savedWatch = Stopwatch()..start();
       final resp = await _client.updateChat(chatId, blob);
+      VoiceEventLog.instance.add('chat-saved', {
+        'ms': savedWatch.elapsedMilliseconds,
+      });
       if (resp == null) {
         // 404: chat gone server-side. Phase 2 treats this as terminal (log +
         // let the drainer markDone); Phase 3 reconciles.

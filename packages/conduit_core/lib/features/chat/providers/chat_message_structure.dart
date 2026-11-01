@@ -295,9 +295,17 @@ Future<String?> _ensureConnectedSocketSessionId(
   }
 
   if (!socketService.isConnected) {
+    final watch = Stopwatch()..start();
     try {
       await socketService.ensureConnected(timeout: timeout);
+      VoiceEventLog.instance.add('socket-wait', {
+        'ms': watch.elapsedMilliseconds,
+      });
     } catch (e) {
+      VoiceEventLog.instance.add('socket-wait', {
+        'ms': watch.elapsedMilliseconds,
+        'failed': true,
+      });
       DebugLogger.log(
         'Socket reconnect before chat send failed: $e',
         scope: 'chat/providers',

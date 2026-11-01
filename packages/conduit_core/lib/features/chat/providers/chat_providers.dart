@@ -99,6 +99,7 @@ import 'package:conduit_core/services/openwebui_stream_parser.dart';
 import 'package:conduit_core/services/connectivity_service.dart'
     show isOnlineProvider;
 import 'package:conduit_core/services/location_service.dart';
+import 'package:conduit_core/features/chat/voice_mode/voice_event_log.dart';
 
 import 'package:conduit_core/services/settings_service.dart';
 import 'package:conduit_core/services/socket_service.dart';

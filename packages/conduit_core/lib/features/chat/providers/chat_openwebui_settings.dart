@@ -154,8 +154,25 @@ typedef OpenWebUiGlobalSettings = ({
 /// Keyed by server and user: another account on the same server, or the same
 /// account on another server, never reads it.
 final class OpenWebUiUserSettingsCache {
+  OpenWebUiUserSettingsCache({DateTime Function()? clock})
+    : _clock = clock ?? DateTime.now;
+
+  final DateTime Function() _clock;
+
   final Map<String, OpenWebUiGlobalSettings> _entries =
       <String, OpenWebUiGlobalSettings>{};
+
+  /// The raw settings document each admitted turn was sent with, by assistant
+  /// message id, so the completion for that same turn does not read it again.
+  final Map<String, _TimedSettings> _admitted = <String, _TimedSettings>{};
+
+  /// A voice call's read-ahead of the account's settings, and its in-flight
+  /// read. Used only by voice sends, and only while fresh.
+  _PrewarmedSettings? _prewarmed;
+  Future<void>? _prewarmInFlight;
+
+  /// A voice call's read-ahead of the device location (auto-refresh only).
+  _PrewarmedLocation? _prewarmedLocation;
 
   OpenWebUiGlobalSettings? recall(String ownerKey) => _entries[ownerKey];
 
@@ -169,6 +186,109 @@ final class OpenWebUiUserSettingsCache {
       systemPrompt: _extractSystemPromptFromSettings(settings),
     );
   }
+
+  /// Notes the raw settings an admitted turn was sent with.
+  void stashAdmitted(String assistantMessageId, Map<String, dynamic> raw) {
+    _admitted[assistantMessageId] = _TimedSettings(raw, _clock());
+    while (_admitted.length > 8) {
+      _admitted.remove(_admitted.keys.first);
+    }
+  }
+
+  /// The raw settings the turn was admitted with, once, when they are younger
+  /// than [maxAge]; null when none, or too old (the caller then reads fresh).
+  Map<String, dynamic>? takeAdmitted(
+    String assistantMessageId, {
+    Duration maxAge = kVoicePrewarmMaxAge,
+  }) {
+    final entry = _admitted.remove(assistantMessageId);
+    if (entry == null) return null;
+    if (_clock().difference(entry.at) > maxAge) return null;
+    return entry.raw;
+  }
+
+  /// Reads the account's settings ahead of a voice turn. Never throws; does
+  /// nothing while a read is already under way.
+  Future<void> prewarm(
+    String ownerKey,
+    Future<Map<String, dynamic>> Function() fetch,
+  ) {
+    final running = _prewarmInFlight;
+    if (running != null) return running;
+    final watch = Stopwatch()..start();
+    final future = () async {
+      try {
+        final raw = await fetch();
+        _prewarmed = _PrewarmedSettings(ownerKey, raw, _clock());
+        VoiceEventLog.instance.add('settings-fetched', {
+          'ms': watch.elapsedMilliseconds,
+          'source': 'prewarm',
+        });
+      } catch (_) {
+        // Admission reads on its own when nothing was prewarmed.
+      }
+    }();
+    _prewarmInFlight = future;
+    return future.whenComplete(() {
+      if (identical(_prewarmInFlight, future)) _prewarmInFlight = null;
+    });
+  }
+
+  /// The prewarmed settings for [ownerKey] if younger than [maxAge]; waits for
+  /// a read already under way, up to [wait].
+  Future<Map<String, dynamic>?> freshPrewarmed(
+    String ownerKey, {
+    Duration maxAge = kVoicePrewarmMaxAge,
+    Duration wait = const Duration(seconds: 3),
+  }) async {
+    final running = _prewarmInFlight;
+    if (running != null) {
+      try {
+        await running.timeout(wait);
+      } catch (_) {}
+    }
+    final entry = _prewarmed;
+    if (entry == null || entry.ownerKey != ownerKey) return null;
+    if (_clock().difference(entry.at) > maxAge) return null;
+    return entry.raw;
+  }
+
+  void rememberLocation(String ownerKey, String location) {
+    _prewarmedLocation = _PrewarmedLocation(ownerKey, location, _clock());
+  }
+
+  String? freshLocation(
+    String ownerKey, {
+    Duration maxAge = kVoicePrewarmMaxAge,
+  }) {
+    final entry = _prewarmedLocation;
+    if (entry == null || entry.ownerKey != ownerKey) return null;
+    if (_clock().difference(entry.at) > maxAge) return null;
+    return entry.location;
+  }
+}
+
+/// How old a voice call's read-ahead may be when a turn uses it.
+const Duration kVoicePrewarmMaxAge = Duration(seconds: 20);
+
+final class _TimedSettings {
+  const _TimedSettings(this.raw, this.at);
+  final Map<String, dynamic> raw;
+  final DateTime at;
+}
+
+final class _PrewarmedSettings {
+  const _PrewarmedSettings(this.ownerKey, this.raw, this.at);
+  final String ownerKey;
+  final Map<String, dynamic> raw;
+  final DateTime at;
+}
+
+final class _PrewarmedLocation {
+  const _PrewarmedLocation(this.ownerKey, this.location, this.at);
+  final String ownerKey;
+  final String location;
+  final DateTime at;
 }
 
 final openWebUiUserSettingsCacheProvider = Provider<OpenWebUiUserSettingsCache>(
@@ -220,6 +340,8 @@ Future<OpenWebUiGlobalSettings> _captureAdmissionGlobalSettings(
   dynamic ref, {
   required ChatMutationOwnerToken owner,
   required String? ownerKey,
+  String? assistantMessageId,
+  bool usePrewarmed = false,
 }) async {
   const unknown = (
     params: <String, dynamic>{},
@@ -240,10 +362,29 @@ Future<OpenWebUiGlobalSettings> _captureAdmissionGlobalSettings(
   }
   if (online) {
     try {
-      final settings = await api
-          .getUserSettings(authSnapshot: owner.openWebUiAuthSnapshot)
-          .timeout(_kAdmissionSettingsTimeout);
+      Map<String, dynamic>? settings;
+      if (usePrewarmed) {
+        settings = await cache?.freshPrewarmed(ownerKey);
+      }
+      if (settings == null) {
+        final watch = Stopwatch()..start();
+        settings = await api
+            .getUserSettings(authSnapshot: owner.openWebUiAuthSnapshot)
+            .timeout(_kAdmissionSettingsTimeout);
+        VoiceEventLog.instance.add('settings-fetched', {
+          'ms': watch.elapsedMilliseconds,
+          'source': 'admission',
+        });
+      } else {
+        VoiceEventLog.instance.add('settings-fetched', {
+          'ms': 0,
+          'source': 'prewarmed',
+        });
+      }
       cache?.remember(ownerKey, settings);
+      if (assistantMessageId != null) {
+        cache?.stashAdmitted(assistantMessageId, settings);
+      }
       return (
         params: openWebUiGlobalParamsFromSettings(settings) ??
             const <String, dynamic>{},
@@ -254,6 +395,78 @@ Future<OpenWebUiGlobalSettings> _captureAdmissionGlobalSettings(
     }
   }
   return cache?.recall(ownerKey) ?? unknown;
+}
+
+/// The raw settings document the turn with [assistantMessageId] was admitted
+/// with, once and while fresh; null when there is none to reuse.
+Map<String, dynamic>? _takeAdmittedOpenWebUiSettings(
+  dynamic ref,
+  String assistantMessageId,
+) {
+  try {
+    return (ref.read(openWebUiUserSettingsCacheProvider)
+            as OpenWebUiUserSettingsCache)
+        .takeAdmitted(assistantMessageId);
+  } catch (_) {
+    return null;
+  }
+}
+
+/// Starts, without waiting, the reads a voice turn will need once the user
+/// stops talking: the account's settings, the socket, and the location when the
+/// account has auto-refresh on. Safe to call often; never throws.
+void prewarmVoiceTurn(dynamic ref) {
+  try {
+    final api = ref.read(apiServiceProvider);
+    if (api is! ApiService) return;
+    final ownerKey = _openWebUiSettingsOwnerKey(ref, api);
+    if (ownerKey == null) return;
+    final cache =
+        ref.read(openWebUiUserSettingsCacheProvider)
+            as OpenWebUiUserSettingsCache;
+    final owner = captureChatMutationOwner(
+      ref,
+      ref.read(activeConversationProvider),
+    );
+    final authSnapshot = owner.openWebUiAuthSnapshot;
+    final socketService = _readOpenWebUiSocketForApi(ref, api);
+    if (socketService != null && !socketService.isConnected) {
+      unawaited(_ensureConnectedSocketSessionId(socketService));
+    }
+    unawaited(
+      cache
+          .prewarm(
+            ownerKey,
+            () => api
+                .getUserSettings(authSnapshot: authSnapshot)
+                .timeout(_kAdmissionSettingsTimeout),
+          )
+          .then((_) async {
+            final raw = await cache.freshPrewarmed(
+              ownerKey,
+              wait: Duration.zero,
+            );
+            if (raw == null ||
+                !extractUserLocationSetting(raw).autoRefreshEnabled) {
+              return;
+            }
+            final watch = Stopwatch()..start();
+            final result = await (ref.read(locationServiceProvider)
+                    as LocationService)
+                .refreshAndSyncUserLocation(api);
+            VoiceEventLog.instance.add('location-refresh', {
+              'ms': watch.elapsedMilliseconds,
+              'source': 'prewarm',
+            });
+            if (result.hasLocation) {
+              cache.rememberLocation(ownerKey, result.location!.trim());
+            }
+          })
+          .catchError((_) {}),
+    );
+  } catch (_) {
+    // A read-ahead is only ever a head start.
+  }
 }
 
 /// The settings one Open WebUI turn is sent with, captured under its owner.

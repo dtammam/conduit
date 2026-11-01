@@ -495,6 +495,8 @@ Future<void> durableSend(
       ref,
       owner: sendMutationOwner,
       ownerKey: settingsOwnerKey,
+      assistantMessageId: assistantMessageId,
+      usePrewarmed: isVoiceMode,
     );
     RequestCompletionPayload completionFor(
       Map<String, dynamic> chatParams, {

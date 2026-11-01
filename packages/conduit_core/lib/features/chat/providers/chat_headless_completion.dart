@@ -63,8 +63,21 @@ Future<void> runQueuedCompletion(
 
   Map<String, dynamic>? userSettingsData;
   String? userSystemPrompt;
+  // The turn's own admission already read the account's settings a moment ago
+  // (and a voice call may have read them before that): the same document is
+  // used while it is under 20 s old, otherwise it is read again as before.
   try {
-    userSettingsData = await api.getUserSettings();
+    final admitted = _takeAdmittedOpenWebUiSettings(ref, assistantMessageId);
+    if (admitted != null) {
+      userSettingsData = admitted;
+    } else {
+      final watch = Stopwatch()..start();
+      userSettingsData = await api.getUserSettings();
+      VoiceEventLog.instance.add('settings-fetched', {
+        'ms': watch.elapsedMilliseconds,
+        'source': 'completion',
+      });
+    }
     userSystemPrompt = _extractSystemPromptFromSettings(userSettingsData);
   } catch (_) {}
   requireActiveOwner();
@@ -220,6 +233,7 @@ Future<void> runQueuedCompletion(
       messageId: assistantMessageId,
       admitted: admittedToolServers,
     );
+    VoiceEventLog.instance.add('completion-post');
     final session = await api.sendMessageSession(
       messages: requestMessages,
       model: effectiveModelId,

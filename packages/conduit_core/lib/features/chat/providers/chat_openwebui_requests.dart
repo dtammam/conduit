@@ -296,10 +296,35 @@ Future<Map<String, dynamic>> _buildOpenWebUiPromptVariablesForRequest(
   try {
     final locationService = ref.read(locationServiceProvider);
     final api = ref.read(apiServiceProvider);
-    userLocation = await locationService.resolveLocationForUserSettings(
-      userSettings,
-      api: api,
-    );
+    // A voice call may have refreshed the location moments ago; reuse it
+    // while it is under 20 s old.
+    String? prewarmed;
+    if (extractUserLocationSetting(userSettings).autoRefreshEnabled) {
+      try {
+        final key = _openWebUiSettingsOwnerKey(ref, api);
+        if (key != null) {
+          prewarmed =
+              (ref.read(openWebUiUserSettingsCacheProvider)
+                      as OpenWebUiUserSettingsCache)
+                  .freshLocation(key);
+        }
+      } catch (_) {}
+    }
+    if (prewarmed != null) {
+      userLocation = prewarmed;
+    } else {
+      final watch = Stopwatch()..start();
+      userLocation = await locationService.resolveLocationForUserSettings(
+        userSettings,
+        api: api,
+      );
+      if (extractUserLocationSetting(userSettings).autoRefreshEnabled) {
+        VoiceEventLog.instance.add('location-refresh', {
+          'ms': watch.elapsedMilliseconds,
+          'source': 'completion',
+        });
+      }
+    }
   } catch (error, stackTrace) {
     DebugLogger.error(
       'Failed to resolve user location',

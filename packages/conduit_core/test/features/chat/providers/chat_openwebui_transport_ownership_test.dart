@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:checks/checks.dart';
+import 'package:conduit_core/models/server_user_settings.dart';
 import 'package:conduit_core/database/app_database.dart';
 import 'package:conduit_core/database/chat_database_repository.dart';
 import 'package:conduit_core/database/database_provider.dart';
@@ -853,6 +854,13 @@ class _RemappingSyncEngine extends _PersistingSyncEngine {
       RemapEvent(fromId: localId, toId: 'server-chat', entityKind: 'chat'),
     );
   }
+}
+
+class _QuietPersonalization extends PersonalizationSettings {
+  @override
+  Future<ServerUserSettings> build() async => ServerUserSettings.fromJson(
+    const <String, dynamic>{},
+  );
 }
 
 /// Answers the title and tag tasks, and notes what is written back.
@@ -3384,6 +3392,8 @@ void main() {
           bool online = true,
           User account = user,
           Map<String, dynamic>? storedParams,
+          bool voice = false,
+          Future<void> Function(ProviderContainer)? beforeSend,
         }) async {
           await _seedChat(db, chatId, storedParams: storedParams);
           final messages = <ChatMessage>[_user('u0', 'earlier')];
@@ -3397,10 +3407,16 @@ void main() {
               isOnlineProvider.overrideWithValue(online),
               currentUserProvider2.overrideWithValue(account),
               openWebUiUserSettingsCacheProvider.overrideWithValue(cache),
+              // A screen's own settings read, once per session, is not the
+              // send's and must not count in what these tests measure.
+              personalizationSettingsProvider.overrideWith(
+                _QuietPersonalization.new,
+              ),
             ],
           );
           addTearDown(container.dispose);
-          await durableSend(container, 'queued turn', null);
+          await beforeSend?.call(container);
+          await durableSend(container, 'queued turn', null, isVoiceMode: voice);
           return container;
         }
 
@@ -3470,6 +3486,107 @@ void main() {
             check(api.sentSystem).equals('Prompt at send');
           },
         );
+
+        group('a voice turn reads the account settings as little as it can', () {
+          // The request a replay sends, without the ids a fresh turn mints.
+          Map<String, dynamic> shape(Map<String, dynamic> body) {
+            Object? strip(Object? v) {
+              if (v is Map) {
+                return {
+                  for (final e in v.entries)
+                    if (!const <Object?>{
+                      'id',
+                      'session_id',
+                      'message_id',
+                      'chat_id',
+                      'parent_id',
+                      'parentId',
+                      'timestamp',
+                      'childrenIds',
+                      'parent',
+                    }.contains(e.key))
+                      e.key: strip(e.value),
+                };
+              }
+              if (v is List) return [for (final e in v) strip(e)];
+              return v;
+            }
+
+            return Map<String, dynamic>.from(strip(body) as Map);
+          }
+
+          var runs = 0;
+
+          Future<({int reads, Map<String, dynamic> body, String op})> turn({
+            bool voice = false,
+            bool prewarm = false,
+            Duration age = Duration.zero,
+          }) async {
+            final turnChat = 'voice-chat-${runs++}';
+            var now = DateTime.utc(2026, 11, 1, 12);
+            final cache = OpenWebUiUserSettingsCache(clock: () => now);
+            final api = _WireCompletionApi(
+              settings: settingsDoc(temperature: 0.4, system: 'Same prompt'),
+            );
+            final container = await admit(
+              api: api,
+              chatId: turnChat,
+              cache: cache,
+              voice: voice,
+              storedParams: {'seed': 5},
+              beforeSend: (c) async {
+                if (!prewarm) return;
+                prewarmVoiceTurn(c);
+                await Future<void>.delayed(const Duration(milliseconds: 100));
+                now = now.add(age);
+              },
+            );
+            final op = completionOf(await pendingOps(turnChat)).chatSettings!;
+            await replayQueued(container, turnChat);
+            return (
+              reads: api.settingsReads,
+              body: shape(api.sentBody),
+              op: jsonEncode(op.toJson()),
+            );
+          }
+
+          test('a cold turn reads once, not twice', () async {
+            final cold = await turn(voice: true);
+            check(cold.reads).equals(1);
+          });
+
+          test('a prewarmed turn reads none of its own', () async {
+            final warm = await turn(voice: true, prewarm: true);
+            // The one read is the prewarm itself.
+            check(warm.reads).equals(1);
+          });
+
+          test('a prewarm older than 20 s is read again', () async {
+            final stale = await turn(
+              voice: true,
+              prewarm: true,
+              age: const Duration(seconds: 21),
+            );
+            check(stale.reads).equals(2);
+          });
+
+          test('the request and the admitted settings are the same with and '
+              'without the prewarm', () async {
+            final cold = await turn(voice: true);
+            final warm = await turn(voice: true, prewarm: true);
+            check(warm.body).deepEquals(cold.body);
+            check(warm.op).equals(cold.op);
+          });
+
+          test('a text chat ignores the prewarm and still reads once', () async {
+            final text = await turn(prewarm: true);
+            // The prewarm, then the send's own read; the completion adds none.
+            check(text.reads).equals(2);
+            final plain = await turn();
+            check(plain.reads).equals(1);
+            check(text.body).deepEquals(plain.body);
+          });
+        });
 
         test('a chat prompt of its own is frozen the same way', () async {
           final api = _WireCompletionApi(

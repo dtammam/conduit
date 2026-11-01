@@ -1516,6 +1516,7 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
     if (!_isCurrent(token)) return;
 
     _currentTranscript = '';
+    _prewarmForNextTurn(minGap: Duration.zero);
     state = state.copyWith(
       phase: ChatVoiceModePhase.listening,
       transcript: '',
@@ -1597,6 +1598,13 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
     if (!_isCurrent(token) || state.isMuted) return;
 
     _currentTranscript = event.text;
+    if (!event.isFinal &&
+        event.text.trim().isNotEmpty &&
+        state.phase == ChatVoiceModePhase.listening) {
+      // Speech has started: read ahead what the send will need, unless the
+      // listening phase just did.
+      _prewarmForNextTurn(minGap: const Duration(seconds: 5));
+    }
     if (state.isActive && state.phase != ChatVoiceModePhase.paused) {
       state = state.copyWith(transcript: event.text);
     }
@@ -1917,8 +1925,22 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
     }
   }
 
+  DateTime? _lastTurnPrewarmAt;
+
+  /// Starts, in the background, the settings, socket and location reads the
+  /// next send will use. Not awaited; a failure only means the send reads them
+  /// itself, as it always did.
+  void _prewarmForNextTurn({required Duration minGap}) {
+    final last = _lastTurnPrewarmAt;
+    final now = DateTime.now();
+    if (last != null && now.difference(last) < minGap) return;
+    _lastTurnPrewarmAt = now;
+    prewarmVoiceTurn(ref);
+  }
+
   Future<void> _sendTranscript(String transcript, int token) async {
     if (!_isCurrent(token)) return;
+    VoiceEventLog.instance.add('send-start');
 
     try {
       final input = _voiceInput!;
@@ -1978,6 +2000,7 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
       await _backgroundCoordinator?.keepAlive();
       if (!_isCurrent(token)) return;
       final selectedToolIds = ref.read(selectedToolIdsProvider);
+      VoiceEventLog.instance.add('durable-send');
       await durableSend(
         ref,
         transcript,
