@@ -408,8 +408,11 @@ void main() {
     final nameSize = tester.getSize(
       find.byKey(const ValueKey('assistant-avatar-pill-name')),
     );
-    check(size.width).equals(nameSize.width + 2 * Spacing.md + 2);
-    check(size.height).equals(Spacing.xl + Spacing.xs);
+    // The compact pill that tucks over the circle's edge (2026-11-01): equal
+    // side padding so the name is centered, and the 24 point idle height.
+    check(size.width)
+        .equals(nameSize.width + 2 * (Spacing.sm + Spacing.xxs) + 2);
+    check(size.height).equals(24.0);
     final decoration =
         tester.widget<Container>(pillSurface).decoration! as BoxDecoration;
     check(decoration.color).isNull();
@@ -469,5 +472,19 @@ void main() {
         tester.widget<Container>(pillSurface).decoration! as BoxDecoration;
     check(decoration.color).equals(theme.surfaceContainerHighest);
     check(decoration.border).equals(Border.all(color: theme.cardBorder));
+  });
+
+  testWidgets('the name pill is centered on the circle and tucks over its '
+      'bottom edge', (tester) async {
+    await mount(tester, onNamePressed: () {});
+    final circle = tester.getRect(
+      find.byKey(const ValueKey('assistant-avatar-circle')),
+    );
+    final pill = tester.getRect(pillSurface);
+    // Muse's effect (2026-11-01): the pill's middle on the circle's edge.
+    check(pill.center.dy).equals(circle.bottom);
+    check(pill.center.dx).equals(circle.center.dx);
+    // And it still opens the picker.
+    await tester.tap(pillSurface);
   });
 }
