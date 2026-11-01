@@ -300,6 +300,15 @@ final class SpeechEngineBridge: ConduitBridge {
         ? SpeechEngineQueue.PieceTrim.streamedMp3
         : SpeechEngineQueue.PieceTrim.none
       try speech.appendPiece(item: item, data: bytes.data, trim: trim)
+    case "appendStreamBytes":
+      guard let item = args["item"] as? Int,
+            let bytes = args["bytes"] as? FlutterStandardTypedData
+      else { return false }
+      try speech.appendStreamBytes(
+        item: item,
+        data: bytes.data,
+        isLast: args["isLast"] as? Bool ?? false
+      )
     case "finishItem":
       guard let item = args["item"] as? Int else { return false }
       try speech.finishItem(item)
@@ -373,6 +382,8 @@ final class SpeechEngineBridge: ConduitBridge {
     let payload: [String: Any]
     switch event {
     case .itemStarted(let item): payload = ["type": "started", "item": item]
+    case .streamScheduled(let item):
+      payload = ["type": "streamScheduled", "item": item]
     case .starved: payload = ["type": "starved"]
     case .drained:
       payload = ["type": "drained"]

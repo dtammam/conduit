@@ -38,6 +38,9 @@ final class SpeechEngineQueue {
   enum Event {
     /// Item [index] began playing.
     case itemStarted(Int)
+    /// The first audio of a continuous stream (item [index]) was scheduled
+    /// on the player.
+    case streamScheduled(Int)
     /// Everything scheduled has played and more is still expected.
     case starved
     /// Every item is finished and has played.
@@ -67,6 +70,10 @@ final class SpeechEngineQueue {
   }
 
   private var items: [Item] = []
+  /// Continuous streams being decoded, by item; and the items that came as
+  /// one, whose first buffer is announced when it is scheduled.
+  private var streams: [Int: Mp3StreamDecoder] = [:]
+  private var streamItems: Set<Int> = []
   /// The item whose buffers are being scheduled now.
   private var scheduleItem = 0
   /// How many buffers of [scheduleItem] are scheduled.
@@ -107,6 +114,8 @@ final class SpeechEngineQueue {
       generation += 1
       try Self.objc { self.player.stop() }
       items.removeAll()
+      streams.removeAll()
+      streamItems.removeAll()
       scheduleItem = 0
       scheduledInItem = 0
       outstanding = 0
@@ -157,6 +166,41 @@ final class SpeechEngineQueue {
         let index = fadeIn ? i : total - 1 - i
         data[c][index] *= gain
       }
+    }
+  }
+
+  /// Adds [data], the next bytes of one continuous MP3 body, to item [index];
+  /// [isLast] says the body has ended ([data] may then be empty).
+  ///
+  /// The bytes are parsed and decoded as they arrive ([Mp3StreamDecoder]) and
+  /// the audio is scheduled in blocks of about 0.1 s, the first as soon as it
+  /// is decoded, so the sentence starts before its clip is complete. The
+  /// encoder's delay and padding are cut from the header (or the default).
+  /// The item is finished by [isLast]. Pieces of other items are unaffected.
+  func appendStreamBytes(item index: Int, data: Data, isLast: Bool) throws {
+    let decoder = queue.sync { () -> Mp3StreamDecoder in
+      if let existing = streams[index] { return existing }
+      let created = Mp3StreamDecoder(outputFormat: format)
+      streams[index] = created
+      streamItems.insert(index)
+      return created
+    }
+    let buffers = try Self.objc { try decoder.feed(data, last: isLast) }
+    try queue.sync {
+      ensureItem(index)
+      if isLast { streams[index] = nil }
+      for (i, buffer) in buffers.enumerated() {
+        if items[index].buffers.isEmpty {
+          Self.fade(buffer, in: true, seconds: Self.fadeIn)
+        }
+        if isLast, i == buffers.count - 1 {
+          Self.fade(buffer, in: false, seconds: Self.fadeOut)
+        }
+        items[index].buffers.append(buffer)
+      }
+      if isLast { items[index].finished = true }
+      try scheduleReady()
+      if isLast { reportIfIdle() }
     }
   }
 
@@ -598,6 +642,7 @@ final class SpeechEngineQueue {
       }
     }
     outstanding += 1
+    if first, streamItems.contains(item) { onEvent?(.streamScheduled(item)) }
     if first {
       // The item starts when everything scheduled before it has played.
       if outstanding == 1 {

@@ -163,6 +163,134 @@ int? mp3FrameLength(Uint8List d, int at) {
   return (v1 ? 144 : 72) * bitrate ~/ sampleRate + padding;
 }
 
+/// What an MP3 body is, as far as its first bytes show.
+enum Mp3BodyKind {
+  /// Not enough bytes yet.
+  undecided,
+
+  /// One continuous MP3 (an ffmpeg stream): decoded as it arrives.
+  continuous,
+
+  /// Files back to back, each with an ID3 tag of its own and, for a file
+  /// written to a pipe, a placeholder where the Xing/Info header would be:
+  /// cut at the tags ([Mp3PieceSplitter]).
+  pieces,
+}
+
+/// Tells a continuous MP3 body from back-to-back files by its first frame.
+///
+/// A file an encoder wrote to a pipe opens with a placeholder frame: silent,
+/// with "LAME..." (or nothing) where an Xing/Info tag would be. A real Info
+/// or Xing frame, or a first frame of audio, is the start of one continuous
+/// body. [ended] says no more bytes will come; a body that stops before it
+/// can be told apart is [Mp3BodyKind.pieces], as it always was.
+Mp3BodyKind classifyMp3Body(List<int> head, {bool ended = false}) {
+  final fallback = ended ? Mp3BodyKind.pieces : Mp3BodyKind.undecided;
+  var at = 0;
+  if (head.length >= 3 &&
+      head[0] == 0x49 &&
+      head[1] == 0x44 &&
+      head[2] == 0x33) {
+    if (head.length < 10) return fallback;
+    final size =
+        (head[6] & 0x7f) << 21 |
+        (head[7] & 0x7f) << 14 |
+        (head[8] & 0x7f) << 7 |
+        (head[9] & 0x7f);
+    at = 10 + size + ((head[5] & 0x10) != 0 ? 10 : 0);
+  }
+  if (head.length < at + 4) return fallback;
+  if (head[at] != 0xff || (head[at + 1] & 0xe0) != 0xe0) {
+    return Mp3BodyKind.pieces;
+  }
+  final v1 = ((head[at + 1] >> 3) & 3) == 3;
+  final mono = ((head[at + 3] >> 6) & 3) == 3;
+  final crc = (head[at + 1] & 1) == 0 ? 2 : 0;
+  final side = v1 ? (mono ? 17 : 32) : (mono ? 9 : 17);
+  final tag = at + 4 + crc + side;
+  if (head.length < tag + 4) return fallback;
+  final name = String.fromCharCodes(head.sublist(tag, tag + 4));
+  if (name == 'Xing' || name == 'Info') return Mp3BodyKind.continuous;
+  if (name == 'LAME' || name == 'Lavf' || name == 'Lavc') {
+    return Mp3BodyKind.pieces;
+  }
+  if (head[tag] == 0 &&
+      head[tag + 1] == 0 &&
+      head[tag + 2] == 0 &&
+      head[tag + 3] == 0) {
+    return Mp3BodyKind.pieces;
+  }
+  return Mp3BodyKind.continuous;
+}
+
+/// A part of a streamed MP3 body, ready for the player.
+sealed class Mp3Route {
+  const Mp3Route(this.bytes);
+  final Uint8List bytes;
+}
+
+/// Bytes of one continuous body, to decode as they come.
+final class Mp3ContinuousBytes extends Mp3Route {
+  const Mp3ContinuousBytes(super.bytes);
+}
+
+/// One whole file out of a body made of files.
+final class Mp3FilePiece extends Mp3Route {
+  const Mp3FilePiece(super.bytes);
+}
+
+/// Sends each part of a streamed MP3 body down the path that suits it: a
+/// continuous body's bytes straight through, a body of files cut into its
+/// files. The first bytes decide; they are held until they can.
+final class Mp3StreamRouter {
+  final BytesBuilder _head = BytesBuilder(copy: true);
+  final Mp3PieceSplitter _splitter = Mp3PieceSplitter();
+  Mp3BodyKind _kind = Mp3BodyKind.undecided;
+
+  Mp3BodyKind get kind => _kind;
+
+  /// Whether the body turned out to be one continuous MP3.
+  bool get continuous => _kind == Mp3BodyKind.continuous;
+
+  List<Mp3Route> add(List<int> bytes) {
+    if (bytes.isEmpty) return const [];
+    if (_kind == Mp3BodyKind.undecided) {
+      _head.add(bytes);
+      final held = _head.toBytes();
+      _kind = classifyMp3Body(held);
+      if (_kind == Mp3BodyKind.undecided) return const [];
+      _head.clear();
+      return _route(held);
+    }
+    return _route(bytes);
+  }
+
+  /// What is left when the body has ended: for a body of files its last
+  /// file; for a body too short to classify, all of it as one file.
+  List<Mp3Route> finish() {
+    if (_kind == Mp3BodyKind.undecided) {
+      final held = _head.takeBytes();
+      _kind = Mp3BodyKind.pieces;
+      if (held.isEmpty) return const [];
+      return [Mp3FilePiece(held)];
+    }
+    if (_kind == Mp3BodyKind.continuous) return const [];
+    final rest = _splitter.finish();
+    return rest.isEmpty ? const [] : [Mp3FilePiece(rest)];
+  }
+
+  List<Mp3Route> _route(List<int> bytes) {
+    if (_kind == Mp3BodyKind.continuous) {
+      return [
+        Mp3ContinuousBytes(
+          bytes is Uint8List ? bytes : Uint8List.fromList(bytes),
+        ),
+      ];
+    }
+    return [for (final piece in _splitter.add(bytes)) Mp3FilePiece(piece)];
+  }
+}
+
 /// The files of [audio] (an MP3 body) as each completes; the whole body as
 /// one when it cannot be cut. Ends when the body does, and with its error.
 Stream<Uint8List> mp3Pieces(ProgressiveAudio audio) async* {

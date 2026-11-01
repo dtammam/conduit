@@ -9,10 +9,23 @@ import 'package:flutter_test/flutter_test.dart';
 
 /// A relay-style MP3 file: ID3 tag, then [frames] 384-byte frames.
 Uint8List _piece(int frames) {
-  final out = BytesBuilder()
-    ..add([0x49, 0x44, 0x33, 4, 0, 0, 0, 0, 0, 0]);
+  final out = BytesBuilder()..add([0x49, 0x44, 0x33, 4, 0, 0, 0, 0, 0, 0]);
   for (var i = 0; i < frames; i++) {
     out.add(Uint8List(384)..setAll(0, [0xff, 0xf3, 0xc4, 0xc4]));
+  }
+  return out.takeBytes();
+}
+
+/// One continuous relay-style MP3 body: an ID3 tag, then [frames] 192-byte
+/// frames of audio (nothing like an Info tag where one would be).
+Uint8List _continuous(int frames) {
+  final out = BytesBuilder()..add([0x49, 0x44, 0x33, 4, 0, 0, 0, 0, 0, 0]);
+  for (var i = 0; i < frames; i++) {
+    out.add(
+      Uint8List(192)
+        ..fillRange(4, 192, 0x5a)
+        ..setAll(0, [0xff, 0xf3, 0x84, 0xc4]),
+    );
   }
   return out.takeBytes();
 }
@@ -37,6 +50,7 @@ class _Files implements AudioPlaybackPort {
     lastClips = clips;
     calls.add('setClips ${clips.length}');
   }
+
   @override
   Future<void> addClip(AudioClip clip) async => calls.add('addClip');
   @override
@@ -69,6 +83,9 @@ void main() {
             'appendPiece' =>
               'append ${args!['item']} ${(args['bytes'] as Uint8List).length}'
                   '${args['trim'] == true ? ' trim' : ''}',
+            'appendStreamBytes' =>
+              'stream ${args!['item']} ${(args['bytes'] as Uint8List).length}'
+                  '${args['isLast'] == true ? ' last' : ''}',
             'finishItem' => 'finish ${args!['item']}',
             'seek' => 'seek ${args!['item']}',
             _ => call.method,
@@ -89,7 +106,8 @@ void main() {
             (_) {},
           );
 
-  Future<void> settle() => Future<void>.delayed(const Duration(milliseconds: 5));
+  Future<void> settle() =>
+      Future<void>.delayed(const Duration(milliseconds: 5));
 
   test('a streamed clip goes to the engine piece by piece, trimmed', () async {
     final engine = EngineSpeechPlayback();
@@ -103,12 +121,50 @@ void main() {
       ..close();
     await settle();
     final a = _piece(2).length, b = _piece(1).length;
-    check(calls).deepEquals([
-      'reset',
-      'append 0 $a trim',
-      'append 0 $b trim',
-      'finish 0',
-    ]);
+    check(
+      calls,
+    ).deepEquals(['reset', 'append 0 $a trim', 'append 0 $b trim', 'finish 0']);
+  });
+
+  test(
+    'a continuous body is forwarded as its bytes arrive, then ended',
+    () async {
+      final engine = EngineSpeechPlayback();
+      final audio = ProgressiveAudio(mimeType: 'audio/mpeg');
+      await engine.setClips([
+        AudioClip(uri: Uri.parse('x:0'), progressive: audio),
+      ]);
+      final body = _continuous(10);
+      // the first bytes are too few to tell what the body is: they wait
+      audio.add(body.sublist(0, 20));
+      await settle();
+      check(calls).deepEquals(['reset']);
+      audio
+        ..add(body.sublist(20, 300))
+        ..add(body.sublist(300, 900));
+      await settle();
+      // held bytes and the chunk that decided go out together, then each chunk
+      check(calls).deepEquals(['reset', 'stream 0 300', 'stream 0 600']);
+      audio
+        ..add(body.sublist(900))
+        ..close();
+      await settle();
+      check(calls).deepEquals([
+        'reset',
+        'stream 0 300',
+        'stream 0 600',
+        'stream 0 ${body.length - 900}',
+        'stream 0 0 last',
+      ]);
+    },
+  );
+
+  test('a stream scheduled event is accepted', () async {
+    final engine = EngineSpeechPlayback();
+    await engine.setClips(const []);
+    await engineEvent({'type': 'streamScheduled', 'item': 0});
+    await settle();
+    check(engine.failed).isFalse();
   });
 
   test('engine events become the clip index and the queue state', () async {
@@ -133,41 +189,44 @@ void main() {
     check(calls).isEmpty();
   });
 
-  test('an engine failure moves the queue to just_audio as whole clips', () async {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(channel, (call) async {
-          calls.add(call.method);
-          if (call.method == 'play') {
-            throw PlatformException(code: 'speech_engine', message: 'probe');
-          }
-          return true;
-        });
-    final files = _Files();
-    final hybrid = HybridSpeechPlayback(files: files);
-    final audio = ProgressiveAudio(mimeType: 'audio/mp3')
-      ..add(_piece(2))
-      ..close();
-    await hybrid.setClips([
-      AudioClip(uri: Uri.parse('x:0'), progressive: audio),
-    ]);
-    await hybrid.play();
-    await settle();
-    await Future<void>.delayed(const Duration(milliseconds: 50));
-    // just_audio was stopped when the engine took the queue, then got it
-    // back as a whole file and went on playing.
-    check(files.calls).deepEquals(['stop', 'setClips 1', 'play']);
-    check(files.lastClips.single.progressive).isNull();
-    check(files.lastClips.single.uri.scheme).equals('file');
+  test(
+    'an engine failure moves the queue to just_audio as whole clips',
+    () async {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            calls.add(call.method);
+            if (call.method == 'play') {
+              throw PlatformException(code: 'speech_engine', message: 'probe');
+            }
+            return true;
+          });
+      final files = _Files();
+      final hybrid = HybridSpeechPlayback(files: files);
+      final audio = ProgressiveAudio(mimeType: 'audio/mp3')
+        ..add(_piece(2))
+        ..close();
+      await hybrid.setClips([
+        AudioClip(uri: Uri.parse('x:0'), progressive: audio),
+      ]);
+      await hybrid.play();
+      await settle();
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      // just_audio was stopped when the engine took the queue, then got it
+      // back as a whole file and went on playing.
+      check(files.calls).deepEquals(['stop', 'setClips 1', 'play']);
+      check(files.lastClips.single.progressive).isNull();
+      check(files.lastClips.single.uri.scheme).equals('file');
 
-    // From then on streamed clips go to just_audio whole.
-    final next = ProgressiveAudio(mimeType: 'audio/mp3')
-      ..add(_piece(1))
-      ..close();
-    await hybrid.setClips([
-      AudioClip(uri: Uri.parse('x:1'), progressive: next),
-    ]);
-    check(files.lastClips.single.progressive).isNull();
-  });
+      // From then on streamed clips go to just_audio whole.
+      final next = ProgressiveAudio(mimeType: 'audio/mp3')
+        ..add(_piece(1))
+        ..close();
+      await hybrid.setClips([
+        AudioClip(uri: Uri.parse('x:1'), progressive: next),
+      ]);
+      check(files.lastClips.single.progressive).isNull();
+    },
+  );
 
   test('the hybrid player picks the engine only for streamed queues', () async {
     final files = _Files();

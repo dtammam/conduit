@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:conduit_core/conduit_core.dart';
+import 'package:conduit_core/features/chat/voice_mode/voice_event_log.dart';
 import 'package:flutter/services.dart';
 
 import 'engine_voice_capture.dart';
@@ -247,6 +248,10 @@ class EngineSpeechPlayback implements AudioPlaybackPort {
         if (_processing != AudioProcessingState.ready) {
           _emit(AudioProcessingState.ready);
         }
+      case 'streamScheduled':
+        VoiceEventLog.instance.add('stream-scheduled', <String, Object?>{
+          'part': args['item'],
+        });
       case 'starved':
         _emit(AudioProcessingState.buffering);
       case 'drained':
@@ -292,25 +297,60 @@ class EngineSpeechPlayback implements AudioPlaybackPort {
     final generation = _generation;
     final progressive = clip.progressive;
     if (progressive != null && isMp3MimeType(progressive.mimeType)) {
+      final router = Mp3StreamRouter();
+      var announced = false;
       late final StreamSubscription<Uint8List> sub;
-      void finish() {
-        _feeds.remove(sub);
-        if (generation == _generation) {
-          unawaited(_call('finishItem', {'item': item}));
+
+      void dispatch(Mp3Route route) {
+        if (generation != _generation) return;
+        if (!announced) {
+          announced = true;
+          VoiceEventLog.instance.add('stream-bytes', <String, Object?>{
+            'part': item,
+            'path': route is Mp3ContinuousBytes ? 'continuous' : 'pieces',
+            'bytes': route.bytes.length,
+          });
         }
+        unawaited(switch (route) {
+          Mp3ContinuousBytes() => _call('appendStreamBytes', {
+            'item': item,
+            'bytes': route.bytes,
+            'isLast': false,
+          }),
+          Mp3FilePiece() => _call('appendPiece', {
+            'item': item,
+            'bytes': route.bytes,
+            'trim': true,
+          }),
+        });
       }
 
-      sub = mp3Pieces(progressive).listen(
-        (piece) {
-          if (generation != _generation) return;
-          unawaited(
-            _call('appendPiece', {'item': item, 'bytes': piece, 'trim': true}),
+      void finish() {
+        _feeds.remove(sub);
+        if (generation != _generation) return;
+        router.finish().forEach(dispatch);
+        unawaited(
+          router.continuous
+              ? _call('appendStreamBytes', {
+                  'item': item,
+                  'bytes': Uint8List(0),
+                  'isLast': true,
+                })
+              : _call('finishItem', {'item': item}),
+        );
+      }
+
+      sub = progressive
+          .read()
+          .map(
+            (bytes) => bytes is Uint8List ? bytes : Uint8List.fromList(bytes),
+          )
+          .listen(
+            (bytes) => router.add(bytes).forEach(dispatch),
+            onError: (Object _) => finish(),
+            onDone: finish,
+            cancelOnError: true,
           );
-        },
-        onError: (Object _) => finish(),
-        onDone: finish,
-        cancelOnError: true,
-      );
       _feeds.add(sub);
       return;
     }
