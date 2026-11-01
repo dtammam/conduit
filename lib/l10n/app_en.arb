@@ -1371,6 +1371,10 @@
   "@shareAsMp3": {
     "description": "Action to render the whole assistant reply as speech and share the MP3 file"
   },
+  "saveMp3ToFiles": "Save MP3 to Files",
+  "@saveMp3ToFiles": {
+    "description": "Action to render the whole assistant reply as speech and save the MP3 in the Files app"
+  },
   "shareAsMp3Preparing": "Making the MP3…",
   "@shareAsMp3Preparing": {
     "description": "Shown while the reply's MP3 is being rendered"

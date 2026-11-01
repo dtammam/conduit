@@ -858,7 +858,7 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
 
   /// Renders the whole reply in the current voice and opens the share sheet
   /// with the file (AirDrop, Messages, Files).
-  Future<void> _handleShareMp3() async {
+  Future<void> _handleShareMp3({bool saveToFiles = false}) async {
     if (_isExportingMp3) return;
     final l10n = AppLocalizations.of(context)!;
     final box = context.findRenderObject() as RenderBox?;
@@ -910,12 +910,15 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
         },
       );
       if (!mounted) return;
-      await ReplyMp3Export.shareFile(
-        exported.file,
-        mimeType: exported.mimeType,
-        title: exported.file.uri.pathSegments.last,
-        origin: origin,
-      );
+      if (saveToFiles) {
+        await ReplyMp3Export.saveToFiles(exported.file);
+      } else {
+        await ReplyMp3Export.shareFile(
+          exported.file,
+          mimeType: exported.mimeType,
+          origin: origin,
+        );
+      }
     } catch (error) {
       if (!mounted) return;
       AdaptiveSnackBar.show(
@@ -2921,6 +2924,19 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
               ? () => unawaited(_handleShareMp3())
               : null,
           sfSymbol: 'square.and.arrow.up',
+        ),
+      if (shouldShowTtsButton && Platform.isIOS)
+        _AssistantFooterAction(
+          id: 'save-mp3',
+          icon: CupertinoIcons.folder,
+          label: l10n.saveMp3ToFiles,
+          onTap:
+              _responseCompleted &&
+                  !_isExportingMp3 &&
+                  !contentActionsBlockedByStreaming
+              ? () => unawaited(_handleShareMp3(saveToFiles: true))
+              : null,
+          sfSymbol: 'folder',
         ),
       if (!widget.readOnly && !_isVoiceReply)
         _AssistantFooterAction(

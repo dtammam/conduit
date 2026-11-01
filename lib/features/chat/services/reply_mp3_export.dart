@@ -203,6 +203,20 @@ class ReplyMp3Export {
 
   static const _channel = MethodChannel('app.cogwheel.conduit/speech_engine');
 
+  /// Save to Files (iOS export picker with a copy). Returns whether a place
+  /// was picked; false where there is no native picker.
+  static Future<bool> saveToFiles(File file) async {
+    if (!Platform.isIOS) return false;
+    try {
+      final done = await _channel.invokeMethod<bool>('saveAudioFile', {
+        'path': file.path,
+      });
+      return done ?? false;
+    } on MissingPluginException {
+      return false;
+    }
+  }
+
   /// Opens the share sheet with [file] as a real .mp3 file (iOS: an item
   /// provider with the file's type and name, which Discord's extension reads;
   /// elsewhere share_plus). Returns whether it was shared.
@@ -238,8 +252,6 @@ class ReplyMp3Export {
             mimeType: mimeType,
           ),
         ],
-        title: title,
-        subject: title,
         sharePositionOrigin: origin,
       ),
     );

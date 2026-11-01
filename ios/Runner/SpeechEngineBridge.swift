@@ -72,6 +72,10 @@ final class SpeechEngineBridge: ConduitBridge {
         self.shareAudioFile(args, result: result)
         return
       }
+      if call.method == "saveAudioFile" {
+        self.saveAudioFile(args, result: result)
+        return
+      }
       self.work.async {
         let reply: Any?
         do {
@@ -104,19 +108,10 @@ final class SpeechEngineBridge: ConduitBridge {
         result(FlutterError(code: "share", message: "Nothing to present from", details: nil))
         return
       }
-      let provider = NSItemProvider()
-      let type = UTType(filenameExtension: url.pathExtension) ?? .mp3
-      provider.registerFileRepresentation(
-        forTypeIdentifier: type.identifier, fileOptions: [], visibility: .all
-      ) { completion in
-        completion(url, false, nil)
-        return nil
-      }
-      provider.suggestedName = url.deletingPathExtension().lastPathComponent
-      let sheet = UIActivityViewController(activityItems: [provider], applicationActivities: nil)
-      if let title = args["title"] as? String, !title.isEmpty {
-        sheet.title = title
-      }
+      // Only the file, as a plain file URL: no text, title or subject. With an
+      // item provider, Discord's extension took a text item and showed no
+      // attachment (2026-10-31).
+      let sheet = UIActivityViewController(activityItems: [url], applicationActivities: nil)
       if let popover = sheet.popoverPresentationController {
         popover.sourceView = root.view
         let x = args["x"] as? Double, y = args["y"] as? Double
@@ -134,6 +129,27 @@ final class SpeechEngineBridge: ConduitBridge {
         result(completed)
       }
       root.present(sheet, animated: true)
+    }
+  }
+
+  /// Save to Files: the system's export picker with a copy of the file.
+  /// Answers true when a place was picked.
+  private func saveAudioFile(_ args: [String: Any], result: @escaping FlutterResult) {
+    guard let path = args["path"] as? String, FileManager.default.isReadableFile(atPath: path) else {
+      result(FlutterError(code: "save", message: "The file is missing", details: nil))
+      return
+    }
+    let url = URL(fileURLWithPath: path)
+    DispatchQueue.main.async {
+      guard let root = self.topController(from: self.host?.presentingViewController) else {
+        result(FlutterError(code: "save", message: "Nothing to present from", details: nil))
+        return
+      }
+      let picker = UIDocumentPickerViewController(forExporting: [url], asCopy: true)
+      let delegate = AudioSavePickerDelegate { picked in result(picked) }
+      picker.delegate = delegate
+      objc_setAssociatedObject(picker, &AudioSavePickerDelegate.key, delegate, .OBJC_ASSOCIATION_RETAIN)
+      root.present(picker, animated: true)
     }
   }
 
@@ -361,5 +377,23 @@ final class SpeechEngineBridge: ConduitBridge {
     DispatchQueue.main.async { [weak self] in
       self?.methodChannel?.invokeMethod("event", arguments: payload)
     }
+  }
+}
+
+/// Answers the Save to Files picker once.
+private final class AudioSavePickerDelegate: NSObject, UIDocumentPickerDelegate {
+  static var key = 0
+  private var done: ((Bool) -> Void)?
+
+  init(_ done: @escaping (Bool) -> Void) { self.done = done }
+
+  func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+    done?(true)
+    done = nil
+  }
+
+  func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+    done?(false)
+    done = nil
   }
 }
