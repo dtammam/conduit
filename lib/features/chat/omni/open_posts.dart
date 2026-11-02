@@ -211,24 +211,46 @@ class _OpenPostsRefresherState extends ConsumerState<OpenPostsRefresher>
   }
 }
 
-/// Opacity of the tint behind an open post.
-const double kOpenPostTintLight = 0.10;
-const double kOpenPostTintDark = 0.16;
+/// Opacity of the glow around an open post, at rest. The breathing takes it
+/// down to [kOpenPostGlowLow] of this and back.
+const double kOpenPostGlowLight = 0.18;
+const double kOpenPostGlowDark = 0.24;
 
-/// Opacity of the thin left edge.
-const double kOpenPostEdgeAlpha = 0.40;
+/// The lowest point of the breathing, as a share of the glow's opacity.
+const double kOpenPostGlowLow = 0.75;
 
-/// A soft tint (and a thin left edge) behind [child] while [highlighted],
-/// in the persona's accent. It fades out when it clears. It only paints
-/// behind the child; the message itself is never changed.
-class OpenPostHighlight extends ConsumerWidget {
-  const OpenPostHighlight({
+/// Blur radius of the glow, in logical pixels.
+const double kOpenPostGlowBlur = 14;
+
+/// Opacity and width of the hairline on the message's own outline.
+const double kOpenPostGlowBorderAlpha = 0.12;
+const double kOpenPostGlowBorderWidth = 1;
+
+/// One breath, low to high and back, takes this long (3.6 s).
+const Duration kOpenPostGlowCycle = Duration(milliseconds: 3600);
+
+/// How long the glow takes to come on or go out.
+const Duration kOpenPostGlowFade = Duration(milliseconds: 400);
+
+/// A soft glow around [child]'s own bounds (a bubble or a text block, never
+/// the row) while the post [messageId] is open, in the persona's accent. It
+/// goes out when the post is answered. It only paints around the child; the
+/// message itself is never changed.
+///
+/// With [hug] the child is shrunk to its content width first and the glow
+/// sits a little outside it, for text that has no bubble.
+class OpenPostGlow extends ConsumerWidget {
+  const OpenPostGlow({
     super.key,
     required this.messageId,
+    required this.radius,
     required this.child,
+    this.hug = false,
   });
 
   final String messageId;
+  final double radius;
+  final bool hug;
   final Widget child;
 
   @override
@@ -239,75 +261,189 @@ class OpenPostHighlight extends ConsumerWidget {
     final theme = context.conduitTheme;
     final accent =
         ref.watch(messageBubbleAccentProvider) ?? theme.buttonPrimary;
-    return OpenPostHighlightFrame(
-      highlighted: on,
+    return OpenPostGlowFrame(
+      glowing: on,
       accent: accent,
       dark: theme.isDark,
+      radius: radius,
+      hug: hug,
       child: child,
     );
   }
 }
 
-/// The painting half of [OpenPostHighlight], with the state passed in.
-class OpenPostHighlightFrame extends StatelessWidget {
-  const OpenPostHighlightFrame({
+/// The painting half of [OpenPostGlow], with the state passed in.
+class OpenPostGlowFrame extends StatefulWidget {
+  const OpenPostGlowFrame({
     super.key,
-    required this.highlighted,
+    required this.glowing,
     required this.accent,
     required this.dark,
+    required this.radius,
     required this.child,
+    this.hug = false,
   });
 
-  final bool highlighted;
+  final bool glowing;
   final Color accent;
   final bool dark;
+  final double radius;
+  final bool hug;
   final Widget child;
 
   @override
+  State<OpenPostGlowFrame> createState() => _OpenPostGlowFrameState();
+}
+
+class _OpenPostGlowFrameState extends State<OpenPostGlowFrame>
+    with TickerProviderStateMixin {
+  late final AnimationController _fade = AnimationController(
+    vsync: this,
+    duration: kOpenPostGlowFade,
+    value: widget.glowing ? 1 : 0,
+  );
+  late final AnimationController _breath = AnimationController(
+    vsync: this,
+    duration: kOpenPostGlowCycle,
+  );
+  bool _reduceMotion = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _reduceMotion = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    _sync();
+  }
+
+  @override
+  void didUpdateWidget(OpenPostGlowFrame old) {
+    super.didUpdateWidget(old);
+    _sync();
+  }
+
+  void _sync() {
+    if (widget.glowing) {
+      if (_reduceMotion) {
+        _fade.value = 1;
+      } else if (_fade.status != AnimationStatus.forward) {
+        _fade.forward();
+      }
+    } else {
+      if (_reduceMotion) {
+        _fade.value = 0;
+      } else if (_fade.status != AnimationStatus.reverse) {
+        _fade.reverse();
+      }
+    }
+    final breathe = widget.glowing && !_reduceMotion;
+    if (breathe && !_breath.isAnimating) {
+      _breath.repeat(reverse: true);
+    } else if (!breathe && _breath.isAnimating) {
+      _breath.stop();
+      _breath.value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _fade.dispose();
+    _breath.dispose();
+    super.dispose();
+  }
+
+  /// The glow's opacity share now: 1 at the top of a breath, down to
+  /// [kOpenPostGlowLow] at the bottom.
+  double get _level =>
+      _fade.value *
+      (1 - (1 - kOpenPostGlowLow) * Curves.easeInOut.transform(_breath.value));
+
+  @override
   Widget build(BuildContext context) {
-    final tint = accent.withValues(
-      alpha: dark ? kOpenPostTintDark : kOpenPostTintLight,
-    );
-    final edge = accent.withValues(alpha: kOpenPostEdgeAlpha);
-    const fade = Duration(milliseconds: 400);
-    return Stack(
-      children: [
-        Positioned.fill(
-          child: IgnorePointer(
-            child: AnimatedOpacity(
-              duration: fade,
-              curve: Curves.easeOut,
-              opacity: highlighted ? 1 : 0,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: tint,
-                  borderRadius: BorderRadius.circular(12),
-                ),
+    Widget child = widget.child;
+    if (widget.hug && widget.glowing) {
+      child = Align(
+        alignment: AlignmentDirectional.centerStart,
+        widthFactor: 1,
+        child: IntrinsicWidth(child: child),
+      );
+    }
+    return AnimatedBuilder(
+      animation: Listenable.merge([_fade, _breath]),
+      child: child,
+      builder: (context, child) => CustomPaint(
+        foregroundPainter: _level <= 0
+            ? null
+            : _GlowPainter(
+                color: widget.accent,
+                glowAlpha: widget.dark ? kOpenPostGlowDark : kOpenPostGlowLight,
+                level: _level,
+                fadeShare: _fade.value,
+                radius: widget.radius,
+                outset: widget.hug ? 6 : 0,
+                textDirection: Directionality.of(context),
               ),
-            ),
-          ),
-        ),
-        Positioned(
-          left: 0,
-          top: 8,
-          bottom: 8,
-          width: 2,
-          child: IgnorePointer(
-            child: AnimatedOpacity(
-              duration: fade,
-              curve: Curves.easeOut,
-              opacity: highlighted ? 1 : 0,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: edge,
-                  borderRadius: BorderRadius.circular(1),
-                ),
-              ),
-            ),
-          ),
-        ),
-        child,
-      ],
+        child: child,
+      ),
     );
   }
+}
+
+class _GlowPainter extends CustomPainter {
+  const _GlowPainter({
+    required this.color,
+    required this.glowAlpha,
+    required this.level,
+    required this.fadeShare,
+    required this.radius,
+    required this.outset,
+    required this.textDirection,
+  });
+
+  final Color color;
+  final double glowAlpha;
+  final double level;
+  final double fadeShare;
+  final double radius;
+  final double outset;
+  final TextDirection textDirection;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final shape = RRect.fromRectAndRadius(
+      (Offset.zero & size).inflate(outset),
+      Radius.circular(radius + outset),
+    );
+    // The glow lives outside the outline only: the interior stays the
+    // message's own.
+    final outside = Path.combine(
+      PathOperation.difference,
+      Path()..addRect(shape.outerRect.inflate(kOpenPostGlowBlur * 4)),
+      Path()..addRRect(shape),
+    );
+    canvas.save();
+    canvas.clipPath(outside);
+    canvas.drawRRect(
+      shape,
+      Paint()
+        ..color = color.withValues(alpha: glowAlpha * level)
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, kOpenPostGlowBlur / 2),
+    );
+    canvas.restore();
+    canvas.drawRRect(
+      shape,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = kOpenPostGlowBorderWidth
+        ..color = color.withValues(alpha: kOpenPostGlowBorderAlpha * fadeShare),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_GlowPainter old) =>
+      old.color != color ||
+      old.glowAlpha != glowAlpha ||
+      old.level != level ||
+      old.fadeShare != fadeShare ||
+      old.radius != radius ||
+      old.outset != outset;
 }

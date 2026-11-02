@@ -90,6 +90,7 @@ import 'package:conduit_core/features/chat/utils/file_utils.dart';
 import '../avatar/assistant_action_log.dart';
 import 'tool_stamp.dart';
 import '../reactions/quick_reply_reactions.dart';
+import '../omni/open_posts.dart';
 import 'chat_branch_actions.dart';
 import 'chat_comparison_widgets.dart';
 import 'message_badge.dart';
@@ -1571,92 +1572,96 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
           // Documentation-style content without heavy bubble; premium markdown
           _withQuickReplies(
             showBadge: proseBubble == null,
-            SizedBox(
-              width: double.infinity,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Display attachments - prioritize files array over attachmentIds to avoid duplication
-                  if (activeFiles != null && activeFiles.isNotEmpty) ...[
-                    _buildFilesFromArray(),
-                    const SizedBox(height: Spacing.md),
-                  ] else if (widget.message.attachmentIds != null &&
-                      widget.message.attachmentIds!.isNotEmpty) ...[
-                    _buildAttachmentItems(),
-                    const SizedBox(height: Spacing.md),
-                  ],
+            // Without bubbles an open post glows around its text block.
+            _maybeGlowBlock(
+              proseBubble == null,
+              SizedBox(
+                width: double.infinity,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Display attachments - prioritize files array over attachmentIds to avoid duplication
+                    if (activeFiles != null && activeFiles.isNotEmpty) ...[
+                      _buildFilesFromArray(),
+                      const SizedBox(height: Spacing.md),
+                    ] else if (widget.message.attachmentIds != null &&
+                        widget.message.attachmentIds!.isNotEmpty) ...[
+                      _buildAttachmentItems(),
+                      const SizedBox(height: Spacing.md),
+                    ],
 
-                  if (activeEmbeds != null && activeEmbeds.isNotEmpty) ...[
-                    _buildEmbedsFromArray(activeEmbeds),
-                    const SizedBox(height: Spacing.md),
-                  ],
+                    if (activeEmbeds != null && activeEmbeds.isNotEmpty) ...[
+                      _buildEmbedsFromArray(activeEmbeds),
+                      const SizedBox(height: Spacing.md),
+                    ],
 
-                  if (hasStatusTimeline) ...[
-                    StreamingStatusWidget(
-                      updates: displayStatusHistory,
-                      isStreaming: _uiTreatsAsStreaming,
-                      compactToolSummaries: ref.watch(
-                        appSettingsProvider.select(
-                          (settings) => settings.compactToolSummaries,
+                    if (hasStatusTimeline) ...[
+                      StreamingStatusWidget(
+                        updates: displayStatusHistory,
+                        isStreaming: _uiTreatsAsStreaming,
+                        compactToolSummaries: ref.watch(
+                          appSettingsProvider.select(
+                            (settings) => settings.compactToolSummaries,
+                          ),
+                        ),
+                        hideToolSteps: ref.watch(
+                          appSettingsProvider.select(
+                            (settings) => settings.toolActivityInAvatarActive,
+                          ),
                         ),
                       ),
-                      hideToolSteps: ref.watch(
-                        appSettingsProvider.select(
-                          (settings) => settings.toolActivityInAvatarActive,
+                      const SizedBox(height: Spacing.xs),
+                    ],
+
+                    ..._buildToolFailureLine(),
+
+                    if (showQueuedAsEmptyState)
+                      _buildQueuedCompletionBanner(queuedCompletion)
+                    else if (suppressEmptyQueuedContent)
+                      const SizedBox.shrink()
+                    else
+                      // Content streams in here. Empty content renders as
+                      // SizedBox.shrink, and the footer indicator covers that
+                      // waiting state until visible content arrives. Keep this
+                      // subtree direct: a stable-key AnimatedSwitcher never
+                      // switched and only obscured the one-shot content fade.
+                      _buildStreamingContentBody(
+                        responseBuilder: responseBuilder,
+                        activeSources: contentSources,
+                        proseBubble: proseBubble,
+                      ),
+
+                    if (showQueuedRecoveryBanner) ...[
+                      const SizedBox(height: Spacing.sm),
+                      _buildQueuedCompletionBanner(queuedCompletion),
+                    ],
+
+                    if (_activeMergedResponse case final merged?
+                        when merged.content.trim().isNotEmpty) ...[
+                      const SizedBox(height: Spacing.md),
+                      ChatMergedResponsePanel(
+                        child: _buildEnhancedMarkdownContent(
+                          merged.content,
+                          responseBuilder: null,
+                          activeSources: const <ChatSourceReference>[],
                         ),
                       ),
-                    ),
-                    const SizedBox(height: Spacing.xs),
+                    ],
+
+                    // Display error banner if message or active version has an error
+                    if (_getActiveError() != null) ...[
+                      const SizedBox(height: Spacing.sm),
+                      _buildErrorBanner(_getActiveError()!),
+                    ],
+
+                    if (hasCodeExecutions) ...[
+                      const SizedBox(height: Spacing.md),
+                      CodeExecutionListView(executions: activeCodeExecutions),
+                    ],
+
+                    // Version switcher moved inline with action buttons below
                   ],
-
-                  ..._buildToolFailureLine(),
-
-                  if (showQueuedAsEmptyState)
-                    _buildQueuedCompletionBanner(queuedCompletion)
-                  else if (suppressEmptyQueuedContent)
-                    const SizedBox.shrink()
-                  else
-                    // Content streams in here. Empty content renders as
-                    // SizedBox.shrink, and the footer indicator covers that
-                    // waiting state until visible content arrives. Keep this
-                    // subtree direct: a stable-key AnimatedSwitcher never
-                    // switched and only obscured the one-shot content fade.
-                    _buildStreamingContentBody(
-                      responseBuilder: responseBuilder,
-                      activeSources: contentSources,
-                      proseBubble: proseBubble,
-                    ),
-
-                  if (showQueuedRecoveryBanner) ...[
-                    const SizedBox(height: Spacing.sm),
-                    _buildQueuedCompletionBanner(queuedCompletion),
-                  ],
-
-                  if (_activeMergedResponse case final merged?
-                      when merged.content.trim().isNotEmpty) ...[
-                    const SizedBox(height: Spacing.md),
-                    ChatMergedResponsePanel(
-                      child: _buildEnhancedMarkdownContent(
-                        merged.content,
-                        responseBuilder: null,
-                        activeSources: const <ChatSourceReference>[],
-                      ),
-                    ),
-                  ],
-
-                  // Display error banner if message or active version has an error
-                  if (_getActiveError() != null) ...[
-                    const SizedBox(height: Spacing.sm),
-                    _buildErrorBanner(_getActiveError()!),
-                  ],
-
-                  if (hasCodeExecutions) ...[
-                    const SizedBox(height: Spacing.md),
-                    CodeExecutionListView(executions: activeCodeExecutions),
-                  ],
-
-                  // Version switcher moved inline with action buttons below
-                ],
+                ),
               ),
             ),
           ),
@@ -1749,6 +1754,17 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
       ),
     );
   }
+
+  /// [body] with an open post's glow around it when [enabled] (replies with no
+  /// bubble). The glow hugs the text block, never the screen width.
+  Widget _maybeGlowBlock(bool enabled, Widget body) => enabled
+      ? OpenPostGlow(
+          messageId: _messageId,
+          radius: AppBorderRadius.md,
+          hug: true,
+          child: body,
+        )
+      : body;
 
   /// The actions the last build offered, in the order of the old action bar.
   List<_AssistantFooterAction> _menuActions = const <_AssistantFooterAction>[];
@@ -1902,7 +1918,11 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
         inset: true,
         badge: isLastBubble ? badge : null,
         fixedRoom: isLastBubble ? badgeRoom : null,
-        child: bubble,
+        child: OpenPostGlow(
+          messageId: _messageId,
+          radius: AppBorderRadius.chatBubble,
+          child: bubble,
+        ),
       ),
     );
   }

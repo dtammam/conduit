@@ -114,111 +114,115 @@ void main() {
     });
   });
 
-  for (final dark in [false, true]) {
-    group(dark ? 'dark theme' : 'light theme', () {
-      Widget harness(Set<String> glowing, {required String id}) {
-        return ProviderScope(
-          overrides: [
-            openPostsProvider.overrideWith(() => _FixedPosts(glowing)),
-            messageBubbleAccentProvider.overrideWithValue(_accent),
-          ],
-          child: MaterialApp(
-            theme: dark
-                ? AppTheme.dark(TweakcnThemes.t3Chat)
-                : AppTheme.light(TweakcnThemes.t3Chat),
-            home: Scaffold(
-              body: OpenPostHighlight(
-                messageId: id,
-                child: const SizedBox(width: 200, height: 60),
-              ),
-            ),
-          ),
-        );
-      }
-
-      double? tintOpacity(WidgetTester tester) {
-        final fades = tester
-            .widgetList<AnimatedOpacity>(
-              find.descendant(
-                of: find.byType(OpenPostHighlight),
-                matching: find.byType(AnimatedOpacity),
-              ),
-            )
-            .toList();
-        return fades.isEmpty ? null : fades.first.opacity;
-      }
-
-      testWidgets('an open post is tinted with the persona color', (
-        tester,
-      ) async {
-        await tester.pumpWidget(harness({'m'}, id: 'm'));
-        check(tintOpacity(tester)).equals(1);
-        final boxes = tester
-            .widgetList<DecoratedBox>(
-              find.descendant(
-                of: find.byType(OpenPostHighlight),
-                matching: find.byType(DecoratedBox),
-              ),
-            )
-            .map((b) => (b.decoration as BoxDecoration).color)
-            .toList();
-        final alpha = dark ? kOpenPostTintDark : kOpenPostTintLight;
-        check(boxes.first).equals(_accent.withValues(alpha: alpha));
-        check(boxes.last).equals(_accent.withValues(alpha: kOpenPostEdgeAlpha));
-      });
-
-      testWidgets('a message that is not in the set is not tinted', (
-        tester,
-      ) async {
-        await tester.pumpWidget(harness({'other'}, id: 'm'));
-        check(tintOpacity(tester)).equals(0);
-      });
-
-      testWidgets('text keeps AA contrast on the tint', (tester) async {
-        await tester.pumpWidget(harness({'m'}, id: 'm'));
-        final context = tester.element(find.byType(OpenPostHighlight));
-        final theme = context.conduitTheme;
-        final alpha = dark ? kOpenPostTintDark : kOpenPostTintLight;
-        final bg = Color.alphaBlend(
-          _accent.withValues(alpha: alpha),
-          theme.surfaceBackground,
-        );
-        check(contrastRatio(bg, theme.textPrimary)).isGreaterOrEqual(4.5);
-      });
-    });
-  }
-
-  testWidgets('the tint fades out when the post closes', (tester) async {
-    final container = ProviderContainer(
-      overrides: [
-        openPostsProvider.overrideWith(() => _FixedPosts({'m'})),
-        messageBubbleAccentProvider.overrideWithValue(_accent),
-      ],
-    );
-    addTearDown(container.dispose);
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
+  group('open post glow', () {
+    Widget app(
+      ProviderContainer container,
+      Widget body, {
+      bool dark = false,
+      bool reduceMotion = false,
+    }) {
+      return UncontrolledProviderScope(
         container: container,
         child: MaterialApp(
-          theme: AppTheme.light(TweakcnThemes.t3Chat),
-          home: const Scaffold(
-            body: OpenPostHighlight(
-              messageId: 'm',
-              child: SizedBox(height: 40),
-            ),
+          theme: dark
+              ? AppTheme.dark(TweakcnThemes.t3Chat)
+              : AppTheme.light(TweakcnThemes.t3Chat),
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context)
+                .copyWith(disableAnimations: reduceMotion),
+            child: child!,
           ),
+          home: Scaffold(body: body),
         ),
-      ),
+      );
+    }
+
+    ProviderContainer containerWith(Set<String> ids) {
+      final c = ProviderContainer(
+        overrides: [
+          openPostsProvider.overrideWith(() => _FixedPosts(ids)),
+          messageBubbleAccentProvider.overrideWithValue(_accent),
+        ],
+      );
+      addTearDown(c.dispose);
+      return c;
+    }
+
+    bool glowPainted(WidgetTester tester) => tester
+        .widgetList<CustomPaint>(
+          find.descendant(
+            of: find.byType(OpenPostGlow),
+            matching: find.byType(CustomPaint),
+          ),
+        )
+        .any((c) => c.foregroundPainter != null);
+
+    const body = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        OpenPostGlow(
+          messageId: 'm',
+          radius: 12,
+          hug: true,
+          child: Text('A short routine post'),
+        ),
+      ],
     );
-    double opacity() => tester
-        .widgetList<AnimatedOpacity>(find.byType(AnimatedOpacity))
-        .first
-        .opacity;
-    check(opacity()).equals(1);
-    // ignore: invalid_use_of_protected_member
-    container.read(openPostsProvider.notifier).state = <String>{};
-    await tester.pump();
-    check(opacity()).equals(0);
-    await tester.pump(const Duration(milliseconds: 500));
+
+    for (final dark in [false, true]) {
+      testWidgets('glows on an open post and not on another (dark=$dark)', (
+        tester,
+      ) async {
+        await tester.pumpWidget(app(containerWith({'m'}), body, dark: dark));
+        await tester.pump(const Duration(milliseconds: 500));
+        check(glowPainted(tester)).isTrue();
+        await tester.pumpWidget(app(containerWith({'x'}), body, dark: dark));
+        await tester.pump(const Duration(milliseconds: 500));
+        check(glowPainted(tester)).isFalse();
+      });
+    }
+
+    testWidgets('goes out once the post is answered', (tester) async {
+      final container = containerWith({'m'});
+      await tester.pumpWidget(app(container, body));
+      await tester.pump(const Duration(milliseconds: 500));
+      check(glowPainted(tester)).isTrue();
+      // ignore: invalid_use_of_protected_member
+      container.read(openPostsProvider.notifier).state = <String>{};
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      check(glowPainted(tester)).isFalse();
+      check(tester.hasRunningAnimations).isFalse();
+    });
+
+    testWidgets('breathes slowly, and not at all with Reduce Motion', (
+      tester,
+    ) async {
+      await tester.pumpWidget(app(containerWith({'m'}), body));
+      await tester.pump(const Duration(milliseconds: 500));
+      check(tester.hasRunningAnimations).isTrue();
+
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpWidget(
+        app(containerWith({'m'}), body, reduceMotion: true),
+      );
+      await tester.pump();
+      check(glowPainted(tester)).isTrue();
+      check(tester.hasRunningAnimations).isFalse();
+    });
+
+    testWidgets('the glow is as wide as the message, not the screen', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(400, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(app(containerWith({'m'}), body));
+      await tester.pump(const Duration(milliseconds: 500));
+      final glow = tester.getSize(find.byType(OpenPostGlow));
+      final text = tester.getSize(find.text('A short routine post'));
+      check(glow.width).equals(text.width);
+      check(glow.width).isLessThan(400);
+    });
   });
 }

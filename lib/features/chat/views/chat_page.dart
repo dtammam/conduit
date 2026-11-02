@@ -3657,9 +3657,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
         groupIds.isEmpty ? <String>[messageId] : groupIds,
       ),
     );
-    final omni = isOmniChatId(rowRef.read(activeConversationProvider)?.id);
-    Widget framed(Widget row) =>
-        omni ? OpenPostHighlight(messageId: messageId, child: row) : row;
+    // An open post glows around its own bubble (see AssistantMessageWidget).
+    Widget framed(Widget row) => row;
     if (!quickRepliesEnabled) return framed(buildRow(null));
     // A reaction that failed to send shows its own bubble and failure, not a
     // badge here.
