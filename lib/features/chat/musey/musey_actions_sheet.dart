@@ -717,11 +717,18 @@ class MuseySlashOverlay extends ConsumerWidget {
     required this.query,
     required this.selectionIndex,
     required this.onPicked,
+    this.below,
   });
 
   final String query;
+
+  /// The highlighted row of the actions; a value past the last action
+  /// highlights none of them (the highlight is then in [below]).
   final int selectionIndex;
   final ValueChanged<MuseyAction> onPicked;
+
+  /// The saved prompts list, shown under a thin divider after the actions.
+  final Widget? below;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -729,6 +736,24 @@ class MuseySlashOverlay extends ConsumerWidget {
     final all = ref.watch(museyActionsProvider).actions ?? const [];
     final items = filterMuseyActions(all, query);
     final brightness = Theme.of(context).brightness;
+    final below = this.below;
+    // No matching action: the saved prompts list stands alone, as it always
+    // has.
+    if (items.isEmpty && below != null) return below;
+    final list = items.isEmpty
+        ? Padding(
+            padding: const EdgeInsets.all(Spacing.md),
+            child: Text(
+              all.isEmpty ? 'Loading actions' : 'No matching action',
+              style: AppTypography.bodyMediumStyle.copyWith(
+                color: theme.textSecondary,
+              ),
+            ),
+          )
+        : ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 240),
+            child: _slashRows(theme, items),
+          );
     return Container(
       key: const ValueKey<String>('musey-slash-overlay'),
       decoration: BoxDecoration(
@@ -741,59 +766,65 @@ class MuseySlashOverlay extends ConsumerWidget {
           width: BorderWidth.thin,
         ),
       ),
-      child: items.isEmpty
-          ? Padding(
-              padding: const EdgeInsets.all(Spacing.md),
-              child: Text(
-                all.isEmpty ? 'Loading actions' : 'No matching action',
-                style: AppTypography.bodyMediumStyle.copyWith(
-                  color: theme.textSecondary,
+      child: below == null
+          ? list
+          : Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                list,
+                Container(
+                  key: const ValueKey<String>('musey-slash-divider'),
+                  height: BorderWidth.thin,
+                  color: theme.dividerColor,
                 ),
+                below,
+              ],
+            ),
+    );
+  }
+
+  Widget _slashRows(ConduitThemeExtension theme, List<MuseyAction> items) {
+    return Builder(
+      builder: (context) => ListView.builder(
+        shrinkWrap: true,
+        padding: EdgeInsets.zero,
+        physics: const ClampingScrollPhysics(),
+        itemCount: items.length,
+        itemBuilder: (_, i) {
+          final a = items[i];
+          final active = i == selectionIndex;
+          return InkWell(
+            key: ValueKey<String>('musey-slash-${a.id}'),
+            onTap: () => onPicked(a),
+            child: Container(
+              color: active ? theme.textPrimary.withValues(alpha: 0.06) : null,
+              padding: const EdgeInsets.symmetric(
+                horizontal: Spacing.md,
+                vertical: Spacing.sm + Spacing.xxs,
               ),
-            )
-          : ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 240),
-              child: ListView.builder(
-                shrinkWrap: true,
-                padding: EdgeInsets.zero,
-                itemCount: items.length,
-                itemBuilder: (_, i) {
-                  final a = items[i];
-                  final active = i == selectionIndex.clamp(0, items.length - 1);
-                  return InkWell(
-                    key: ValueKey<String>('musey-slash-${a.id}'),
-                    onTap: () => onPicked(a),
-                    child: Container(
-                      color: active
-                          ? theme.textPrimary.withValues(alpha: 0.06)
-                          : null,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: Spacing.md,
-                        vertical: Spacing.sm + Spacing.xxs,
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            _iconFor(a.icon),
-                            size: IconSize.medium,
-                            color: theme.textPrimary,
-                          ),
-                          const SizedBox(width: Spacing.sm + Spacing.xs),
-                          Expanded(
-                            child: Text(
-                              a.label,
-                              style: AppTypography.bodyLargeStyle.copyWith(
-                                color: theme.textPrimary,
-                              ),
-                            ),
-                          ),
-                        ],
+              child: Row(
+                children: [
+                  Icon(
+                    _iconFor(a.icon),
+                    size: IconSize.medium,
+                    color: theme.textPrimary,
+                  ),
+                  const SizedBox(width: Spacing.sm + Spacing.xs),
+                  Expanded(
+                    child: Text(
+                      a.label,
+                      style: AppTypography.bodyLargeStyle.copyWith(
+                        color: theme.textPrimary,
                       ),
                     ),
-                  );
-                },
+                  ),
+                ],
               ),
             ),
+          );
+        },
+      ),
     );
   }
 }

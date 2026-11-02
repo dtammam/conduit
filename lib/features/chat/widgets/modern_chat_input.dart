@@ -2125,7 +2125,7 @@ class _ModernChatInputState extends ConsumerState<ModernChatInput>
     // Determine filtered list length based on trigger type.
     final int filteredLength;
     if (_museySlashActive) {
-      filteredLength = _museySlashItems.length;
+      filteredLength = _museySlashItems.length + _museySlashPromptCount;
     } else if (_currentPromptCommand.startsWith('\$')) {
       filteredLength = _skillSuggestions.asData?.value.length ?? 0;
     } else if (_currentPromptCommand.startsWith('@')) {
@@ -2155,8 +2155,18 @@ class _ModernChatInputState extends ConsumerState<ModernChatInput>
   void _confirmPromptSelection() {
     if (_museySlashActive) {
       final items = _museySlashItems;
-      if (items.isEmpty) return;
-      _applyMuseySlash(items[_promptSelectionIndex.clamp(0, items.length - 1)]);
+      final prompts = _activePromptListValue;
+      final saved = prompts == null
+          ? const <Prompt>[]
+          : _filterPrompts(prompts);
+      final total = items.length + saved.length;
+      if (total == 0) return;
+      final index = _promptSelectionIndex.clamp(0, total - 1);
+      if (index < items.length) {
+        _applyMuseySlash(items[index]);
+      } else {
+        _applyPrompt(saved[index - items.length]);
+      }
       return;
     }
     if (_currentPromptCommand.startsWith('#')) {
@@ -2602,10 +2612,21 @@ class _ModernChatInputState extends ConsumerState<ModernChatInput>
         (hermesCapabilities?.skills ?? true);
 
     if (_museySlashActive) {
+      final actionCount = _museySlashItems.length;
       return MuseySlashOverlay(
         query: _currentPromptCommand.substring(1),
         selectionIndex: _promptSelectionIndex,
         onPicked: _applyMuseySlash,
+        below: _museySlashPromptCount > 0
+            ? PromptSuggestionOverlay(
+                useHermesSkills: useHermesSkills,
+                filteredPrompts: _filterPrompts,
+                // The highlight moves on into the prompts once the actions
+                // are passed.
+                selectionIndex: _promptSelectionIndex - actionCount,
+                onPromptSelected: _applyPrompt,
+              )
+            : null,
       );
     }
     if (_currentPromptCommand.startsWith('#')) {
@@ -4436,6 +4457,12 @@ class _ModernChatInputState extends ConsumerState<ModernChatInput>
     ref.read(museyActionsProvider).actions ?? const <MuseyAction>[],
     _currentPromptCommand.substring(1),
   );
+
+  /// How many saved prompts match the "/" query (shown under the actions).
+  int get _museySlashPromptCount {
+    final prompts = _activePromptListValue;
+    return prompts == null ? 0 : _filterPrompts(prompts).length;
+  }
 
   Future<void> _openMuseySheet({MuseyAction? initial}) async {
     final send = widget.onMuseySend;
