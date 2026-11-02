@@ -344,6 +344,12 @@ class _MuseyActionFormState extends ConsumerState<MuseyActionForm> {
           _moments[f.key] = _parseMoment(f, d) ?? _now;
       }
     }
+    // An action with nothing to fill in (undo) runs on the pick.
+    if (widget.action.fields.isEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(_submit(const <String, Object?>{}));
+      });
+    }
   }
 
   DateTime? _parseMoment(MuseyField f, Object? d) {
@@ -374,29 +380,40 @@ class _MuseyActionFormState extends ConsumerState<MuseyActionForm> {
 
   /// The slots to send, or null with [_fieldErrors] set when a required field
   /// is empty or a number is not one.
+  /// The current value of a field for `show_when`: the picked option or the
+  /// typed text, null while empty.
+  String? _valueOf(String key) {
+    final choice = _choices[key];
+    if (choice != null) return choice;
+    final text = _texts[key]?.text.trim();
+    return text == null || text.isEmpty ? null : text;
+  }
+
   Map<String, Object?>? _collect() {
     final slots = <String, Object?>{};
     final errors = <String, String>{};
     for (final f in widget.action.fields) {
+      // A field that is not showing is neither checked nor sent.
+      if (!f.visibleGiven(_valueOf)) continue;
       switch (f.type) {
         case MuseyFieldType.choice:
           final v = _choices[f.key];
           if (v == null) {
-            if (f.required) errors[f.key] = 'Pick one';
+            if (f.mustFill) errors[f.key] = 'Pick one';
           } else {
             slots[f.key] = v;
           }
         case MuseyFieldType.text:
           final v = _texts[f.key]!.text.trim();
           if (v.isEmpty) {
-            if (f.required) errors[f.key] = 'Required';
+            if (f.mustFill) errors[f.key] = 'Required';
           } else {
             slots[f.key] = v;
           }
         case MuseyFieldType.number:
           final v = _texts[f.key]!.text.trim();
           if (v.isEmpty) {
-            if (f.required) errors[f.key] = 'Required';
+            if (f.mustFill) errors[f.key] = 'Required';
           } else {
             final n = num.tryParse(v.replaceAll(',', '.'));
             if (n == null) {
@@ -466,7 +483,7 @@ class _MuseyActionFormState extends ConsumerState<MuseyActionForm> {
       _choices[f.key] = o.value;
       _fieldErrors.remove(f.key);
     });
-    if (widget.action.oneTapField?.key == f.key) {
+    if (widget.action.oneTapFieldGiven(_valueOf)?.key == f.key) {
       unawaited(_submit(_collect()));
     }
   }
@@ -513,8 +530,11 @@ class _MuseyActionFormState extends ConsumerState<MuseyActionForm> {
   @override
   Widget build(BuildContext context) {
     final theme = context.conduitTheme;
-    final fields = widget.action.fields;
-    final oneTap = widget.action.oneTapField;
+    final fields = [
+      for (final f in widget.action.fields)
+        if (f.visibleGiven(_valueOf)) f,
+    ];
+    final oneTap = widget.action.oneTapFieldGiven(_valueOf);
     final onlyTheOneTap = oneTap != null && fields.length == 1;
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -528,6 +548,17 @@ class _MuseyActionFormState extends ConsumerState<MuseyActionForm> {
               children: [
                 for (final f in fields) ...[
                   _buildField(f, theme),
+                  if (f.note != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: Spacing.xs),
+                      child: Text(
+                        f.note!,
+                        key: ValueKey<String>('musey-note-${f.key}'),
+                        style: AppTypography.labelSmallStyle.copyWith(
+                          color: theme.textSecondary,
+                        ),
+                      ),
+                    ),
                   const SizedBox(height: Spacing.sm),
                 ],
               ],

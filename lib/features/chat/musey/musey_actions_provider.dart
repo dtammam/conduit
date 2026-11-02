@@ -54,6 +54,9 @@ Map<String, Object?> _actionToJson(MuseyAction a) => <String, Object?>{
               <String, Object?>{'value': o.value, 'label': o.label},
           ],
         'default': ?f.defaultValue,
+        if (f.showWhenKey != null)
+          'show_when': {'key': f.showWhenKey, 'value': f.showWhenValue},
+        'note': ?f.note,
       },
   ],
 };

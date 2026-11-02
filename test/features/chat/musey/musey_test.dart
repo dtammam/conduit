@@ -36,6 +36,31 @@ const _choreActions = {
       ],
     },
     {
+      'id': 'chore_log',
+      'label': 'Chore log',
+      'fields': [
+        {
+          'key': 'chore',
+          'label': 'What did you handle?',
+          'type': 'choice',
+          'required': true,
+          'options': [
+            {'value': 'Dishes', 'label': 'Dishes'},
+            {'value': 'Other', 'label': 'Other'},
+          ],
+        },
+        {
+          'key': 'other',
+          'label': 'What was it?',
+          'type': 'text',
+          'required': false,
+          'note': 'A few words.',
+          'show_when': {'key': 'chore', 'value': 'Other'},
+        },
+      ],
+    },
+    {'id': 'undo', 'label': 'Undo', 'fields': []},
+    {
       'id': 'expense',
       'label': 'Expense',
       'fields': [
@@ -151,8 +176,11 @@ void main() {
 
     test('the slash filter matches label and id', () {
       final all = parseMuseyActions(_choreActions);
-      expect(filterMuseyActions(all, 'ch').map((a) => a.id), ['chore']);
-      expect(filterMuseyActions(all, '').length, 2);
+      expect(filterMuseyActions(all, 'ch').map((a) => a.id), [
+        'chore',
+        'chore_log',
+      ]);
+      expect(filterMuseyActions(all, '').length, 4);
       expect(filterMuseyActions(all, 'zzz'), isEmpty);
     });
   });
@@ -277,6 +305,88 @@ void main() {
       await tester.pumpAndSettle();
       expect(got, isNotNull);
       expect(got!.codeUnits, text.codeUnits);
+    });
+
+    testWidgets('a conditional chore field: any chore but Other sends at once', (
+      tester,
+    ) async {
+      final api = FakeApi();
+      await tester.pumpWidget(
+        _app(
+          api,
+          MuseyActionForm(
+            action: action('chore_log'),
+            send: (_) async => true,
+            onDone: () {},
+          ),
+        ),
+      );
+      expect(find.byKey(const ValueKey('musey-field-other')), findsNothing);
+      expect(find.byKey(const ValueKey('musey-send')), findsNothing);
+      await tester.tap(
+        find.byKey(const ValueKey('musey-option-chore-Dishes')),
+      );
+      await tester.pumpAndSettle();
+      expect(api.composeCalls.single.$2, {'chore': 'Dishes'});
+    });
+
+    testWidgets('Other reveals a required text field with its note', (
+      tester,
+    ) async {
+      final api = FakeApi();
+      await tester.pumpWidget(
+        _app(
+          api,
+          MuseyActionForm(
+            action: action('chore_log'),
+            send: (_) async => true,
+            onDone: () {},
+          ),
+        ),
+      );
+      await tester.tap(find.byKey(const ValueKey('musey-option-chore-Other')));
+      await tester.pumpAndSettle();
+      expect(api.composeCalls, isEmpty);
+      expect(find.byKey(const ValueKey('musey-field-other')), findsOneWidget);
+      expect(find.text('A few words.'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('musey-send')));
+      await tester.pumpAndSettle();
+      expect(api.composeCalls, isEmpty);
+      expect(find.byKey(const ValueKey('musey-error-other')), findsOneWidget);
+      await tester.enterText(
+        find.descendant(
+          of: find.byKey(const ValueKey('musey-field-other')),
+          matching: find.byType(EditableText),
+        ),
+        'Fixed the gate',
+      );
+      await tester.tap(find.byKey(const ValueKey('musey-send')));
+      await tester.pumpAndSettle();
+      expect(api.composeCalls.single.$2, {
+        'chore': 'Other',
+        'other': 'Fixed the gate',
+      });
+    });
+
+    testWidgets('an action with no fields runs when picked', (tester) async {
+      final api = FakeApi(composeText: 'undo');
+      final sent = <String>[];
+      await tester.pumpWidget(
+        _app(
+          api,
+          MuseyActionForm(
+            action: action('undo'),
+            send: (t) async {
+              sent.add(t);
+              return true;
+            },
+            onDone: () {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(sent, ['undo']);
+      expect(api.composeCalls.single.$2, isEmpty);
     });
 
     testWidgets('a bad slot shows the relay error and sends nothing', (

@@ -29,6 +29,9 @@ class MuseyField {
     this.required = false,
     this.options = const <MuseyOption>[],
     this.defaultValue,
+    this.showWhenKey,
+    this.showWhenValue,
+    this.note,
   });
 
   final String key;
@@ -39,6 +42,22 @@ class MuseyField {
 
   /// The relay's suggested value, as sent (string or number), or null.
   final Object? defaultValue;
+
+  /// This field shows only while the field [showWhenKey] has the value
+  /// [showWhenValue] (`show_when` of the relay). Null: always shown.
+  final String? showWhenKey;
+  final String? showWhenValue;
+
+  /// A short helper line under the field.
+  final String? note;
+
+  /// A field the relay reveals only for one value (the "Other" text) counts as
+  /// required once it shows, whatever its own flag says.
+  bool get mustFill => required || showWhenKey != null;
+
+  /// Whether the field shows given the current values of the other fields.
+  bool visibleGiven(String? Function(String key) valueOf) =>
+      showWhenKey == null || valueOf(showWhenKey!) == showWhenValue;
 }
 
 /// One action of the wrench menu.
@@ -60,8 +79,14 @@ class MuseyAction {
 
   /// The one required choice field that makes a single tap send, or null when
   /// the action needs more than that tap.
-  MuseyField? get oneTapField {
-    final required = fields.where((f) => f.required).toList();
+  MuseyField? get oneTapField => oneTapFieldGiven((_) => null);
+
+  /// Like [oneTapField], counting only the fields visible given the current
+  /// values ([valueOf] by field key).
+  MuseyField? oneTapFieldGiven(String? Function(String key) valueOf) {
+    final required = fields
+        .where((f) => f.mustFill && f.visibleGiven(valueOf))
+        .toList();
     if (required.length != 1) return null;
     final field = required.single;
     return field.type == MuseyFieldType.choice && field.options.isNotEmpty
@@ -122,8 +147,17 @@ List<MuseyAction> parseMuseyActions(Object? data) {
             );
           }
         }
+        final showWhen = f['show_when'];
+        final note = f['note'];
         fields.add(
           MuseyField(
+            showWhenKey: showWhen is Map && showWhen['key'] is String
+                ? showWhen['key'] as String
+                : null,
+            showWhenValue: showWhen is Map && showWhen['value'] != null
+                ? showWhen['value'].toString()
+                : null,
+            note: note is String && note.isNotEmpty ? note : null,
             key: key,
             label: fLabel,
             type: type,
