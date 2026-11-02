@@ -83,6 +83,9 @@ import '../../../shared/utils/platform_utils.dart';
 import '../../../shared/utils/adaptive_glass.dart';
 
 import 'package:conduit/l10n/app_localizations.dart';
+import '../musey/musey_actions_provider.dart';
+import '../musey/musey_actions_sheet.dart';
+import '../musey/musey_api.dart';
 import 'package:conduit_core/providers/host_ports.dart';
 
 import '../../../shared/widgets/modal_safe_area.dart';
@@ -394,6 +397,10 @@ class ModernChatInput extends ConsumerStatefulWidget {
   final Widget Function(double size)? overflowButtonBuilder;
   final Widget? attachedOverlay;
 
+  /// Sends text composed by a Musey action into the current chat as a normal
+  /// user message. Null hides the wrench button and the "/" action list.
+  final Future<bool> Function(String text)? onMuseySend;
+
   final Function()? onVoiceInput;
   final Function()? onVoiceCall;
   final Function()? onFileAttachment;
@@ -422,6 +429,7 @@ class ModernChatInput extends ConsumerStatefulWidget {
     this.placeholder,
     this.overflowButtonBuilder,
     this.attachedOverlay,
+    this.onMuseySend,
     this.onVoiceInput,
     this.onVoiceCall,
     this.onFileAttachment,
@@ -1681,6 +1689,13 @@ class _ModernChatInputState extends ConsumerState<ModernChatInput>
       _skillSuggestionDebounce = null;
     }
 
+    if (shouldShow &&
+        match.command.startsWith('/') &&
+        match.start == 0 &&
+        widget.onMuseySend != null) {
+      unawaited(ref.read(museyActionsProvider.notifier).load());
+    }
+
     if (!wasShowing && shouldShow) {
       // Trigger data fetch lazily when overlay first appears.
       if (_currentPromptCommand.startsWith('/')) {
@@ -2109,7 +2124,9 @@ class _ModernChatInputState extends ConsumerState<ModernChatInput>
 
     // Determine filtered list length based on trigger type.
     final int filteredLength;
-    if (_currentPromptCommand.startsWith('\$')) {
+    if (_museySlashActive) {
+      filteredLength = _museySlashItems.length;
+    } else if (_currentPromptCommand.startsWith('\$')) {
       filteredLength = _skillSuggestions.asData?.value.length ?? 0;
     } else if (_currentPromptCommand.startsWith('@')) {
       final List<Model>? models = ref.read(modelsProvider).value;
@@ -2136,6 +2153,12 @@ class _ModernChatInputState extends ConsumerState<ModernChatInput>
   }
 
   void _confirmPromptSelection() {
+    if (_museySlashActive) {
+      final items = _museySlashItems;
+      if (items.isEmpty) return;
+      _applyMuseySlash(items[_promptSelectionIndex.clamp(0, items.length - 1)]);
+      return;
+    }
     if (_currentPromptCommand.startsWith('#')) {
       if (_contextSuggestions.isEmpty) {
         _openKnowledgePicker();
@@ -2578,6 +2601,13 @@ class _ModernChatInputState extends ConsumerState<ModernChatInput>
         isHermesModel(selectedModel) &&
         (hermesCapabilities?.skills ?? true);
 
+    if (_museySlashActive) {
+      return MuseySlashOverlay(
+        query: _currentPromptCommand.substring(1),
+        selectionIndex: _promptSelectionIndex,
+        onPicked: _applyMuseySlash,
+      );
+    }
     if (_currentPromptCommand.startsWith('#')) {
       return _buildContextSuggestionOverlay(context, overlayColor, borderColor);
     }
@@ -3446,6 +3476,8 @@ class _ModernChatInputState extends ConsumerState<ModernChatInput>
       codeInterpreter: codeInterpreterOffer,
     );
 
+    // Rebuild when the relay client appears or goes (the wrench follows it).
+    ref.watch(museyApiProvider);
     final focusTick = ref.watch(inputFocusTriggerProvider);
     final autofocusEnabled = ref.watch(composerAutofocusEnabledProvider);
     if (autofocusEnabled && focusTick != _lastHandledFocusTick) {
@@ -3738,6 +3770,10 @@ class _ModernChatInputState extends ConsumerState<ModernChatInput>
                 ),
                 const SizedBox(width: Spacing.xs),
               ],
+              if (!_isRecording && _museyEnabled) ...[
+                _buildMuseyButton(),
+                const SizedBox(width: Spacing.xs),
+              ],
               if (quickPills.isNotEmpty)
                 Expanded(
                   child: HorizontalOverflowFade(
@@ -3897,6 +3933,10 @@ class _ModernChatInputState extends ConsumerState<ModernChatInput>
                     dense: true,
                     nativeActions: nativeAttachmentActions,
                   ),
+                  const SizedBox(width: Spacing.xs),
+                ],
+                if (!_isRecording && _museyEnabled) ...[
+                  _buildMuseyButton(),
                   const SizedBox(width: Spacing.xs),
                 ],
                 Expanded(
@@ -4372,6 +4412,90 @@ class _ModernChatInputState extends ConsumerState<ModernChatInput>
                 },
               );
             },
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Whether the wrench button and the "/" action list are offered: the chat
+  /// can take the composed text and the Voice provider's relay is set.
+  bool get _museyEnabled =>
+      widget.onMuseySend != null && ref.read(museyApiProvider) != null;
+
+  /// Whether the text is a "/" typed first in the composer, which opens the
+  /// Musey action list instead of Open WebUI's saved prompts.
+  bool get _museySlashActive =>
+      _museyEnabled &&
+      _showPromptOverlay &&
+      _currentPromptCommand.startsWith('/') &&
+      _currentPromptRange?.start == 0 &&
+      !_hermesCommandsActive;
+
+  List<MuseyAction> get _museySlashItems => filterMuseyActions(
+    ref.read(museyActionsProvider).actions ?? const <MuseyAction>[],
+    _currentPromptCommand.substring(1),
+  );
+
+  Future<void> _openMuseySheet({MuseyAction? initial}) async {
+    final send = widget.onMuseySend;
+    if (send == null || !mounted || _isDeactivated) return;
+    _dismissFallbackAttachmentPanel();
+    await _hideNativeKeyboardAttachmentPanel();
+    if (!mounted || _isDeactivated) return;
+    await showMuseyActionsSheet(context, send: send, initial: initial);
+  }
+
+  void _applyMuseySlash(MuseyAction action) {
+    final range = _currentPromptRange;
+    if (range != null) {
+      // The "/query" was only a way to ask for the list.
+      _controller.value = _controller.value.replaced(range, '');
+    }
+    setState(() {
+      _showPromptOverlay = false;
+      _currentPromptCommand = '';
+      _currentPromptRange = null;
+      _promptSelectionIndex = 0;
+    });
+    unawaited(_openMuseySheet(initial: action));
+  }
+
+  Widget _buildMuseyButton() {
+    final double buttonSize = conduitScaledControlExtent(
+      context,
+      baseExtent: _composerControlSize,
+    );
+    final bool enabled = widget.enabled && !_isRecording;
+    final theme = context.conduitTheme;
+    final Color iconColor = enabled
+        ? theme.textPrimary.withValues(alpha: Alpha.strong)
+        : theme.textPrimary.withValues(alpha: Alpha.disabled);
+    final iconSize = conduitScaledIconExtent(
+      context,
+      PlatformInfo.isIOS
+          ? _cupertinoComposerOverflowIconExtent
+          : _materialComposerOverflowIconExtent,
+    );
+    return Focus(
+      key: const ValueKey('composer-musey-button'),
+      canRequestFocus: false,
+      skipTraversal: true,
+      descendantsAreFocusable: false,
+      child: AdaptiveTooltip(
+        message: 'Actions',
+        child: _buildComposerIconButton(
+          onPressed: enabled ? () => unawaited(_openMuseySheet()) : null,
+          size: buttonSize,
+          forcePlain: true,
+          semanticLabel: 'Actions',
+          iosSymbol: 'wrench.and.screwdriver',
+          iosSymbolSize: iconSize,
+          iosSymbolColor: iconColor,
+          child: ConduitSystemAdaptiveIcon(
+            PlatformInfo.isIOS ? CupertinoIcons.wrench : Icons.build_outlined,
+            size: iconSize,
+            color: iconColor,
           ),
         ),
       ),

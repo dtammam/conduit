@@ -91,7 +91,11 @@ import '../widgets/openwebui_chat_settings_sheet.dart';
 import '../widgets/modern_chat_input.dart';
 import '../widgets/user_message_bubble.dart';
 import '../reactions/quick_reply_reactions.dart';
+import '../musey/break_prompt_bar.dart';
+import '../musey/musey_api.dart';
+import '../musey/musey_flags.dart';
 import '../providers/assistant_name_provider.dart';
+import 'package:conduit_core/features/chat/voice_mode/voice_event_log.dart';
 import '../avatar/assistant_action_log.dart';
 import '../avatar/assistant_avatar_strip.dart';
 import '../avatar/omni_tab_bar.dart';
@@ -953,6 +957,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   void initState() {
     super.initState();
     _livePromptNotifier = ref.read(openWebUiLivePromptProvider.notifier);
+    // Break notes that could not be posted last time go out now.
+    unawaited(ref.read(museyFlagQueueProvider).retryAll());
 
     _screenContextSub = ref.listenManual(screenContextProvider, (_, next) {
       if (next == null || next.isEmpty) {
@@ -1132,11 +1138,63 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   }
 
   Future<void> _handleMessageSend(String text) async {
+    // A pending 💥 note goes to the relay's flag log, never to the model.
+    final breakTarget = ref.read(breakPromptProvider.notifier).take();
+    if (breakTarget != null) {
+      await _submitBreakNote(breakTarget, text);
+      return;
+    }
     final reply = _takeReplyTarget();
     await _sendMessage(
       reply == null ? text : composeReplyText(reply.content, text),
       includeComposerContext: true,
     ).then(_finishReply(reply));
+  }
+
+  /// Posts a 💥 note. The note is saved on the phone before the post, so a
+  /// failed post is retried at the next launch and never dropped.
+  Future<void> _submitBreakNote(BreakFlagTarget target, String note) async {
+    final queue = ref.read(museyFlagQueueProvider);
+    final persona = ref.read(assistantNameProvider);
+    final ok = await submitBreakNote(
+      queue,
+      target,
+      note.trim(),
+      build: VoiceEventLog.instance.build,
+      persona: persona,
+    );
+    if (!mounted) return;
+    AdaptiveSnackBar.show(
+      context,
+      message: ok ? 'Logged for review' : 'Saved. Will retry later.',
+      type: ok ? AdaptiveSnackBarType.success : AdaptiveSnackBarType.info,
+      duration: const Duration(seconds: 2),
+    );
+  }
+
+  /// The 💥 on a reply: marks it and asks "What broke?" above the composer.
+  void _startBreakFlag(String messageId) {
+    final chatId = ref.read(activeConversationProvider)?.id;
+    if (chatId == null) return;
+    final target = buildBreakTarget(
+      ref.read(chatMessagesProvider),
+      chatId: chatId,
+      messageId: messageId,
+    );
+    if (target == null) return;
+    ref.read(breakPromptProvider.notifier).start(target);
+  }
+
+  /// Sends text a Musey action composed, exactly as the relay returned it,
+  /// like a quick reply: with the chat's selected tools and without the
+  /// composer's attachments. True when the chat took it.
+  Future<bool> _handleMuseySend(String text) async {
+    final result = await _sendMessage(
+      text,
+      includeComposerContext: false,
+      includeSelectedTools: true,
+    );
+    return result.admitted;
   }
 
   /// The message the composer is replying to, if any. The request that goes
@@ -3542,6 +3600,12 @@ class _ChatPageState extends ConsumerState<ChatPage> {
             ),
           )
         : null;
+    final breakFlagged = rowRef.watch(
+      flaggedMessagesProvider.select((ids) => ids.contains(messageId)),
+    );
+    final museyOn = rowRef.watch(
+      museyApiProvider.select((api) => api != null),
+    );
     Widget buildRow(
       QuickReplyReaction? quickReplyBadge,
     ) => assistant.AssistantMessageWidget(
@@ -3571,6 +3635,10 @@ class _ChatPageState extends ConsumerState<ChatPage> {
           ? null
           : _handleQuickReplySend,
       quickReplyBadge: quickReplyBadge,
+      breakFlagged: breakFlagged,
+      onBreak: readOnly || !quickRepliesEnabled || !museyOn
+          ? null
+          : () => _startBreakFlag(messageId),
       onReply: readOnly ? null : _startReply,
       // Copy and listen act on the pressed row only; regenerate and delete
       // still act on the whole grouped response below.
@@ -4081,8 +4149,10 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       const ReplyToBar(),
+                      const BreakPromptBar(),
                       ModernChatInput(
                         onSendMessage: _handleMessageSend,
+                        onMuseySend: _handleMuseySend,
                         onCompareSend: _handleCompareSend,
                         enabled: debugCanSubmitChatMessageForTesting(
                           isLoadingConversation: isLoadingConversation,

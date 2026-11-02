@@ -37,6 +37,7 @@ class MessageMenuSpec {
     this.more = const <MessageMenuAction>[],
     this.moreIcon,
     this.onReaction,
+    this.onBreak,
   });
 
   final List<MessageMenuAction> actions;
@@ -45,6 +46,9 @@ class MessageMenuSpec {
   /// The icon of the More button, shown when [more] is not empty.
   final IconData? moreIcon;
   final ValueChanged<QuickReplyReaction>? onReaction;
+
+  /// The 💥 after the reactions: marks the reply as broken.
+  final VoidCallback? onBreak;
 }
 
 /// Opens a message's menu on a long press of [child].
@@ -382,6 +386,9 @@ class _MessageMenuState extends State<_MessageMenu> {
           QuickReplyPill(
             onSelected: (reaction) =>
                 widget.onChosen(() => onReaction(reaction)),
+            onBreak: spec.onBreak == null
+                ? null
+                : () => widget.onChosen(spec.onBreak!),
           ),
           const SizedBox(height: Spacing.xs),
         ],

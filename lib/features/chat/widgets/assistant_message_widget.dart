@@ -153,6 +153,13 @@ class AssistantMessageWidget extends ConsumerStatefulWidget {
   /// bottom-trailing corner.
   final QuickReplyReaction? quickReplyBadge;
 
+  /// Marks this reply as broken (the 💥 reaction). Null leaves the 💥 out of
+  /// the menu.
+  final VoidCallback? onBreak;
+
+  /// Whether this reply carries the 💥 badge.
+  final bool breakFlagged;
+
   @visibleForTesting
   final VoidCallback? debugOnShellBuild;
 
@@ -182,6 +189,8 @@ class AssistantMessageWidget extends ConsumerStatefulWidget {
     this.onQuickReply,
     this.onReply,
     this.quickReplyBadge,
+    this.onBreak,
+    this.breakFlagged = false,
     this.debugOnShellBuild,
     this.debugOnStreamingContentBuild,
   });
@@ -1801,18 +1810,36 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
       ],
       moreIcon: Platform.isIOS ? CupertinoIcons.ellipsis : Icons.more_horiz,
       onReaction: _showsQuickReplies ? _sendQuickReply : null,
+      onBreak: _showsQuickReplies ? widget.onBreak : null,
     );
   }
 
   Widget? _buildQuickReplyBadge({double ringWidth = 1}) {
     final badge = widget.quickReplyBadge;
-    if (badge == null) return null;
+    final flagged = widget.breakFlagged;
+    if (badge == null && !flagged) return null;
     final l10n = AppLocalizations.of(context)!;
-    return MessageBadge(
-      key: const ValueKey<String>('assistant-quick-reply-badge'),
-      emoji: badge.emoji,
-      semanticsLabel: l10n.quickReplyReactionBadge(badge.localizedText(l10n)),
+    final reaction = badge == null
+        ? null
+        : MessageBadge(
+            key: const ValueKey<String>('assistant-quick-reply-badge'),
+            emoji: badge.emoji,
+            semanticsLabel: l10n.quickReplyReactionBadge(
+              badge.localizedText(l10n),
+            ),
+            ringWidth: ringWidth,
+          );
+    if (!flagged) return reaction;
+    final boom = MessageBadge(
+      key: const ValueKey<String>('assistant-break-badge'),
+      emoji: '\u{1F4A5}',
+      semanticsLabel: 'Marked as broken',
       ringWidth: ringWidth,
+    );
+    if (reaction == null) return boom;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [boom, const SizedBox(width: 2), reaction],
     );
   }
 
@@ -1843,6 +1870,7 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
     // into the action row does not move the list either.
     final canCarryBadge =
         reaction != null ||
+        widget.breakFlagged ||
         (widget.onQuickReply != null && !widget.readOnly && !_isVoiceReply);
     const hang = MessageBadgeAnchor.insetHang;
     final paragraphGap = ConduitMarkdownStyle.fromTheme(context)
@@ -1856,6 +1884,7 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
       reaction,
       reaction?.localizedText(l10n),
       badgeRoom,
+      widget.breakFlagged,
     );
     final cached = _proseBubble;
     if (cached != null && inputs == _proseBubbleInputs) return cached;

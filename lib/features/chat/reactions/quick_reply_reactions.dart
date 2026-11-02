@@ -131,11 +131,15 @@ QuickReplyReaction? quickReplyBadgeFor(
 
 /// The floating pill of reactions: row one of the message menu.
 class QuickReplyPill extends StatelessWidget {
-  const QuickReplyPill({super.key, required this.onSelected});
+  const QuickReplyPill({super.key, required this.onSelected, this.onBreak});
 
   static const double _itemExtent = 44;
 
   final ValueChanged<QuickReplyReaction> onSelected;
+
+  /// Marks the reply as broken (the 💥 after the reactions). Null leaves it
+  /// out.
+  final VoidCallback? onBreak;
 
   @override
   Widget build(BuildContext context) {
@@ -177,6 +181,27 @@ class QuickReplyPill extends StatelessWidget {
                     child: Text(
                       reaction.emoji,
                       style: const TextStyle(fontSize: 24),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          if (onBreak != null)
+            Semantics(
+              button: true,
+              label: 'Report what broke',
+              excludeSemantics: true,
+              child: GestureDetector(
+                key: const ValueKey<String>('quick-reply-break'),
+                behavior: HitTestBehavior.opaque,
+                onTap: onBreak,
+                child: const SizedBox(
+                  width: _itemExtent,
+                  height: _itemExtent,
+                  child: Center(
+                    child: Text(
+                      '\u{1F4A5}',
+                      style: TextStyle(fontSize: 24),
                     ),
                   ),
                 ),
