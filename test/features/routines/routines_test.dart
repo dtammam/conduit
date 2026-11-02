@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:checks/checks.dart';
+import 'package:conduit/features/chat/omni/message_jump.dart';
 import 'package:conduit/features/routines/push_registration.dart';
 import 'package:conduit/features/routines/routines_providers.dart';
 import 'package:conduit/features/routines/routines_service.dart';
@@ -394,6 +395,39 @@ void main() {
       push.emit({'kind': 'open', 'chat_id': 'omni'});
       await Future<void>.delayed(const Duration(milliseconds: 50));
       check(container.read(routineReplyMarkerProvider)).isNull();
+    });
+
+    test('a tap on a push with a message id asks to jump to it', () async {
+      await start(
+        settings: const AppSettings(
+          routinesServerUrl: _base,
+          routinesPushEnabled: true,
+        ),
+      );
+      await container.read(pushRegistrationProvider.notifier).start();
+      push.emit({
+        'kind': 'open',
+        'chat_id': 'omni',
+        'message_id': 'post-9',
+        'slug': 'journal',
+      });
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      final jump = container.read(messageJumpProvider)!;
+      check(jump.chatId).equals('omni');
+      check(jump.messageId).equals('post-9');
+    });
+
+    test('an older push without a message id asks for no jump', () async {
+      await start(
+        settings: const AppSettings(
+          routinesServerUrl: _base,
+          routinesPushEnabled: true,
+        ),
+      );
+      await container.read(pushRegistrationProvider.notifier).start();
+      push.emit({'kind': 'open', 'chat_id': 'omni', 'slug': 'journal'});
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      check(container.read(messageJumpProvider)).isNull();
     });
 
     test('a reply event waits for the chat page as a request', () async {

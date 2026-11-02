@@ -1,4 +1,5 @@
 import 'package:checks/checks.dart';
+import 'package:conduit/features/chat/omni/message_jump.dart';
 import 'package:conduit/features/chat/omni/open_posts.dart';
 import 'package:conduit/features/chat/providers/text_to_speech_provider.dart';
 import 'package:conduit/features/chat/widgets/assistant_message_widget.dart';
@@ -73,5 +74,60 @@ void main() {
     for (final e in glows.evaluate()) {
       check(tester.getSize(find.byWidget(e.widget)).width).isLessThan(380);
     }
+  });
+
+  testWidgets('a message a tap jumped to glows, then the glow goes', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(400, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final container = ProviderContainer(
+      overrides: [
+        textToSpeechControllerProvider.overrideWith(_Tts.new),
+        streamingHapticsEnabledProvider.overrideWithValue(false),
+        openPostsProvider.overrideWith(() => _Posts(const {})),
+        messageBubbleAccentProvider.overrideWithValue(const Color(0xFF8E5CD8)),
+      ],
+    );
+    addTearDown(container.dispose);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          theme: AppTheme.light(TweakcnThemes.t3Chat),
+          localizationsDelegates: conduitLocalizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: AssistantMessageWidget(
+              message: ChatMessage(
+                id: 'a1',
+                role: 'assistant',
+                content: 'Hi',
+                timestamp: DateTime.utc(2026),
+                model: 'Assistant',
+                metadata: const {'responseDone': true},
+              ),
+              showFollowUps: false,
+              animateOnMount: false,
+              modelName: 'Assistant',
+              onCopy: () {},
+              onDelete: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+    bool glowing() => tester
+        .widgetList<OpenPostGlowFrame>(find.byType(OpenPostGlowFrame))
+        .any((f) => f.glowing);
+    await tester.pump(const Duration(milliseconds: 500));
+    check(glowing()).isFalse();
+    container.read(highlightedMessageProvider.notifier).flash('a1');
+    await tester.pump(const Duration(milliseconds: 500));
+    check(glowing()).isTrue();
+    await tester.pump(kMessageJumpHighlight + const Duration(seconds: 1));
+    await tester.pump(const Duration(milliseconds: 500));
+    check(glowing()).isFalse();
   });
 }

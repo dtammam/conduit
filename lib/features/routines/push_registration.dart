@@ -4,6 +4,7 @@ import 'package:conduit/features/chat/avatar/persona_appearance_service.dart'
     show switchboardTokenProvider;
 import 'package:conduit/features/notifications/providers/notification_socket_listener.dart'
     show openChatById;
+import 'package:conduit/features/chat/omni/message_jump.dart';
 import 'package:conduit_core/features/chat/omni/omni_chat.dart';
 import 'package:conduit_core/features/chat/omni/routine_reply_marker.dart';
 import 'package:conduit_core/services/settings_service.dart';
@@ -406,6 +407,13 @@ class PushRegistration extends Notifier<PushStatus> {
     final chatId = await _chatIdOf(event);
     if (chatId == null || !ref.mounted) return;
     _armReplyMarker(chatId, event);
+    // A push that names its message takes the person to it (the chat page
+    // scrolls there once the chat and the message are loaded); an older push
+    // without one just opens the chat.
+    final messageId = messageIdFromPushEvent(event);
+    if (messageId != null) {
+      ref.read(messageJumpProvider.notifier).request(chatId, messageId);
+    }
     // Opens the chat and pulls it from the server, so the message the
     // routine posted is there.
     await openChatById(ref, chatId);

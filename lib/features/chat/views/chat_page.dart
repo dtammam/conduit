@@ -95,7 +95,9 @@ import '../musey/break_prompt_bar.dart';
 import '../musey/musey_api.dart';
 import '../musey/musey_flags.dart';
 import '../providers/assistant_name_provider.dart';
+
 import 'package:conduit_core/features/chat/voice_mode/voice_event_log.dart';
+
 import '../avatar/assistant_action_log.dart';
 import '../avatar/assistant_avatar_strip.dart';
 import '../avatar/omni_tab_bar.dart';
@@ -135,6 +137,7 @@ import '../providers/context_usage_providers.dart';
 import '../widgets/context_usage_ring.dart';
 import '../../routines/push_registration.dart';
 import '../widgets/omni_session_divider.dart';
+import '../omni/message_jump.dart';
 import '../omni/open_posts.dart';
 import '../widgets/reply_to_bar.dart';
 import '../../../shared/widgets/server_version_warning_card.dart';
@@ -627,6 +630,9 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   ProviderSubscription<String?>? _screenContextSub;
   ProviderSubscription<bool>? _conversationLoadingSub;
   ProviderSubscription<RoutineReplyRequest?>? _routineReplySub;
+  ProviderSubscription<MessageJumpRequest?>? _messageJumpSub;
+  Timer? _messageJumpExpiry;
+  bool _messageJumpRunning = false;
   ProviderSubscription<List<ChatMessage>>? _messagesAppendSub;
   ProviderSubscription<(bool, bool)>? _voiceLayoutSub;
   bool _routineReplySending = false;
@@ -953,6 +959,86 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     }());
   }
 
+  /// Takes the user to the message a notification tap pointed at: waits for
+  /// its chat to be open and the message to be in the transcript, shows older
+  /// pages until it is within the timeline, scrolls it to the top and lets it
+  /// glow for a moment. If it never turns up (or does not scroll into view)
+  /// the chat stays open at the bottom and nothing is shown.
+  void _drainMessageJump() {
+    if (!mounted || _messageJumpRunning) return;
+    final request = ref.read(messageJumpProvider);
+    if (request == null) return;
+    if (request.expired(DateTime.now())) {
+      ref.read(messageJumpProvider.notifier).clear();
+      return;
+    }
+    final active = ref.read(activeConversationProvider);
+    if (active == null ||
+        !conversationMatchesScopedId(active, request.chatId) ||
+        ref.read(isLoadingConversationProvider)) {
+      return;
+    }
+    final ids = [for (final m in ref.read(chatMessagesProvider)) m.id];
+    final need = transcriptCountToReveal(
+      ids: ids,
+      messageId: request.messageId,
+      loadedCount: ref.read(chatTranscriptPagingProvider).loadedCount,
+    );
+    if (need == null) return; // not pulled yet; the next change retries
+    _messageJumpRunning = true;
+    unawaited(_runMessageJump(request, need));
+  }
+
+  Future<void> _runMessageJump(MessageJumpRequest request, int need) async {
+    final paging = ref.read(chatTranscriptPagingProvider.notifier);
+    var found = false;
+    try {
+      for (var guard = 0; guard < 400; guard++) {
+        final state = ref.read(chatTranscriptPagingProvider);
+        if (state.loadedCount >= need || !state.hasOlder) break;
+        await paging.fetchOlder(
+          totalMessages: ref.read(chatMessagesProvider).length,
+        );
+      }
+      for (var attempt = 0; attempt < 4 && mounted; attempt++) {
+        await WidgetsBinding.instance.endOfFrame;
+        await Future<void>.delayed(const Duration(milliseconds: 250));
+        if (!mounted) return;
+        final current = ref.read(messageJumpProvider);
+        if (current == null || current.messageId != request.messageId) return;
+        if (!_timelineViewportController.hasClients) continue;
+        await _timelineViewportController.jumpMessageToTop(request.messageId);
+        await WidgetsBinding.instance.endOfFrame;
+        if (_timelineViewportController.visibleMessageIds.contains(
+          request.messageId,
+        )) {
+          found = true;
+          break;
+        }
+      }
+    } catch (error, stackTrace) {
+      DebugLogger.error(
+        'message-jump-failed',
+        scope: 'chat/page',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    } finally {
+      _messageJumpRunning = false;
+      if (mounted) {
+        final current = ref.read(messageJumpProvider);
+        if (current != null && current.messageId == request.messageId) {
+          ref.read(messageJumpProvider.notifier).clear();
+        }
+        if (found) {
+          ref
+              .read(highlightedMessageProvider.notifier)
+              .flash(request.messageId);
+        }
+      }
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -976,7 +1062,18 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     ) {
       if (!isLoading) _scheduleScreenContextSubmission();
       if (!isLoading) _drainRoutineReply();
+      if (!isLoading) _drainMessageJump();
     });
+    _messageJumpSub = ref.listenManual(messageJumpProvider, (_, next) {
+      _messageJumpExpiry?.cancel();
+      if (next == null) return;
+      _messageJumpExpiry = Timer(kMessageJumpPatience, () {
+        if (mounted && ref.read(messageJumpProvider) == next) {
+          ref.read(messageJumpProvider.notifier).clear();
+        }
+      });
+      _drainMessageJump();
+    }, fireImmediately: true);
     _routineReplySub = ref.listenManual(
       routineReplyProvider,
       (_, _) => _drainRoutineReply(),
@@ -1098,6 +1195,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     _screenContextSub?.close();
     _conversationLoadingSub?.close();
     _routineReplySub?.close();
+    _messageJumpSub?.close();
+    _messageJumpExpiry?.cancel();
     _messagesAppendSub?.close();
     _voiceLayoutSub?.close();
     _reviewerModeSub?.close();
@@ -1454,6 +1553,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     List<ChatMessage>? previous,
     List<ChatMessage> next,
   ) {
+    if (ref.read(messageJumpProvider) != null) _drainMessageJump();
     if (!mounted || previous == null || previous.isEmpty || next.isEmpty) {
       return;
     }
@@ -3603,9 +3703,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     final breakFlagged = rowRef.watch(
       flaggedMessagesProvider.select((ids) => ids.contains(messageId)),
     );
-    final museyOn = rowRef.watch(
-      museyApiProvider.select((api) => api != null),
-    );
+    final museyOn = rowRef.watch(museyApiProvider.select((api) => api != null));
     Widget buildRow(
       QuickReplyReaction? quickReplyBadge,
     ) => assistant.AssistantMessageWidget(

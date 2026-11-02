@@ -9,6 +9,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../widgets/message_bubble_colors.dart';
+import 'message_jump.dart';
 
 /// How long after Dean sends a message the posts are asked again, so the relay
 /// has recorded the reply.
@@ -255,9 +256,14 @@ class OpenPostGlow extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final on = ref.watch(
+    final open = ref.watch(
       openPostsProvider.select((ids) => ids.contains(messageId)),
     );
+    // A message a notification tap just jumped to glows for a moment too.
+    final jumped = ref.watch(
+      highlightedMessageProvider.select((id) => id == messageId),
+    );
+    final on = open || jumped;
     final theme = context.conduitTheme;
     final accent =
         ref.watch(messageBubbleAccentProvider) ?? theme.buttonPrimary;
