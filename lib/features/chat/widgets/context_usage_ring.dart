@@ -269,37 +269,41 @@ class ContextUsageSheetContent extends ConsumerWidget {
       }
     }
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            ContextUsageRing(fraction: usage?.fraction),
-            const SizedBox(width: Spacing.sm),
+    return SheetScrollBody(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              ContextUsageRing(fraction: usage?.fraction),
+              const SizedBox(width: Spacing.sm),
+              Expanded(
+                child: Text(
+                  l10n.contextUsageTitle,
+                  style: AppTypography.bodyLargeStyle.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: theme.textPrimary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: Spacing.lg),
+          ...rows,
+          if (usage != null) ...[
+            const SizedBox(height: Spacing.xs),
             Text(
-              l10n.contextUsageTitle,
-              style: AppTypography.bodyLargeStyle.copyWith(
-                fontWeight: FontWeight.w600,
-                color: theme.textPrimary,
+              usage.tokens.estimated
+                  ? l10n.contextUsageEstimateNote
+                  : l10n.contextUsageReportedNote,
+              style: AppTypography.labelSmallStyle.copyWith(
+                color: theme.textTertiary,
               ),
             ),
           ],
-        ),
-        const SizedBox(height: Spacing.lg),
-        ...rows,
-        if (usage != null) ...[
-          const SizedBox(height: Spacing.xs),
-          Text(
-            usage.tokens.estimated
-                ? l10n.contextUsageEstimateNote
-                : l10n.contextUsageReportedNote,
-            style: AppTypography.labelSmallStyle.copyWith(
-              color: theme.textTertiary,
-            ),
-          ),
         ],
-      ],
+      ),
     );
   }
 

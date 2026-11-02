@@ -27,6 +27,57 @@ List<MuseyAction> filterMuseyActions(List<MuseyAction> actions, String query) {
   ];
 }
 
+/// Longest suggestion list shown under a text field.
+const int museyMaxSuggestions = 8;
+
+/// A choice field with more options than this gets a search picker.
+const int museyLongChoice = 12;
+
+bool _wordStart(String text, int at) =>
+    at == 0 || !RegExp(r'[a-z0-9]').hasMatch(text[at - 1]);
+
+/// The options matching [query] (case-insensitive, on label or value): matches
+/// at the start of a word first, then matches anywhere, each group in the
+/// given order. An empty query keeps all options when [emptyKeepsAll], else
+/// none. At most [limit] results.
+List<MuseyOption> filterMuseyOptions(
+  List<MuseyOption> options,
+  String query, {
+  int? limit,
+  bool emptyKeepsAll = false,
+}) {
+  final q = query.trim().toLowerCase();
+  if (q.isEmpty) {
+    final all = emptyKeepsAll ? options : const <MuseyOption>[];
+    return limit == null || all.length <= limit ? all : all.sublist(0, limit);
+  }
+  final starts = <MuseyOption>[];
+  final inside = <MuseyOption>[];
+  for (final o in options) {
+    var best = 2; // 0 word start, 1 elsewhere, 2 none
+    for (final text in [o.label.toLowerCase(), o.value.toLowerCase()]) {
+      var i = text.indexOf(q);
+      while (i >= 0) {
+        if (_wordStart(text, i)) {
+          best = 0;
+          break;
+        }
+        best = best < 1 ? best : 1;
+        i = text.indexOf(q, i + 1);
+      }
+      if (best == 0) break;
+    }
+    if (best == 0) {
+      starts.add(o);
+    } else if (best == 1) {
+      inside.add(o);
+    }
+    if (limit != null && starts.length >= limit) break;
+  }
+  final out = [...starts, ...inside];
+  return limit == null || out.length <= limit ? out : out.sublist(0, limit);
+}
+
 IconData _iconFor(String? sfSymbol) {
   final name = sfSymbol ?? '';
   if (name.contains('cart') || name.contains('basket')) {
@@ -286,7 +337,8 @@ class MuseyActionRow extends StatelessWidget {
 }
 
 String _two(int n) => n.toString().padLeft(2, '0');
-String formatMuseyDate(DateTime d) => '${d.year.toString().padLeft(4, '0')}-'
+String formatMuseyDate(DateTime d) =>
+    '${d.year.toString().padLeft(4, '0')}-'
     '${_two(d.month)}-${_two(d.day)}';
 String formatMuseyTime(DateTime d) => '${_two(d.hour)}:${_two(d.minute)}';
 
@@ -321,6 +373,11 @@ class _MuseyActionFormState extends ConsumerState<MuseyActionForm> {
   final Map<String, TextEditingController> _texts = {};
   final Map<String, DateTime> _moments = {};
   final Map<String, String> _fieldErrors = {};
+
+  /// The suggestion tapped per text field: while the field still shows its
+  /// label, the value is what is sent.
+  final Map<String, MuseyOption> _suggested = {};
+  final Map<String, GlobalKey> _suggestionKeys = {};
   bool _sending = false;
   String? _error;
 
@@ -408,7 +465,10 @@ class _MuseyActionFormState extends ConsumerState<MuseyActionForm> {
           if (v.isEmpty) {
             if (f.mustFill) errors[f.key] = 'Required';
           } else {
-            slots[f.key] = v;
+            final picked = _suggested[f.key];
+            slots[f.key] = picked != null && picked.label == v
+                ? picked.value
+                : v;
           }
         case MuseyFieldType.number:
           final v = _texts[f.key]!.text.trim();
@@ -488,6 +548,66 @@ class _MuseyActionFormState extends ConsumerState<MuseyActionForm> {
     }
   }
 
+  Future<void> _openPicker(MuseyField f) async {
+    final picked = await ThemedSheets.showCustom<MuseyOption>(
+      context: context,
+      builder: (_) => _ChoicePicker(title: f.label, options: f.options),
+    );
+    if (picked != null && mounted) _pickChoice(f, picked);
+  }
+
+  /// Scrolls the suggestion rows into view above the keyboard.
+  void _revealSuggestions(MuseyField f) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = _suggestionKeys[f.key]?.currentContext;
+      if (ctx != null && mounted) {
+        unawaited(
+          Scrollable.ensureVisible(
+            ctx,
+            duration: const Duration(milliseconds: 120),
+            alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
+          ),
+        );
+      }
+    });
+  }
+
+  Widget _buildSuggestions(MuseyField f, ConduitThemeExtension theme) {
+    final text = _texts[f.key]!.text.trim();
+    final matches = filterMuseyOptions(
+      f.suggestions,
+      text,
+      limit: museyMaxSuggestions,
+    ).where((o) => o.label.toLowerCase() != text.toLowerCase()).toList();
+    final key = _suggestionKeys.putIfAbsent(f.key, GlobalKey.new);
+    if (matches.isEmpty) return SizedBox.shrink(key: key);
+    return Column(
+      key: key,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: Spacing.xs),
+        for (final o in matches) ...[
+          _OptionRow(
+            key: ValueKey<String>('musey-suggestion-${f.key}-${o.value}'),
+            label: o.label,
+            selected: false,
+            onTap: () {
+              _texts[f.key]!.text = o.label;
+              _texts[f.key]!.selection = TextSelection.collapsed(
+                offset: o.label.length,
+              );
+              setState(() {
+                _suggested[f.key] = o;
+                _fieldErrors.remove(f.key);
+              });
+            },
+          ),
+          const SizedBox(height: Spacing.xs),
+        ],
+      ],
+    );
+  }
+
   Future<void> _pickMoment(MuseyField f) async {
     var value = _moments[f.key]!;
     final isDate = f.type == MuseyFieldType.date;
@@ -508,7 +628,9 @@ class _MuseyActionFormState extends ConsumerState<MuseyActionForm> {
                       ? CupertinoDatePickerMode.date
                       : CupertinoDatePickerMode.time,
                   initialDateTime: value,
-                  use24hFormat: MediaQuery.alwaysUse24HourFormatOf(sheetContext),
+                  use24hFormat: MediaQuery.alwaysUse24HourFormatOf(
+                    sheetContext,
+                  ),
                   onDateTimeChanged: (d) => value = d,
                 ),
               ),
@@ -571,9 +693,7 @@ class _MuseyActionFormState extends ConsumerState<MuseyActionForm> {
             child: Text(
               _error!,
               key: const ValueKey<String>('musey-form-error'),
-              style: AppTypography.bodyMediumStyle.copyWith(
-                color: theme.error,
-              ),
+              style: AppTypography.bodyMediumStyle.copyWith(color: theme.error),
             ),
           ),
         if (!onlyTheOneTap)
@@ -616,6 +736,45 @@ class _MuseyActionFormState extends ConsumerState<MuseyActionForm> {
   Widget _buildField(MuseyField f, ConduitThemeExtension theme) {
     switch (f.type) {
       case MuseyFieldType.choice:
+        if (f.options.length > museyLongChoice) {
+          final current = f.options
+              .where((o) => o.value == _choices[f.key])
+              .firstOrNull;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _label(f, theme),
+              ConduitCard(
+                key: ValueKey<String>('musey-picker-${f.key}'),
+                onTap: _sending ? null : () => unawaited(_openPicker(f)),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: Spacing.md,
+                  vertical: Spacing.sm + Spacing.xxs,
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        current?.label ?? 'Choose',
+                        style: AppTypography.bodyLargeStyle.copyWith(
+                          color: current == null
+                              ? theme.textSecondary
+                              : theme.textPrimary,
+                        ),
+                      ),
+                    ),
+                    Icon(
+                      CupertinoIcons.chevron_down,
+                      size: IconSize.small,
+                      color: theme.iconSecondary,
+                    ),
+                  ],
+                ),
+              ),
+              _fieldError(f, theme),
+            ],
+          );
+        }
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -650,12 +809,16 @@ class _MuseyActionFormState extends ConsumerState<MuseyActionForm> {
                   : TextCapitalization.sentences,
               textInputAction: TextInputAction.done,
               onChanged: (_) {
-                if (_fieldErrors.containsKey(f.key)) {
+                if (_fieldErrors.containsKey(f.key) ||
+                    f.suggestions.isNotEmpty) {
                   setState(() => _fieldErrors.remove(f.key));
+                  if (f.suggestions.isNotEmpty) _revealSuggestions(f);
                 }
               },
               onSubmitted: (_) => unawaited(_submit()),
             ),
+            if (f.suggestions.isNotEmpty && !isNumber)
+              _buildSuggestions(f, theme),
             _fieldError(f, theme),
           ],
         );
@@ -686,6 +849,75 @@ class _MuseyActionFormState extends ConsumerState<MuseyActionForm> {
           ],
         );
     }
+  }
+}
+
+/// The picker of a choice with many options: a search box on top, the
+/// matching options below it, scrolling inside the sheet.
+class _ChoicePicker extends StatefulWidget {
+  const _ChoicePicker({required this.title, required this.options});
+
+  final String title;
+  final List<MuseyOption> options;
+
+  @override
+  State<_ChoicePicker> createState() => _ChoicePickerState();
+}
+
+class _ChoicePickerState extends State<_ChoicePicker> {
+  String _query = '';
+
+  @override
+  Widget build(BuildContext context) {
+    final shown = filterMuseyOptions(
+      widget.options,
+      _query,
+      emptyKeepsAll: true,
+    );
+    final media = MediaQuery.of(context);
+    return Padding(
+      padding: EdgeInsets.only(bottom: media.viewInsets.bottom),
+      child: ConduitModalSheetSurface(
+        child: SafeArea(
+          top: false,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: media.size.height * 0.7),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _SheetTitle(title: widget.title),
+                AdaptiveTextField(
+                  key: const ValueKey<String>('musey-picker-search'),
+                  placeholder: 'Search',
+                  onChanged: (v) => setState(() => _query = v),
+                ),
+                const SizedBox(height: Spacing.sm),
+                Flexible(
+                  child: ListView(
+                    key: const ValueKey<String>('musey-picker-list'),
+                    shrinkWrap: true,
+                    padding: EdgeInsets.zero,
+                    children: [
+                      for (final o in shown) ...[
+                        _OptionRow(
+                          key: ValueKey<String>('musey-pick-${o.value}'),
+                          label: o.label,
+                          selected: false,
+                          onTap: () => Navigator.of(context).pop(o),
+                        ),
+                        const SizedBox(height: Spacing.xs),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(height: Spacing.sm),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 

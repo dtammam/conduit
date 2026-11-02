@@ -55,33 +55,37 @@ class UsageStatsModal {
       showHandle: false,
       padding: const EdgeInsets.all(Spacing.lg),
       builder: (ctx) {
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Title
-            Row(
-              children: [
-                Icon(
-                  Icons.analytics_outlined,
-                  size: IconSize.md,
-                  color: theme.textPrimary,
-                ),
-                const SizedBox(width: Spacing.sm),
-                Text(
-                  l10n.usageInfoTitle,
-                  style: AppTypography.bodyLargeStyle.copyWith(
-                    fontWeight: FontWeight.w600,
+        return SheetScrollBody(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Title
+              Row(
+                children: [
+                  Icon(
+                    Icons.analytics_outlined,
+                    size: IconSize.md,
                     color: theme.textPrimary,
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: Spacing.lg),
+                  const SizedBox(width: Spacing.sm),
+                  Expanded(
+                    child: Text(
+                      l10n.usageInfoTitle,
+                      style: AppTypography.bodyLargeStyle.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: theme.textPrimary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: Spacing.lg),
 
-            // Stats grid
-            ..._buildUsageStats(ctx, usage, l10n, theme),
-          ],
+              // Stats grid
+              ..._buildUsageStats(ctx, usage, l10n, theme),
+            ],
+          ),
         );
       },
     );
@@ -209,31 +213,36 @@ class _UsageStatRow extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            label,
-            style: AppTypography.bodyMediumStyle.copyWith(
-              color: theme.textSecondary,
+          Flexible(
+            child: Text(
+              label,
+              style: AppTypography.bodyMediumStyle.copyWith(
+                color: theme.textSecondary,
+              ),
             ),
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                value,
-                style: AppTypography.bodyMediumStyle.copyWith(
-                  fontWeight: FontWeight.w600,
-                  fontFamily: AppTypography.monospaceFontFamily,
-                  color: theme.textPrimary,
-                ),
-              ),
-              if (detail != null)
+          const SizedBox(width: Spacing.sm),
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
                 Text(
-                  detail!,
-                  style: AppTypography.labelSmallStyle.copyWith(
-                    color: theme.textTertiary,
+                  value,
+                  style: AppTypography.bodyMediumStyle.copyWith(
+                    fontWeight: FontWeight.w600,
+                    fontFamily: AppTypography.monospaceFontFamily,
+                    color: theme.textPrimary,
                   ),
                 ),
-            ],
+                if (detail != null)
+                  Text(
+                    detail!,
+                    style: AppTypography.labelSmallStyle.copyWith(
+                      color: theme.textTertiary,
+                    ),
+                  ),
+              ],
+            ),
           ),
         ],
       ),

@@ -643,6 +643,23 @@ class ConduitModalSheetHeader extends StatelessWidget {
   }
 }
 
+/// The body of a sheet whose content is a plain column that may be taller
+/// than the screen (small phone, large text, keyboard up): it scrolls instead
+/// of overflowing. Use it as the direct child of the sheet surface (or of the
+/// sheet's own padding), never around a child that already scrolls or holds a
+/// Flexible.
+class SheetScrollBody extends StatelessWidget {
+  const SheetScrollBody({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => SingleChildScrollView(
+    keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+    child: child,
+  );
+}
+
 class ConduitModalSheetSurface extends StatelessWidget {
   const ConduitModalSheetSurface({
     super.key,
@@ -664,7 +681,12 @@ class ConduitModalSheetSurface extends StatelessWidget {
       content = Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [const SheetHandle(), child],
+        // Flexible: a child that scrolls (a Flexible scroll view inside it)
+        // gets the sheet's bounded height instead of an infinite one.
+        children: [
+          const SheetHandle(),
+          Flexible(child: child),
+        ],
       );
     }
 

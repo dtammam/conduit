@@ -92,7 +92,7 @@ Future<void> showChatExportSheet(
     context: context,
     useSafeArea: true,
     isScrollControlled: true,
-    builder: (_) => _ChatExportSheet(prepare: prepare),
+    builder: (_) => ChatExportSheet(prepare: prepare),
   );
   if (outcome == null || !context.mounted) return;
   final l10n = AppLocalizations.of(context)!;
@@ -138,16 +138,17 @@ Future<void> showChatExportSheet(
   }
 }
 
-class _ChatExportSheet extends StatefulWidget {
-  const _ChatExportSheet({required this.prepare});
+class ChatExportSheet extends StatefulWidget {
+  const ChatExportSheet({super.key, required this.prepare});
 
+  // ignore: library_private_types_in_public_api
   final Future<_PreparedChatExport> Function(ChatExportKind kind) prepare;
 
   @override
-  State<_ChatExportSheet> createState() => _ChatExportSheetState();
+  State<ChatExportSheet> createState() => _ChatExportSheetState();
 }
 
-class _ChatExportSheetState extends State<_ChatExportSheet> {
+class _ChatExportSheetState extends State<ChatExportSheet> {
   /// The export being read, while it is.
   ChatExportKind? _preparing;
 
@@ -192,47 +193,49 @@ class _ChatExportSheetState extends State<_ChatExportSheet> {
     }
 
     return ConduitModalSheetSurface(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Semantics(
-                  header: true,
-                  child: Text(
-                    l10n.chatExportAction,
-                    style: theme.headingSmall,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+      child: SheetScrollBody(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Semantics(
+                    header: true,
+                    child: Text(
+                      l10n.chatExportAction,
+                      style: theme.headingSmall,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                 ),
-              ),
-              SheetCloseButton(
-                tooltip: l10n.close,
-                onPressed: () => Navigator.of(context).pop(),
-              ),
-            ],
-          ),
-          const SizedBox(height: Spacing.md),
-          InsetGroupedList(
-            children: [
-              row(
-                key: const Key('chat-export-backup'),
-                kind: ChatExportKind.backup,
-                title: l10n.chatExportJson,
-                subtitle: l10n.chatExportJsonDescription,
-              ),
-              row(
-                key: const Key('chat-export-transcript'),
-                kind: ChatExportKind.transcript,
-                title: l10n.chatExportMarkdown,
-                subtitle: l10n.chatExportMarkdownDescription,
-              ),
-            ],
-          ),
-        ],
+                SheetCloseButton(
+                  tooltip: l10n.close,
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
+            ),
+            const SizedBox(height: Spacing.md),
+            InsetGroupedList(
+              children: [
+                row(
+                  key: const Key('chat-export-backup'),
+                  kind: ChatExportKind.backup,
+                  title: l10n.chatExportJson,
+                  subtitle: l10n.chatExportJsonDescription,
+                ),
+                row(
+                  key: const Key('chat-export-transcript'),
+                  kind: ChatExportKind.transcript,
+                  title: l10n.chatExportMarkdown,
+                  subtitle: l10n.chatExportMarkdownDescription,
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

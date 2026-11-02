@@ -32,6 +32,7 @@ class MuseyField {
     this.showWhenKey,
     this.showWhenValue,
     this.note,
+    this.suggestions = const <MuseyOption>[],
   });
 
   final String key;
@@ -50,6 +51,11 @@ class MuseyField {
 
   /// A short helper line under the field.
   final String? note;
+
+  /// Known values for a text field (`suggestions` of the relay, possibly
+  /// several hundred). The form lists the ones matching what is typed; free
+  /// text stays allowed. Empty: a plain text field.
+  final List<MuseyOption> suggestions;
 
   /// A field the relay reveals only for one value (the "Other" text) counts as
   /// required once it shows, whatever its own flag says.
@@ -104,6 +110,21 @@ MuseyFieldType? _fieldType(Object? raw) => switch (raw) {
   _ => null,
 };
 
+/// `[{value, label}]` entries; malformed ones are skipped, a missing label
+/// falls back to the value.
+List<MuseyOption> _parseOptions(Object? raw) {
+  final out = <MuseyOption>[];
+  if (raw is! List) return out;
+  for (final o in raw) {
+    if (o is! Map) continue;
+    final value = o['value'];
+    final label = o['label'];
+    if (value is! String || value.isEmpty) continue;
+    out.add(MuseyOption(value: value, label: label is String ? label : value));
+  }
+  return out;
+}
+
 /// The actions in a `GET /musey/actions` answer. Malformed entries are
 /// skipped; anything that is not the expected shape gives an empty list.
 List<MuseyAction> parseMuseyActions(Object? data) {
@@ -130,23 +151,15 @@ List<MuseyAction> parseMuseyActions(Object? data) {
         final key = f['key'];
         final fLabel = f['label'];
         final type = _fieldType(f['type']);
-        if (key is! String || key.isEmpty || fLabel is! String || type == null) {
+        if (key is! String ||
+            key.isEmpty ||
+            fLabel is! String ||
+            type == null) {
           valid = false;
           break;
         }
-        final options = <MuseyOption>[];
-        final rawOptions = f['options'];
-        if (rawOptions is List) {
-          for (final o in rawOptions) {
-            if (o is! Map) continue;
-            final value = o['value'];
-            final oLabel = o['label'];
-            if (value is! String) continue;
-            options.add(
-              MuseyOption(value: value, label: oLabel is String ? oLabel : value),
-            );
-          }
-        }
+        final options = _parseOptions(f['options']);
+        final suggestions = _parseOptions(f['suggestions']);
         final showWhen = f['show_when'];
         final note = f['note'];
         fields.add(
@@ -163,6 +176,9 @@ List<MuseyAction> parseMuseyActions(Object? data) {
             type: type,
             required: f['required'] == true,
             options: options,
+            suggestions: type == MuseyFieldType.text
+                ? suggestions
+                : const <MuseyOption>[],
             defaultValue: f['default'],
           ),
         );
@@ -336,7 +352,10 @@ class DioMuseyApi implements MuseyApi {
     }
     final status = response.statusCode ?? 0;
     final data = response.data;
-    if (status < 200 || status >= 300 || data is! Map || data['actions'] is! List) {
+    if (status < 200 ||
+        status >= 300 ||
+        data is! Map ||
+        data['actions'] is! List) {
       throw const MuseyApiException('The relay did not return the actions.');
     }
     return parseMuseyActions(data);

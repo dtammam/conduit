@@ -105,10 +105,7 @@ Future<void> _showNativeChatShareSheet({
       await Clipboard.setData(ClipboardData(text: url));
       ConduitHaptics.success();
       if (announce) {
-        showMessage(
-          l10n.sharedChatCopied,
-          type: AdaptiveSnackBarType.success,
-        );
+        showMessage(l10n.sharedChatCopied, type: AdaptiveSnackBarType.success);
       }
     } catch (_) {
       showMessage(l10n.chatShareFailed, type: AdaptiveSnackBarType.error);
@@ -300,10 +297,7 @@ class _ChatShareSheetState extends ConsumerState<ChatShareSheet> {
       final url = await _ensureShareUrl();
       await Clipboard.setData(ClipboardData(text: url));
       ConduitHaptics.success();
-      _showSnack(
-        l10n.sharedChatCopied,
-        type: AdaptiveSnackBarType.success,
-      );
+      _showSnack(l10n.sharedChatCopied, type: AdaptiveSnackBarType.success);
     } catch (_) {
       _showSnack(l10n.chatShareFailed, type: AdaptiveSnackBarType.error);
     } finally {
@@ -339,15 +333,9 @@ class _ChatShareSheetState extends ConsumerState<ChatShareSheet> {
         setState(() => _shareId = null);
       }
       ConduitHaptics.success();
-      _showSnack(
-        l10n.sharedLinkDeleted,
-        type: AdaptiveSnackBarType.success,
-      );
+      _showSnack(l10n.sharedLinkDeleted, type: AdaptiveSnackBarType.success);
     } catch (_) {
-      _showSnack(
-        l10n.deleteSharedLinkFailed,
-        type: AdaptiveSnackBarType.error,
-      );
+      _showSnack(l10n.deleteSharedLinkFailed, type: AdaptiveSnackBarType.error);
     } finally {
       if (mounted) {
         setState(() => _isDeleting = false);
@@ -384,114 +372,116 @@ class _ChatShareSheetState extends ConsumerState<ChatShareSheet> {
           Spacing.lg,
           Spacing.lg,
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const SheetHandle(),
-            Row(
-              children: [
-                Icon(
-                  CupertinoIcons.link,
-                  color: theme.iconPrimary,
-                  size: IconSize.lg,
-                ),
-                const SizedBox(width: Spacing.sm),
-                Expanded(
-                  child: Text(
-                    l10n.shareChat,
-                    style: AppTypography.headlineSmallStyle.copyWith(
-                      color: theme.textPrimary,
-                      fontWeight: FontWeight.w700,
+        child: SheetScrollBody(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SheetHandle(),
+              Row(
+                children: [
+                  Icon(
+                    CupertinoIcons.link,
+                    color: theme.iconPrimary,
+                    size: IconSize.lg,
+                  ),
+                  const SizedBox(width: Spacing.sm),
+                  Expanded(
+                    child: Text(
+                      l10n.shareChat,
+                      style: AppTypography.headlineSmallStyle.copyWith(
+                        color: theme.textPrimary,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
+                  SheetCloseButton(
+                    tooltip: l10n.closeButtonSemantic,
+                    onPressed: () => Navigator.of(context).maybePop(),
+                    color: theme.iconSecondary,
+                  ),
+                ],
+              ),
+              const SizedBox(height: Spacing.md),
+              Text(
+                hasExistingShare
+                    ? l10n.shareChatExisting
+                    : l10n.shareChatDescription,
+                style: AppTypography.bodyMediumStyle.copyWith(
+                  color: theme.textSecondary,
+                  height: 1.35,
                 ),
-                SheetCloseButton(
-                  tooltip: l10n.closeButtonSemantic,
-                  onPressed: () => Navigator.of(context).maybePop(),
-                  color: theme.iconSecondary,
+              ),
+              const SizedBox(height: Spacing.lg),
+              ConduitButton(
+                key: const Key('chat-share-copy'),
+                text: hasExistingShare ? l10n.updateAndCopyLink : l10n.copyLink,
+                onPressed: _isDeleting ? null : _copyLink,
+                isLoading: _isSharing,
+                icon: CupertinoIcons.doc_on_clipboard,
+                isFullWidth: true,
+              ),
+              const SizedBox(height: Spacing.sm),
+              ConduitButton(
+                key: const Key('chat-share-system'),
+                text: l10n.shareSystemSheet,
+                onPressed: _isDeleting ? null : _shareLink,
+                isSecondary: true,
+                icon: CupertinoIcons.share,
+                isFullWidth: true,
+              ),
+              if (hasExistingShare && _audience != null) ...[
+                const SizedBox(height: Spacing.lg),
+                InsetGroupedList(
+                  children: [
+                    UtilityRow(
+                      key: const Key('chat-share-audience'),
+                      title: l10n.chatShareAudience,
+                      subtitle: l10n.chatShareAudienceDescription,
+                      leading: Icon(
+                        CupertinoIcons.person_2,
+                        color: theme.iconPrimary,
+                        size: IconSize.medium,
+                      ),
+                      showChevron: true,
+                      onTap: () => ResourceSharingSheet.showWith(
+                        context,
+                        _audience!,
+                        resourceName: widget.conversation.title,
+                      ),
+                    ),
+                  ],
                 ),
               ],
-            ),
-            const SizedBox(height: Spacing.md),
-            Text(
-              hasExistingShare
-                  ? l10n.shareChatExisting
-                  : l10n.shareChatDescription,
-              style: AppTypography.bodyMediumStyle.copyWith(
-                color: theme.textSecondary,
-                height: 1.35,
-              ),
-            ),
-            const SizedBox(height: Spacing.lg),
-            ConduitButton(
-              key: const Key('chat-share-copy'),
-              text: hasExistingShare ? l10n.updateAndCopyLink : l10n.copyLink,
-              onPressed: _isDeleting ? null : _copyLink,
-              isLoading: _isSharing,
-              icon: CupertinoIcons.doc_on_clipboard,
-              isFullWidth: true,
-            ),
-            const SizedBox(height: Spacing.sm),
-            ConduitButton(
-              key: const Key('chat-share-system'),
-              text: l10n.shareSystemSheet,
-              onPressed: _isDeleting ? null : _shareLink,
-              isSecondary: true,
-              icon: CupertinoIcons.share,
-              isFullWidth: true,
-            ),
-            if (hasExistingShare && _audience != null) ...[
-              const SizedBox(height: Spacing.lg),
-              InsetGroupedList(
-                children: [
-                  UtilityRow(
-                    key: const Key('chat-share-audience'),
-                    title: l10n.chatShareAudience,
-                    subtitle: l10n.chatShareAudienceDescription,
-                    leading: Icon(
-                      CupertinoIcons.person_2,
-                      color: theme.iconPrimary,
-                      size: IconSize.medium,
+              if (hasExistingShare) ...[
+                const SizedBox(height: Spacing.md),
+                InsetGroupedList(
+                  children: [
+                    UtilityRow(
+                      key: const Key('chat-share-delete'),
+                      // Like the native sheet: the action, then what it means.
+                      title: l10n.shareChatDeleteLink,
+                      subtitle: l10n.shareChatDeleteAndCreate,
+                      leading: Icon(
+                        CupertinoIcons.trash,
+                        color: theme.error,
+                        size: IconSize.medium,
+                      ),
+                      destructive: true,
+                      enabled: !_isSharing,
+                      trailing: _isDeleting
+                          ? const ConduitLoadingIndicator(
+                              size: IconSize.small,
+                              isCompact: true,
+                            )
+                          : null,
+                      onTap: _isDeleting || _isSharing ? null : _deleteLink,
                     ),
-                    showChevron: true,
-                    onTap: () => ResourceSharingSheet.showWith(
-                      context,
-                      _audience!,
-                      resourceName: widget.conversation.title,
-                    ),
-                  ),
-                ],
-              ),
+                  ],
+                ),
+              ],
             ],
-            if (hasExistingShare) ...[
-              const SizedBox(height: Spacing.md),
-              InsetGroupedList(
-                children: [
-                  UtilityRow(
-                    key: const Key('chat-share-delete'),
-                    // Like the native sheet: the action, then what it means.
-                    title: l10n.shareChatDeleteLink,
-                    subtitle: l10n.shareChatDeleteAndCreate,
-                    leading: Icon(
-                      CupertinoIcons.trash,
-                      color: theme.error,
-                      size: IconSize.medium,
-                    ),
-                    destructive: true,
-                    enabled: !_isSharing,
-                    trailing: _isDeleting
-                        ? const ConduitLoadingIndicator(
-                            size: IconSize.small,
-                            isCompact: true,
-                          )
-                        : null,
-                    onTap: _isDeleting || _isSharing ? null : _deleteLink,
-                  ),
-                ],
-              ),
-            ],
-          ],
+          ),
         ),
       ),
     );
