@@ -83,9 +83,11 @@ import '../../../shared/utils/platform_utils.dart';
 import '../../../shared/utils/adaptive_glass.dart';
 
 import 'package:conduit/l10n/app_localizations.dart';
+
 import '../musey/musey_actions_provider.dart';
 import '../musey/musey_actions_sheet.dart';
 import '../musey/musey_api.dart';
+
 import 'package:conduit_core/providers/host_ports.dart';
 
 import '../../../shared/widgets/modal_safe_area.dart';
@@ -3791,10 +3793,6 @@ class _ModernChatInputState extends ConsumerState<ModernChatInput>
                 ),
                 const SizedBox(width: Spacing.xs),
               ],
-              if (!_isRecording && _museyEnabled) ...[
-                _buildMuseyButton(),
-                const SizedBox(width: Spacing.xs),
-              ],
               if (quickPills.isNotEmpty)
                 Expanded(
                   child: HorizontalOverflowFade(
@@ -3868,7 +3866,13 @@ class _ModernChatInputState extends ConsumerState<ModernChatInput>
                 const SizedBox(width: Spacing.xs),
                 _buildInlineMicAction(voiceAvailable),
               ],
-              if (!showCreateDraftNoteAction && !showInlineMicAction)
+              // The wrench sits right of the dictation mic and left of the
+              // primary button, so it stays put as the mic comes and goes.
+              if (_museyEnabled) ...[
+                const SizedBox(width: Spacing.xs),
+                _buildMuseyButton(),
+                const SizedBox(width: Spacing.xs),
+              ] else if (!showCreateDraftNoteAction && !showInlineMicAction)
                 const SizedBox(width: Spacing.xs),
               _buildPrimaryButton(
                 _hasText || hasAttachments,
@@ -3956,10 +3960,6 @@ class _ModernChatInputState extends ConsumerState<ModernChatInput>
                   ),
                   const SizedBox(width: Spacing.xs),
                 ],
-                if (!_isRecording && _museyEnabled) ...[
-                  _buildMuseyButton(),
-                  const SizedBox(width: Spacing.xs),
-                ],
                 Expanded(
                   child: _buildComposerTextField(
                     brightness: brightness,
@@ -3993,7 +3993,14 @@ class _ModernChatInputState extends ConsumerState<ModernChatInput>
                     ),
                   ),
                 ],
-                if (!compactControls.showMic) const SizedBox(width: Spacing.xs),
+                // Right of the dictation mic, left of the primary button: it
+                // keeps its place as the mic comes and goes.
+                if (_museyEnabled) ...[
+                  const SizedBox(width: Spacing.xs),
+                  _buildMuseyButton(),
+                  const SizedBox(width: Spacing.xs),
+                ] else if (!compactControls.showMic)
+                  const SizedBox(width: Spacing.xs),
                 _buildPrimaryButton(
                   _hasText || hasAttachments,
                   isGenerating,
@@ -4084,6 +4091,9 @@ class _ModernChatInputState extends ConsumerState<ModernChatInput>
           reservedWidth += controlSize + Spacing.xs;
         }
         if (compactControls.showMic) {
+          reservedWidth += controlSize + Spacing.xs;
+        }
+        if (_museyEnabled) {
           reservedWidth += controlSize + Spacing.xs;
         }
         final compactTextFieldWidth =
