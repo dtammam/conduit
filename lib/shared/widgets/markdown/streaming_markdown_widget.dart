@@ -871,7 +871,7 @@ class _StreamingMarkdownWidgetState
         trimLastBlockBottomPadding: true,
       );
       if (bubble == null) return whole;
-      return MarkdownProseBubbleSegment(
+      final segment = MarkdownProseBubbleSegment(
         style: bubble,
         isFirst: true,
         isLast: true,
@@ -879,6 +879,7 @@ class _StreamingMarkdownWidgetState
         isLastBubble: true,
         child: whole,
       );
+      return bubble.decorateRun?.call(segment, isLastBubble: true) ?? segment;
     }
 
     final partWidgets = bubble == null
@@ -960,6 +961,40 @@ class _StreamingMarkdownWidgetState
     }
 
     final widgets = <Widget>[];
+    // Slices of the prose run being collected. A run is one visual bubble:
+    // its decoration (glow, badge) is applied once around all of it.
+    var run = <Widget>[];
+    var runFirstIndex = 0;
+    void flushRun(int endIndex) {
+      if (run.isEmpty) return;
+      Widget group = run.length == 1
+          ? run.single
+          : Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: run,
+            );
+      final decorateRun = bubble.decorateRun;
+      if (decorateRun != null) {
+        group = decorateRun(group, isLastBubble: endIndex == lastProseIndex);
+      }
+      widgets.add(
+        KeyedSubtree(
+          key: ValueKey<String>(
+            'markdown-prose-run:${parts[runFirstIndex].partId}',
+          ),
+          child: Padding(
+            padding: EdgeInsets.only(
+              top: runFirstIndex > 0 ? bubble.gap : 0,
+              bottom: endIndex < parts.length - 1 ? bubble.gap : 0,
+            ),
+            child: group,
+          ),
+        ),
+      );
+      run = <Widget>[];
+    }
+
     for (var index = 0; index < parts.length; index += 1) {
       final part = parts[index];
       final isFirst = index == 0 || parts[index - 1].isDetails;
@@ -977,23 +1012,30 @@ class _StreamingMarkdownWidgetState
             ? index == parts.length - 1
             : isLast,
       );
-      widgets.add(
+      if (part.isDetails) {
+        widgets.add(
+          KeyedSubtree(
+            key: ValueKey<String>('markdown-display-part:${part.partId}'),
+            child: markdown,
+          ),
+        );
+        continue;
+      }
+      if (isFirst) runFirstIndex = index;
+      run.add(
         KeyedSubtree(
           key: ValueKey<String>('markdown-display-part:${part.partId}'),
-          child: part.isDetails
-              ? markdown
-              : MarkdownProseBubbleSegment(
-                  style: bubble,
-                  isFirst: isFirst,
-                  isLast: isLast,
-                  fillWidth: runLengths[index] > 1,
-                  gapBefore: isFirst && index > 0,
-                  gapAfter: isLast && index < parts.length - 1,
-                  isLastBubble: index == lastProseIndex,
-                  child: markdown,
-                ),
+          child: MarkdownProseBubbleSegment(
+            style: bubble,
+            isFirst: isFirst,
+            isLast: isLast,
+            fillWidth: runLengths[index] > 1,
+            isLastBubble: index == lastProseIndex,
+            child: markdown,
+          ),
         ),
       );
+      if (isLast) flushRun(index);
     }
     return widgets;
   }

@@ -214,17 +214,17 @@ class _OpenPostsRefresherState extends ConsumerState<OpenPostsRefresher>
 
 /// Opacity of the glow around an open post, at rest. The breathing takes it
 /// down to [kOpenPostGlowLow] of this and back.
-const double kOpenPostGlowLight = 0.18;
-const double kOpenPostGlowDark = 0.24;
+const double kOpenPostGlowLight = 0.09;
+const double kOpenPostGlowDark = 0.12;
 
 /// The lowest point of the breathing, as a share of the glow's opacity.
 const double kOpenPostGlowLow = 0.75;
 
 /// Blur radius of the glow, in logical pixels.
-const double kOpenPostGlowBlur = 14;
+const double kOpenPostGlowBlur = 10;
 
 /// Opacity and width of the hairline on the message's own outline.
-const double kOpenPostGlowBorderAlpha = 0.12;
+const double kOpenPostGlowBorderAlpha = 0.06;
 const double kOpenPostGlowBorderWidth = 1;
 
 /// One breath, low to high and back, takes this long (3.6 s).

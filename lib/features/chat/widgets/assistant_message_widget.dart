@@ -1914,7 +1914,16 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
         vertical: Spacing.sm + Spacing.xxs,
       ),
       maxWidthFactor: kAssistantBubbleMaxWidthFactor,
-      decorate: (bubble, {required isLastBubble}) => MessageBadgeAnchor(
+      // The column-level wrapper keeps state when prose arrives; the run-level
+      // one carries the badge and the single open-post glow around the whole
+      // bubble (all its blocks), never per block.
+      decorate: (column, {required isLastBubble}) => MessageBadgeAnchor(
+        inset: true,
+        badge: isLastBubble ? badge : null,
+        fixedRoom: isLastBubble ? badgeRoom : null,
+        child: column,
+      ),
+      decorateRun: (bubble, {required isLastBubble}) => MessageBadgeAnchor(
         inset: true,
         badge: isLastBubble ? badge : null,
         fixedRoom: isLastBubble ? badgeRoom : null,

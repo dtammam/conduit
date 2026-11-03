@@ -28,6 +28,7 @@ class MarkdownProseBubble {
     this.maxWidthFactor = 0.85,
     this.gap = 8,
     this.decorate,
+    this.decorateRun,
   });
 
   /// The bubble fill.
@@ -50,6 +51,12 @@ class MarkdownProseBubble {
   /// Optional wrapper around each segment, for example a reaction badge on
   /// the last bubble.
   final MarkdownProseBubbleDecorator? decorate;
+
+  /// Optional wrapper around a whole run of slices (one visual bubble, all its
+  /// blocks together), for example the open-post glow and the reaction badge.
+  /// Called once per run, never per slice. [MarkdownProseBubbleDecorator]'s
+  /// `isLastBubble` is true for the reply's last run.
+  final MarkdownProseBubbleDecorator? decorateRun;
 }
 
 /// One block's slice of a prose bubble.
@@ -92,7 +99,7 @@ class MarkdownProseBubbleSegment extends StatelessWidget {
   Widget build(BuildContext context) {
     final radius = Radius.circular(style.radius);
     final padding = style.padding;
-    Widget bubble = MarkdownBubbleWidth(
+    final bubble = MarkdownBubbleWidth(
       factor: style.maxWidthFactor,
       fill: fillWidth,
       child: DecoratedBox(
@@ -114,10 +121,6 @@ class MarkdownProseBubbleSegment extends StatelessWidget {
         ),
       ),
     );
-    final decorate = style.decorate;
-    if (decorate != null) {
-      bubble = decorate(bubble, isLastBubble: isLastBubble);
-    }
     return Padding(
       padding: EdgeInsets.only(
         top: gapBefore ? style.gap : 0,
