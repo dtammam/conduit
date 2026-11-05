@@ -815,14 +815,14 @@ void main() {
       await tester.pump();
       await tester.tap(find.byKey(const ValueKey('assistant-avatar-circle')));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Appearance'));
+      await tester.tap(find.byKey(const ValueKey('omni-tab-appearance')));
       await tester.pumpAndSettle();
       // Hidden while message bubbles are off.
       check(find.byKey(const ValueKey('bubble-color-auto')).evaluate())
           .isEmpty();
 
       final container = ProviderScope.containerOf(
-        tester.element(find.byType(AssistantAvatarStrip)),
+        tester.element(find.byType(AssistantAvatarStrip, skipOffstage: false)),
       );
       await tester.runAsync(
         () => container

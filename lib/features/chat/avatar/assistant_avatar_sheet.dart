@@ -5,13 +5,14 @@ import 'package:conduit/l10n/app_localizations.dart';
 import 'package:conduit/shared/theme/theme_extensions.dart';
 import 'package:conduit/shared/widgets/platform_ui/platform_ui.dart';
 import 'package:conduit_core/features/automations/providers/automation_providers.dart';
-import 'package:conduit_core/features/chat/providers/chat_providers.dart';
 import 'package:conduit_core/providers/app_providers.dart';
 import 'package:conduit_core/services/settings_service.dart';
 import 'package:conduit_core/utils/debug_logger.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:material_ui/material_ui.dart'
+    show Material, MaterialPageRoute, Tooltip;
 
 import '../widgets/message_bubble_colors.dart';
 import 'assistant_action_log.dart';
@@ -19,6 +20,7 @@ import 'assistant_activity.dart';
 import 'assistant_avatar_accent.dart';
 import 'assistant_avatar_media.dart';
 import 'assistant_pending_approval.dart';
+import 'omni_tab_bar.dart';
 import '../../routines/routines_tab.dart';
 
 const String _logScope = 'chat/avatar-activity';
@@ -53,9 +55,11 @@ String prettyToolPayload(String text) {
   return text;
 }
 
-/// The sheet behind the avatar circle: a status page for the assistant with
-/// the recorded tool calls, a waiting approval, scheduled tasks and, under
-/// Appearance, the per-state clips and the bubble color.
+/// The page behind the avatar circle and the bottom bar: Activity, Approvals,
+/// Routines and Appearance, each its own full page, as in Muse: a round menu
+/// button, the persona pill and an optional action on top, a large title,
+/// then the content. Moving between the four is the bottom bar only, with the
+/// current one selected.
 class AssistantAvatarSheet extends ConsumerStatefulWidget {
   const AssistantAvatarSheet({
     super.key,
@@ -87,13 +91,22 @@ class AssistantAvatarSheet extends ConsumerStatefulWidget {
       _AssistantAvatarSheetState();
 }
 
+/// Opens the assistant page for [tab] over the chat, full screen.
+Future<void> showAssistantPage(
+  BuildContext context, {
+  required AssistantAvatarSheet Function() builder,
+}) {
+  return Navigator.of(context).push<void>(
+    MaterialPageRoute<void>(
+      settings: const RouteSettings(name: 'assistant-page'),
+      builder: (_) => builder(),
+    ),
+  );
+}
+
 class _AssistantAvatarSheetState extends ConsumerState<AssistantAvatarSheet> {
   late AssistantSheetTab _tab;
   Set<String>? _filter;
-
-  /// Failures that were unseen when the Activity tab was first shown, kept
-  /// on its label for as long as the sheet is open.
-  int _carriedFailures = 0;
 
   @override
   void initState() {
@@ -109,7 +122,6 @@ class _AssistantAvatarSheetState extends ConsumerState<AssistantAvatarSheet> {
 
   /// The Activity tab is on screen: the failures in it count as seen.
   void _viewActivity() {
-    _carriedFailures += ref.read(assistantActionLogProvider).unseenFailures;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       unawaited(
@@ -124,6 +136,28 @@ class _AssistantAvatarSheetState extends ConsumerState<AssistantAvatarSheet> {
     if (tab == AssistantSheetTab.activity) _viewActivity();
   }
 
+  Future<void> _confirmClear() async {
+    final l10n = AppLocalizations.of(context)!;
+    final log = ref.read(assistantActionLogProvider.notifier);
+    await AdaptiveAlertDialog.show(
+      context: context,
+      title: l10n.assistantActivityClearTitle,
+      message: l10n.assistantActivityClearMessage,
+      actions: [
+        AlertAction(
+          title: l10n.cancel,
+          style: AlertActionStyle.cancel,
+          onPressed: () {},
+        ),
+        AlertAction(
+          title: l10n.clear,
+          style: AlertActionStyle.destructive,
+          onPressed: () => unawaited(log.clear()),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -136,94 +170,140 @@ class _AssistantAvatarSheetState extends ConsumerState<AssistantAvatarSheet> {
           appSettingsProvider.select((s) => s.routinesServerUrl.isNotEmpty),
         );
     final approval = ref.watch(assistantApprovalProvider);
-    final unseen = ref.watch(
-      assistantActionLogProvider.select((log) => log.unseenFailures),
-    );
     final tab = _tab == AssistantSheetTab.routines && !routinesAvailable
         ? AssistantSheetTab.activity
         : _tab;
-    final failures = tab == AssistantSheetTab.activity
-        ? _carriedFailures + unseen
-        : unseen;
-    final tabs = <AssistantSheetTab>[
-      AssistantSheetTab.activity,
-      AssistantSheetTab.approvals,
-      if (routinesAvailable) AssistantSheetTab.routines,
-      AssistantSheetTab.appearance,
-    ];
-    final height = MediaQuery.sizeOf(context).height;
-    // One height for every tab, so switching tabs never moves the header or
-    // the tab control (the same fraction ThemedSheets.showCustom callers such
-    // as the channel thread sheet use).
-    return SafeArea(
-      top: false,
-      child: SizedBox(
-        key: const ValueKey('assistant-sheet-body'),
-        height: height * 0.85,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(
-            Spacing.modalPadding,
-            Spacing.sm,
-            Spacing.modalPadding,
-            Spacing.lg,
+    final title = switch (tab) {
+      AssistantSheetTab.activity => l10n.assistantSheetTabActivity,
+      AssistantSheetTab.approvals => l10n.assistantSheetTabApprovals,
+      AssistantSheetTab.routines => l10n.assistantSheetTabRoutines,
+      AssistantSheetTab.appearance => l10n.assistantSheetTabAppearance,
+    };
+    final hasCalls = ref.watch(
+      assistantActionLogProvider.select((log) => log.records.isNotEmpty),
+    );
+    return Material(
+      key: const ValueKey('assistant-sheet-body'),
+      color: theme.surfaceBackground,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SafeArea(
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(
+                Spacing.screenPadding,
+                Spacing.xs,
+                Spacing.screenPadding,
+                0,
+              ),
+              child: _PageTopRow(
+                modelName: widget.modelName,
+                avatar: widget.avatar,
+                // The only page with a real action: clear the log.
+                action: tab == AssistantSheetTab.activity
+                    ? _RoundButton(
+                        key: const ValueKey('assistant-activity-clear'),
+                        symbol: 'trash',
+                        label: l10n.clear,
+                        onTap: hasCalls ? _confirmClear : null,
+                      )
+                    : null,
+              ),
+            ),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _SheetHeader(modelName: widget.modelName, avatar: widget.avatar),
-              const SizedBox(height: Spacing.md),
-              AdaptiveValueSegmentedControl<AssistantSheetTab>(
-                key: const ValueKey('assistant-sheet-tabs'),
-                value: tab,
-                onChanged: _select,
-                segments: [
-                  for (final entry in tabs)
-                    AdaptiveSegment<AssistantSheetTab>(
-                      value: entry,
-                      label: _TabLabel(
-                        text: switch (entry) {
-                          AssistantSheetTab.activity =>
-                            l10n.assistantSheetTabActivity,
-                          AssistantSheetTab.approvals =>
-                            l10n.assistantSheetTabApprovals,
-                          AssistantSheetTab.routines =>
-                            l10n.assistantSheetTabRoutines,
-                          AssistantSheetTab.appearance =>
-                            l10n.assistantSheetTabAppearance,
-                        },
-                        count: switch (entry) {
-                          AssistantSheetTab.activity => failures,
-                          AssistantSheetTab.approvals =>
-                            approval == null ? 0 : 1,
-                          _ => 0,
-                        },
-                        color: entry == AssistantSheetTab.activity
-                            ? theme.error
-                            : theme.warning,
-                      ),
-                    ),
-                ],
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              Spacing.screenPadding,
+              Spacing.lg,
+              Spacing.screenPadding,
+              Spacing.sm,
+            ),
+            child: Text(
+              title,
+              key: const ValueKey('assistant-page-title'),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.titleLargeStyle.copyWith(
+                color: theme.textPrimary,
+                fontSize: 28,
+                fontWeight: FontWeight.w500,
               ),
-              const SizedBox(height: Spacing.md),
-              Expanded(
-                child: switch (tab) {
-                  AssistantSheetTab.activity => _ActivityTab(
-                    filter: _filter,
-                    onClearFilter: () => setState(() => _filter = null),
-                  ),
-                  AssistantSheetTab.approvals => SingleChildScrollView(
-                    child: _ApprovalsTab(approval: approval),
-                  ),
-                  AssistantSheetTab.routines => const RoutinesTab(),
-                  AssistantSheetTab.appearance => SingleChildScrollView(
-                    child: _AppearanceTab(
-                      store: widget.store,
-                      onChanged: widget.onChanged,
-                    ),
-                  ),
-                },
+            ),
+          ),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: Spacing.screenPadding,
               ),
-            ],
+              child: switch (tab) {
+                AssistantSheetTab.activity => _ActivityTab(
+                  filter: _filter,
+                  onClearFilter: () => setState(() => _filter = null),
+                ),
+                AssistantSheetTab.approvals => SingleChildScrollView(
+                  child: _ApprovalsTab(approval: approval),
+                ),
+                AssistantSheetTab.routines => const RoutinesTab(),
+                AssistantSheetTab.appearance => SingleChildScrollView(
+                  child: _AppearanceTab(
+                    store: widget.store,
+                    onChanged: widget.onChanged,
+                  ),
+                ),
+              },
+            ),
+          ),
+          OmniTabBar(selected: tab, onOpen: _select),
+        ],
+      ),
+    );
+  }
+}
+
+/// A 44 pt round button of the page's top row.
+class _RoundButton extends StatelessWidget {
+  const _RoundButton({
+    super.key,
+    required this.symbol,
+    required this.label,
+    required this.onTap,
+  });
+
+  final String symbol;
+  final String label;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.conduitTheme;
+    final enabled = onTap != null;
+    return Semantics(
+      button: true,
+      enabled: enabled,
+      label: label,
+      excludeSemantics: true,
+      onTap: onTap,
+      child: Tooltip(
+        message: label,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: Container(
+            width: _roundButtonSize,
+            height: _roundButtonSize,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: theme.surfaceContainer,
+              border: Border.all(color: theme.cardBorder, width: 0.5),
+            ),
+            child: Icon(
+              cupertinoIconForSFSymbol(symbol),
+              size: IconSize.md,
+              color: enabled
+                  ? theme.textPrimary
+                  : theme.textPrimary.withValues(alpha: 0.35),
+            ),
           ),
         ),
       ),
@@ -231,143 +311,99 @@ class _AssistantAvatarSheetState extends ConsumerState<AssistantAvatarSheet> {
   }
 }
 
-class _TabLabel extends StatelessWidget {
-  const _TabLabel({
-    required this.text,
-    required this.count,
-    required this.color,
+const double _roundButtonSize = 44;
+
+/// The top row: the round menu button (back to the chat), the persona's
+/// avatar and name in a pill, and the page's own action when it has one.
+class _PageTopRow extends StatelessWidget {
+  const _PageTopRow({
+    required this.modelName,
+    required this.avatar,
+    required this.action,
   });
-
-  final String text;
-  final int count;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Flexible(
-          child: Text(
-            text,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppTypography.captionStyle,
-          ),
-        ),
-        if (count > 0) ...[
-          const SizedBox(width: Spacing.xxs),
-          Container(
-            key: ValueKey('assistant-sheet-tab-count-$text'),
-            constraints: const BoxConstraints(minWidth: 16),
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            decoration: BoxDecoration(
-              color: color,
-              borderRadius: BorderRadius.circular(AppBorderRadius.round),
-            ),
-            child: Text(
-              '$count',
-              textAlign: TextAlign.center,
-              style: AppTypography.micro.copyWith(
-                color: const Color(0xFFFFFFFF),
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-/// The avatar circle, the model's name and the status line the strip shows.
-class _SheetHeader extends ConsumerWidget {
-  const _SheetHeader({required this.modelName, required this.avatar});
 
   final String? modelName;
   final Widget? avatar;
+  final Widget? action;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final theme = context.conduitTheme;
-    final snapshot = ref.watch(
-      chatMessagesProvider.select(assistantActivitySnapshot),
-    );
-    final word = assistantActivityLabel(l10n, snapshot.live);
-    final busy = snapshot.live != AssistantActivity.idle;
-    final status = busy ? (snapshot.detail ?? word) : word;
     final name = modelName?.trim() ?? '';
     final initial = name.isEmpty
         ? ''
         : String.fromCharCodes(name.runes.take(1)).toUpperCase();
-    return Row(
-      children: [
-        Container(
-          key: const ValueKey('assistant-sheet-avatar'),
-          width: 56,
-          height: 56,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: theme.surfaceContainer,
-            border: Border.all(color: theme.cardBorder),
+    return SizedBox(
+      height: _roundButtonSize,
+      child: Row(
+        children: [
+          _RoundButton(
+            key: const ValueKey('assistant-page-menu'),
+            symbol: 'line.3.horizontal',
+            label: l10n.back,
+            onTap: () => Navigator.of(context).maybePop(),
           ),
-          child: ClipOval(
-            child:
-                avatar ??
-                Center(
-                  child: Text(
-                    initial,
-                    style: AppTypography.titleLargeStyle.copyWith(
-                      color: theme.textPrimary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
+          Expanded(
+            child: Center(
+              child: Container(
+                key: const ValueKey('assistant-sheet-pill'),
+                height: 36,
+                padding: const EdgeInsets.only(right: Spacing.md, left: 4),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(AppBorderRadius.round),
+                  color: theme.surfaceContainer,
+                  border: Border.all(color: theme.cardBorder, width: 0.5),
                 ),
-          ),
-        ),
-        const SizedBox(width: Spacing.md),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                name.isEmpty ? l10n.assistantAvatar : name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTypography.titleMediumStyle.copyWith(
-                  color: theme.textPrimary,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              Row(
-                children: [
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: busy ? theme.warning : theme.success,
-                    ),
-                  ),
-                  const SizedBox(width: Spacing.xs),
-                  Flexible(
-                    child: Text(
-                      status,
-                      key: const ValueKey('assistant-sheet-status'),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTypography.bodySmallStyle.copyWith(
-                        color: theme.textSecondary,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      key: const ValueKey('assistant-sheet-avatar'),
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: theme.surfaceContainerHighest,
+                      ),
+                      child: ClipOval(
+                        child:
+                            avatar ??
+                            Center(
+                              child: Text(
+                                initial,
+                                style: AppTypography.labelStyle.copyWith(
+                                  color: theme.textPrimary,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
                       ),
                     ),
-                  ),
-                ],
+                    const SizedBox(width: Spacing.sm),
+                    Flexible(
+                      child: Text(
+                        name.isEmpty ? l10n.assistantAvatar : name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.bodyMediumStyle.copyWith(
+                          color: theme.textPrimary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ],
+            ),
           ),
-        ),
-      ],
+          SizedBox(
+            width: _roundButtonSize,
+            height: _roundButtonSize,
+            child: action,
+          ),
+        ],
+      ),
     );
   }
 }
@@ -413,28 +449,6 @@ class _ActivityTabState extends ConsumerState<_ActivityTab> {
         .format(day);
   }
 
-  Future<void> _confirmClear() async {
-    final l10n = AppLocalizations.of(context)!;
-    final log = ref.read(assistantActionLogProvider.notifier);
-    await AdaptiveAlertDialog.show(
-      context: context,
-      title: l10n.assistantActivityClearTitle,
-      message: l10n.assistantActivityClearMessage,
-      actions: [
-        AlertAction(
-          title: l10n.cancel,
-          style: AlertActionStyle.cancel,
-          onPressed: () {},
-        ),
-        AlertAction(
-          title: l10n.clear,
-          style: AlertActionStyle.destructive,
-          onPressed: () => unawaited(log.clear()),
-        ),
-      ],
-    );
-  }
-
   void _openInChat(AssistantActionRecord record) {
     final open = ref.read(assistantOpenChatProvider);
     final current = ref.read(activeConversationProvider)?.id;
@@ -472,27 +486,16 @@ class _ActivityTabState extends ConsumerState<_ActivityTab> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          children: [
-            if (filter != null)
-              AdaptiveChip.input(
-                key: const ValueKey('assistant-activity-filter'),
-                label: Text(l10n.assistantActivityFromReply),
-                onDeleted: widget.onClearFilter,
-                deleteButtonTooltipMessage: l10n.assistantActivityShowAll,
-              ),
-            const Spacer(),
-            AdaptiveButton(
-              key: const ValueKey('assistant-activity-clear'),
-              onPressed: _confirmClear,
-              enabled: log.records.isNotEmpty,
-              label: l10n.clear,
-              style: AdaptiveButtonStyle.plain,
-              size: AdaptiveButtonSize.small,
-              useNative: false,
+        if (filter != null)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: AdaptiveChip.input(
+              key: const ValueKey('assistant-activity-filter'),
+              label: Text(l10n.assistantActivityFromReply),
+              onDeleted: widget.onClearFilter,
+              deleteButtonTooltipMessage: l10n.assistantActivityShowAll,
             ),
-          ],
-        ),
+          ),
         if (items.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: Spacing.lg),

@@ -418,9 +418,9 @@ class _AssistantAvatarStripState extends ConsumerState<AssistantAvatarStrip>
     if (_sheetOpen) return;
     _sheetOpen = true;
     try {
-      await ThemedSheets.showSurface<void>(
-        context: context,
-        builder: (_) => AssistantAvatarSheet(
+      await showAssistantPage(
+        context,
+        builder: () => AssistantAvatarSheet(
           store: _store,
           onChanged: _reloadMedia,
           modelName: widget.modelName,

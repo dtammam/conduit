@@ -6,34 +6,53 @@ import 'package:conduit_core/features/automations/providers/automation_providers
 import 'package:conduit_core/services/settings_service.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:material_ui/material_ui.dart' show Brightness, Theme;
+import 'package:material_ui/material_ui.dart' show Brightness, Theme, Tooltip;
 
 import 'assistant_action_log.dart';
 import 'assistant_pending_approval.dart';
 
-/// The glass capsule of labelled buttons under the Omni chat's composer: one
-/// tap away, the assistant's Activity, Approvals, Routines and Appearance
-/// pages, each with its glyph over a one-word label. The chat itself needs no
-/// button, since the bar only shows there. It is hidden while the keyboard is
-/// up.
+/// The glass capsule of icon buttons under the Omni chat's composer (and on the
+/// assistant pages), laid out like Muse's: one tap away, the assistant's
+/// Activity, Approvals, Routines and Appearance pages. The names are only
+/// semantics labels and tooltips. On a page, [selected] sits on a dark pill.
+/// It is hidden while the keyboard is up.
 class OmniTabBar extends ConsumerWidget {
   const OmniTabBar({
     super.key,
     required this.onOpen,
     this.keyboardVisible = false,
+    this.keyboardProgress,
+    this.selected,
   });
+
+  /// The page showing now, drawn on a pill; none in the chat itself.
+  final AssistantSheetTab? selected;
 
   /// Whether the keyboard is up. The caller reads it above the page's
   /// scaffold, which removes the keyboard inset from its body.
   final bool keyboardVisible;
+
+  /// How far the keyboard is up, 0 (down) to 1 (fully up): the caller
+  /// divides the keyboard's own inset by its full height each frame, so the
+  /// bar gives its room back as the keyboard rises and takes it again as it
+  /// falls, in step with the keyboard and with no jump in the composer. When
+  /// null, [keyboardVisible] decides: 1 when up, else 0.
+  final double? keyboardProgress;
 
   /// Opens the page for [tab] over the chat.
   final void Function(AssistantSheetTab tab) onOpen;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    if (keyboardVisible) {
-      return const SizedBox.shrink(key: ValueKey('omni-tab-bar-hidden'));
+    final progress = (keyboardProgress ?? (keyboardVisible ? 1.0 : 0.0)).clamp(
+      0.0,
+      1.0,
+    );
+    if (progress >= 1) {
+      return const SizedBox(
+        key: ValueKey('omni-tab-bar-hidden'),
+        height: _gapAboveKeyboard,
+      );
     }
     final l10n = AppLocalizations.of(context)!;
     final theme = context.conduitTheme;
@@ -51,6 +70,7 @@ class OmniTabBar extends ConsumerWidget {
     final pills = [
       _TabButton(
         id: 'activity',
+        selected: selected == AssistantSheetTab.activity,
         symbol: 'list.bullet.rectangle',
         label: l10n.assistantSheetTabActivity,
         badge: failures,
@@ -59,6 +79,7 @@ class OmniTabBar extends ConsumerWidget {
       ),
       _TabButton(
         id: 'approvals',
+        selected: selected == AssistantSheetTab.approvals,
         symbol: 'checkmark.seal',
         label: l10n.assistantSheetTabApprovals,
         badge: pendingApproval ? 1 : 0,
@@ -68,12 +89,14 @@ class OmniTabBar extends ConsumerWidget {
       if (routinesAvailable)
         _TabButton(
           id: 'routines',
+          selected: selected == AssistantSheetTab.routines,
           symbol: 'alarm',
           label: l10n.assistantSheetTabRoutines,
           onTap: () => onOpen(AssistantSheetTab.routines),
         ),
       _TabButton(
         id: 'appearance',
+        selected: selected == AssistantSheetTab.appearance,
         symbol: 'paintpalette',
         label: l10n.assistantSheetTabAppearance,
         onTap: () => onOpen(AssistantSheetTab.appearance),
@@ -146,20 +169,49 @@ class OmniTabBar extends ConsumerWidget {
         child: capsule,
       );
     }
-    return Padding(
+    final bar = Padding(
       padding: const EdgeInsets.fromLTRB(
-        Spacing.screenPadding,
-        Spacing.xs,
-        Spacing.screenPadding,
-        Spacing.sm,
+        _sideMargin,
+        _gapBelowComposer,
+        _sideMargin,
+        _gapAboveBottomEdge,
       ),
       child: capsule,
+    );
+    if (progress <= 0) return bar;
+    // Part way: the bar's room shrinks to the composer's own gap above the
+    // keyboard as the keyboard comes up, and it fades out.
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ClipRect(
+          child: Align(
+            alignment: Alignment.bottomCenter,
+            heightFactor: 1 - progress,
+            child: IgnorePointer(
+              ignoring: progress > 0.5,
+              child: Opacity(opacity: 1 - progress, child: bar),
+            ),
+          ),
+        ),
+        SizedBox(height: _gapAboveKeyboard * progress),
+      ],
     );
   }
 }
 
 const double _capsuleInset = 4;
-const double _capsuleHeight = 64 + 2 * _capsuleInset;
+
+/// Muse's measures, in points: 60 tall, 21 from the sides, 11 under the
+/// composer and 22 from the bottom edge of the screen (above the home
+/// indicator, which the bar overlaps).
+const double _capsuleHeight = 60;
+const double _sideMargin = 21;
+const double _gapBelowComposer = 10;
+const double _gapAboveBottomEdge = 22;
+
+/// The composer's gap above the keyboard once the bar is gone.
+const double _gapAboveKeyboard = Spacing.sm;
 
 class _TabButton extends StatelessWidget {
   const _TabButton({
@@ -167,6 +219,7 @@ class _TabButton extends StatelessWidget {
     required this.symbol,
     required this.label,
     this.onTap,
+    this.selected = false,
     this.badge = 0,
     this.badgeColor,
   });
@@ -175,6 +228,7 @@ class _TabButton extends StatelessWidget {
   final String symbol;
   final String label;
   final VoidCallback? onTap;
+  final bool selected;
   final int badge;
   final Color? badgeColor;
 
@@ -183,55 +237,57 @@ class _TabButton extends StatelessWidget {
     final theme = context.conduitTheme;
     return Semantics(
       button: true,
+      selected: selected,
       label: label,
       excludeSemantics: true,
       onTap: onTap,
-      child: GestureDetector(
-        key: ValueKey('omni-tab-$id'),
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+      child: Tooltip(
+        message: label,
+        child: GestureDetector(
+          key: ValueKey('omni-tab-$id'),
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: Center(
+            child: Stack(
+              alignment: Alignment.center,
               children: [
-                Icon(
-                  cupertinoIconForSFSymbol(symbol),
-                  size: IconSize.lg,
-                  color: theme.iconSecondary,
+                // The dark pill behind the selected icon, as in Muse.
+                Container(
+                  key: selected ? ValueKey('omni-tab-selected-$id') : null,
+                  height: _capsuleHeight - 2 * _capsuleInset,
+                  constraints: const BoxConstraints(minWidth: 56),
+                  decoration: BoxDecoration(
+                    color: selected
+                        ? theme.textPrimary.withValues(alpha: 0.12)
+                        : null,
+                    borderRadius: BorderRadius.circular(
+                      (_capsuleHeight - 2 * _capsuleInset) / 2,
+                    ),
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(
+                    cupertinoIconForSFSymbol(symbol),
+                    size: IconSize.lg,
+                    color: selected ? theme.textPrimary : theme.iconSecondary,
+                  ),
                 ),
-                const SizedBox(height: Spacing.xxs),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: Spacing.xs),
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      label,
-                      maxLines: 1,
-                      style: AppTypography.captionStyle.copyWith(
-                        color: theme.textSecondary,
-                        fontWeight: FontWeight.w500,
+                if (badge > 0)
+                  Positioned(
+                    top: 8,
+                    right: 12,
+                    child: Container(
+                      key: ValueKey('omni-tab-badge-$id'),
+                      width: 9,
+                      height: 9,
+                      decoration: BoxDecoration(
+                        color: badgeColor,
+                        shape: BoxShape.circle,
                       ),
                     ),
                   ),
-                ),
               ],
             ),
-            if (badge > 0)
-              Align(
-                alignment: const Alignment(0.38, -0.78),
-                child: Container(
-                  key: ValueKey('omni-tab-badge-$id'),
-                  width: 9,
-                  height: 9,
-                  decoration: BoxDecoration(
-                    color: badgeColor,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ),
-          ],
+          ),
         ),
       ),
     );

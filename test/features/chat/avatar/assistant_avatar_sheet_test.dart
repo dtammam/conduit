@@ -232,11 +232,10 @@ void main() {
       check(container.read(assistantActionLogProvider).unseenFailures)
           .equals(0);
       check(failedBadge.evaluate()).isEmpty();
-      check(
-        find
-            .byKey(const ValueKey('assistant-sheet-tab-count-Activity'))
-            .evaluate(),
-      ).length.equals(1);
+      check(find.byKey(const ValueKey('assistant-page-title')).evaluate())
+          .length
+          .equals(1);
+      check(find.text('Activity').evaluate()).length.equals(1);
     });
   });
 
@@ -309,7 +308,7 @@ void main() {
     testWidgets('Approvals says nothing waits', (tester) async {
       await mount(tester);
       await openSheet(tester);
-      await tester.tap(find.text('Approvals'));
+      await tester.tap(find.byKey(const ValueKey('omni-tab-approvals')));
       await tester.pumpAndSettle();
 
       check(find.text('Nothing waiting for you').evaluate()).length.equals(1);
@@ -329,11 +328,9 @@ void main() {
       check(find.byKey(const ValueKey('assistant-approval-deny')).evaluate())
           .length
           .equals(1);
-      check(
-        find
-            .byKey(const ValueKey('assistant-sheet-tab-count-Approvals'))
-            .evaluate(),
-      ).length.equals(1);
+      check(find.byKey(const ValueKey('omni-tab-badge-approvals')).evaluate())
+          .length
+          .equals(1);
     });
 
     testWidgets('a question is answered in the chat', (tester) async {
@@ -348,7 +345,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      check(find.byKey(const ValueKey('assistant-sheet-tabs')).evaluate())
+      check(find.byKey(const ValueKey('assistant-sheet-body')).evaluate())
           .isEmpty();
     });
 
@@ -358,8 +355,8 @@ void main() {
       await mount(tester);
       await openSheet(tester);
 
-      check(find.text('Routines').evaluate()).isEmpty();
-      check(find.text('Appearance').evaluate()).length.equals(1);
+      check(find.byTooltip('Routines').evaluate()).isEmpty();
+      check(find.byTooltip('Appearance').evaluate()).length.equals(1);
     });
 
     testWidgets('Routines shows when automations are available', (
@@ -368,38 +365,48 @@ void main() {
       await mount(tester, upcoming: true);
       await openSheet(tester);
 
-      check(find.text('Routines').evaluate()).length.equals(1);
+      check(find.byTooltip('Routines').evaluate()).length.equals(1);
     });
 
-    testWidgets('the sheet and the tab control keep their place across tabs', (
-      tester,
-    ) async {
-      await mount(tester, upcoming: true, records: [_call('a')]);
-      await openSheet(tester);
+    testWidgets(
+      'the page, its top row, title and bar keep their place across tabs',
+      (tester) async {
+        await mount(tester, upcoming: true, records: [_call('a')]);
+        await openSheet(tester);
 
-      final tabs = find.byKey(const ValueKey('assistant-sheet-tabs'));
-      final avatar = find.byKey(const ValueKey('assistant-sheet-avatar'));
-      final sheet = find.byKey(const ValueKey('assistant-sheet-body'));
-      final tabsAt = tester.getRect(tabs);
-      final avatarAt = tester.getRect(avatar);
-      final sheetAt = tester.getRect(sheet);
-      check(sheetAt.height).isGreaterThan(
-        tester.view.physicalSize.height / tester.view.devicePixelRatio * 0.8,
-      );
+        final pill = find.byKey(const ValueKey('assistant-sheet-pill'));
+        final title = find.byKey(const ValueKey('assistant-page-title'));
+        final bar = find.byKey(const ValueKey('omni-tab-bar'));
+        final page = find.byKey(const ValueKey('assistant-sheet-body'));
+        final pillAt = tester.getRect(pill);
+        final titleAt = tester.getTopLeft(title);
+        final barAt = tester.getRect(bar);
+        check(tester.getRect(page).height).isGreaterThan(
+          tester.view.physicalSize.height / tester.view.devicePixelRatio * 0.99,
+        );
+        // A large title, left aligned at the 16 pt margin, under the pill.
+        check(titleAt.dx).equals(16);
+        check(titleAt.dy).isGreaterThan(pillAt.bottom);
+        // No four-button row on the page itself: only the bottom bar.
+        check(find.byKey(const ValueKey('assistant-sheet-tabs')).evaluate())
+            .isEmpty();
 
-      for (final label in const [
-        'Approvals',
-        'Routines',
-        'Appearance',
-        'Activity',
-      ]) {
-        await tester.tap(find.descendant(of: tabs, matching: find.text(label)));
-        await tester.pumpAndSettle();
-        check(tester.getRect(tabs)).equals(tabsAt);
-        check(tester.getRect(avatar)).equals(avatarAt);
-        check(tester.getRect(sheet)).equals(sheetAt);
-      }
-    });
+        for (final id in const [
+          'approvals',
+          'routines',
+          'appearance',
+          'activity',
+        ]) {
+          await tester.tap(find.byKey(ValueKey('omni-tab-$id')));
+          await tester.pumpAndSettle();
+          check(tester.getRect(pill)).equals(pillAt);
+          check(tester.getTopLeft(title)).equals(titleAt);
+          check(tester.getRect(bar)).equals(barAt);
+          check(find.byKey(ValueKey('omni-tab-selected-$id')).evaluate()).length
+              .equals(1);
+        }
+      },
+    );
 
     testWidgets('a row puts the time and raw name under the preview', (
       tester,
@@ -428,7 +435,7 @@ void main() {
     testWidgets('Appearance keeps the four state rows', (tester) async {
       await mount(tester);
       await openSheet(tester);
-      await tester.tap(find.text('Appearance'));
+      await tester.tap(find.byKey(const ValueKey('omni-tab-appearance')));
       await tester.pumpAndSettle();
 
       for (final state in const ['idle', 'working', 'making', 'done']) {
@@ -436,6 +443,50 @@ void main() {
             .length
             .equals(1);
       }
+    });
+  });
+
+  group('page chrome', () {
+    testWidgets(
+      'each page: menu button, pill, large title, only Activity has an action',
+      (tester) async {
+        await mount(tester, upcoming: true, records: [_call('a')]);
+        await openSheet(tester);
+        final clear = find.byKey(const ValueKey('assistant-activity-clear'));
+        for (final (id, title) in const [
+          ('activity', 'Activity'),
+          ('approvals', 'Approvals'),
+          ('routines', 'Routines'),
+          ('appearance', 'Appearance'),
+        ]) {
+          await tester.tap(find.byKey(ValueKey('omni-tab-$id')));
+          await tester.pumpAndSettle();
+          check(find.byKey(const ValueKey('assistant-page-menu')).evaluate())
+              .length
+              .equals(1);
+          check(find.byKey(const ValueKey('assistant-sheet-pill')).evaluate())
+              .length
+              .equals(1);
+          final text = tester.widget<Text>(
+            find.byKey(const ValueKey('assistant-page-title')),
+          );
+          check(text.data).equals(title);
+          check(text.style?.fontSize).equals(28);
+          check(clear.evaluate().length).equals(id == 'activity' ? 1 : 0);
+        }
+      },
+    );
+
+    testWidgets('the menu button leaves the page', (tester) async {
+      await mount(tester);
+      await openSheet(tester);
+      check(find.byKey(const ValueKey('assistant-sheet-body')).evaluate())
+          .length
+          .equals(1);
+      await tester.tap(find.byKey(const ValueKey('assistant-page-menu')));
+      await tester.pumpAndSettle();
+      check(find.byKey(const ValueKey('assistant-sheet-body')).evaluate())
+          .isEmpty();
     });
   });
 

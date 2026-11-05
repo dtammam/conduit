@@ -242,6 +242,31 @@ MessageReceipt deriveMessageReceipt({
   return MessageReceipt.none;
 }
 
+/// The delivery mark for the user message [messageId] on any turn, so a mark
+/// stays on its message for good instead of moving to each new one. It comes
+/// only from the messages themselves (the reply that follows, or a send that
+/// did not dispatch), so it is the same after new messages, a chat reload and
+/// a cold start, with nothing stored of its own. A reply that has started or
+/// finished is a delivery, an error on it a failure, and a user turn with no
+/// assistant reply right after it shows nothing.
+MessageReceipt deriveStickyReceipt({
+  required List<ChatMessage> messages,
+  required String messageId,
+  String? failedSendMessageId,
+}) {
+  final i = messages.indexWhere((m) => m.id == messageId);
+  if (i < 0 || messages[i].role != 'user') return MessageReceipt.none;
+  if (failedSendMessageId == messageId) return MessageReceipt.failed;
+  final reply = i + 1 < messages.length ? messages[i + 1] : null;
+  if (reply == null || reply.role != 'assistant') return MessageReceipt.none;
+  if (reply.error != null) return MessageReceipt.failed;
+  final started =
+      !reply.isStreaming ||
+      reply.content.isNotEmpty ||
+      reply.statusHistory.isNotEmpty;
+  return started ? MessageReceipt.delivered : MessageReceipt.none;
+}
+
 class _ChatToolbarActionDescriptor {
   const _ChatToolbarActionDescriptor({
     required this.widget,
@@ -585,6 +610,10 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   bool _hasUserScrolled = false;
   bool _isDeactivated = false;
   double _inputHeight = 0;
+
+  /// The tallest keyboard seen (a typical one to start), to turn its inset
+  /// into how far up it is.
+  double _keyboardFullInset = 300;
   bool _didStartupFocus = false; // one-time auto-focus on startup
   String? _lastConversationId;
   int _conversationOwnerGeneration = 0;
@@ -3585,17 +3614,10 @@ class _ChatPageState extends ConsumerState<ChatPage> {
           final receipt = receiptsEnabled
               ? rowRef.watch(
                   chatMessagesProvider.select(
-                    (messages) => deriveMessageReceipt(
+                    (messages) => deriveStickyReceipt(
                       messages: messages,
                       messageId: messageId,
                       failedSendMessageId: failedSendMessageId,
-                      isHiddenTurn: quickRepliesEnabled
-                          ? (messages, index) => isQuickReplyTurn(
-                              messages,
-                              index,
-                              failedSendMessageId: failedSendMessageId,
-                            )
-                          : null,
                     ),
                   ),
                 )
@@ -4078,6 +4100,21 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   }
 
   Widget _buildComposerSection(BuildContext context) {
+    // The Omni bar sits 22 pt from the bottom edge, over the home indicator
+    // (as in Muse), so the safe area is its own margin and not added again.
+    final omniBarShown =
+        isOmniChatId(
+          ref.watch(activeConversationProvider.select((c) => c?.id)),
+        ) &&
+        ref.watch(appSettingsProvider.select((s) => s.assistantAvatarEnabled));
+    // How far the keyboard is up, 0 to 1, from its own inset each frame: the
+    // bar follows it, so the composer never jumps.
+    final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+    if (keyboardInset > _keyboardFullInset) _keyboardFullInset = keyboardInset;
+    final keyboardProgress = (keyboardInset / _keyboardFullInset).clamp(
+      0.0,
+      1.0,
+    );
     final hasAttachments =
         ref.watch(attachedFilesProvider.select((files) => files.isNotEmpty)) ||
         ref.watch(
@@ -4095,8 +4132,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
           top: false,
           left: false,
           right: false,
-          bottom: !Platform.isAndroid,
-          minimum: Platform.isAndroid
+          bottom: !Platform.isAndroid && !omniBarShown,
+          minimum: Platform.isAndroid || omniBarShown
               ? EdgeInsets.zero
               : const EdgeInsets.only(bottom: Spacing.sm),
           child: Column(
@@ -4284,8 +4321,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                             ),
                           ))
                         OmniTabBar(
-                          keyboardVisible:
-                              MediaQuery.viewInsetsOf(context).bottom > 0,
+                          keyboardProgress: keyboardProgress,
                           onOpen: (tab) => composerRef
                               .read(assistantSheetRequestProvider.notifier)
                               .open(tab: tab),

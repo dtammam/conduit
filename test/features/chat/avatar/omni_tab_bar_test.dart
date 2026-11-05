@@ -80,15 +80,89 @@ void main() {
     });
   }
 
-  testWidgets('each button shows its label under the glyph, with no Chat', (
+  testWidgets(
+    'icons only: no visible labels, names kept as semantics and tooltips',
+    (tester) async {
+      final semantics = tester.ensureSemantics();
+      await _mount(tester);
+      for (final label in ['Activity', 'Approvals', 'Routines', 'Appearance']) {
+        check(find.text(label).evaluate()).isEmpty();
+        check(find.byTooltip(label).evaluate()).length.equals(1);
+        check(find.bySemanticsLabel(label).evaluate()).isNotEmpty;
+      }
+      check(find.byKey(const ValueKey('omni-tab-chat')).evaluate()).isEmpty();
+      semantics.dispose();
+    },
+  );
+
+  testWidgets('sits where Muse'
+      's bar does: 21 pt sides, 60 pt tall, 22 pt up', (tester) async {
+    tester.view.physicalSize = const Size(393, 852);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          automationsAvailableProvider.overrideWithValue(false),
+          appSettingsProvider.overrideWith(
+            () => _Settings(const AppSettings(routinesServerUrl: 'x')),
+          ),
+          assistantApprovalProvider.overrideWithValue(null),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.light(TweakcnThemes.t3Chat),
+          localizationsDelegates: conduitLocalizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: Align(
+              alignment: Alignment.bottomCenter,
+              child: OmniTabBar(onOpen: (_) {}),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    final rect = tester.getRect(find.byKey(const ValueKey('omni-tab-bar')));
+    check(rect.left).equals(21);
+    check(393 - rect.right).equals(21);
+    check(rect.height).equals(60);
+    check(852 - rect.bottom).equals(22);
+  });
+
+  testWidgets('the selected page sits on a dark pill, the others do not', (
     tester,
   ) async {
-    await _mount(tester);
-    for (final label in ['Activity', 'Approvals', 'Routines', 'Appearance']) {
-      check(find.text(label).evaluate()).length.equals(1);
-    }
-    check(find.byKey(const ValueKey('omni-tab-chat')).evaluate()).isEmpty();
-    check(find.text('Chat').evaluate()).isEmpty();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          automationsAvailableProvider.overrideWithValue(false),
+          appSettingsProvider.overrideWith(
+            () => _Settings(const AppSettings(routinesServerUrl: 'x')),
+          ),
+          assistantApprovalProvider.overrideWithValue(null),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.dark(TweakcnThemes.t3Chat),
+          localizationsDelegates: conduitLocalizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: Center(
+              child: OmniTabBar(
+                onOpen: (_) {},
+                selected: AssistantSheetTab.approvals,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    check(find.byKey(const ValueKey('omni-tab-selected-approvals')).evaluate())
+        .length
+        .equals(1);
+    check(find.byKey(const ValueKey('omni-tab-selected-activity')).evaluate())
+        .isEmpty();
   });
 
   testWidgets('the capsule fits a narrow phone without overflow', (
@@ -119,5 +193,41 @@ void main() {
     await _mount(tester);
     check(find.byKey(const ValueKey('omni-tab-badge-approvals')).evaluate())
         .isEmpty();
+  });
+
+  testWidgets('gives its room back in step with the keyboard', (tester) async {
+    Future<double> heightAt(double progress) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            automationsAvailableProvider.overrideWithValue(false),
+            appSettingsProvider.overrideWith(
+              () => _Settings(const AppSettings(routinesServerUrl: 'x')),
+            ),
+            assistantApprovalProvider.overrideWithValue(null),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.light(TweakcnThemes.t3Chat),
+            localizationsDelegates: conduitLocalizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: Scaffold(
+              body: Align(
+                alignment: Alignment.bottomCenter,
+                child: OmniTabBar(onOpen: (_) {}, keyboardProgress: progress),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      return tester.getSize(find.byType(OmniTabBar)).height;
+    }
+
+    final down = await heightAt(0);
+    final half = await heightAt(0.5);
+    final up = await heightAt(1);
+    check(down).isGreaterThan(half);
+    check(half).isGreaterThan(up);
+    check(up).equals(8);
   });
 }

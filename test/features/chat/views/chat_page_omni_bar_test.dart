@@ -30,6 +30,7 @@ import 'package:conduit_core/ports/key_value_store.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:cupertino_ui/cupertino_ui.dart' show CupertinoIcons;
+import 'package:conduit/features/chat/widgets/modern_chat_input.dart';
 import 'package:material_ui/material_ui.dart';
 
 class _Conversations extends Conversations {
@@ -200,6 +201,12 @@ void main() {
     }
   }
 
+  Future<void> mountPageFrames(WidgetTester tester) async {
+    for (var frame = 0; frame < 3; frame++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+  }
+
   final transcript = <ChatMessage>[
     _user('u1', 'Lunch at a cafe'),
     _assistant('a1', parent: 'u1'),
@@ -216,6 +223,65 @@ void main() {
     check(newChat.evaluate()).isEmpty();
     check(find.byIcon(CupertinoIcons.create).evaluate()).isEmpty();
   });
+
+  testWidgets(
+    'the bar sits 22 pt up with 21 pt sides and about 11 pt under the composer',
+    (tester) async {
+      tester.view.physicalSize = const Size(393, 852);
+      tester.view.devicePixelRatio = 1;
+      tester.view.padding = const FakeViewPadding(top: 59, bottom: 34);
+      tester.view.viewPadding = const FakeViewPadding(top: 59, bottom: 34);
+      addTearDown(tester.view.reset);
+      await mountPage(tester, messages: transcript);
+      final rect = tester.getRect(bar);
+      check(852 - rect.bottom).isCloseTo(22, 0.5);
+      check(rect.left).isCloseTo(21, 0.5);
+      check(393 - rect.right).isCloseTo(21, 0.5);
+      check(rect.height).isCloseTo(60, 0.5);
+      // The composer's shell ends about 11 pt above the bar.
+      final composer = tester.getRect(find.byType(ModernChatInput));
+      check(rect.top - composer.bottom).isLessThan(14);
+      check(rect.top - composer.bottom).isGreaterOrEqual(9);
+    },
+  );
+
+  testWidgets(
+    'the bar hides with the keyboard and the composer follows it without a jump',
+    (tester) async {
+      tester.view.physicalSize = const Size(393, 852);
+      tester.view.devicePixelRatio = 1;
+      tester.view.padding = const FakeViewPadding(top: 59, bottom: 34);
+      tester.view.viewPadding = const FakeViewPadding(top: 59, bottom: 34);
+      addTearDown(tester.view.reset);
+      await mountPage(tester, messages: transcript);
+      final composer = find.byType(ModernChatInput);
+      final closedBottom = tester.getRect(composer).bottom;
+      check(bar.evaluate()).length.equals(1);
+
+      var previous = closedBottom;
+      for (final inset in [100.0, 200.0, 300.0, 336.0]) {
+        tester.view.viewInsets = FakeViewPadding(bottom: inset);
+        await mountPageFrames(tester);
+        final bottom = tester.getRect(composer).bottom;
+        // Rising with the keyboard, never dropping back.
+        check(bottom).isLessThan(previous);
+        // And never by more than the keyboard''s own step plus the bar''s room.
+        check(previous - bottom).isLessThan(100 + 100);
+        previous = bottom;
+      }
+      // Fully up: no bar, the composer 8 pt above the keyboard.
+      check(bar.evaluate()).isEmpty();
+      check(find.byKey(const ValueKey('omni-tab-bar-hidden')).evaluate()).length
+          .equals(1);
+      check(852 - 336 - tester.getRect(composer).bottom).isCloseTo(8, 0.5);
+
+      // Keyboard down again: the bar is back and the composer is where it was.
+      tester.view.viewInsets = FakeViewPadding.zero;
+      await mountPageFrames(tester);
+      check(bar.evaluate()).length.equals(1);
+      check(tester.getRect(composer).bottom).isCloseTo(closedBottom, 0.5);
+    },
+  );
 
   testWidgets('another chat has neither the bar nor the missing button', (
     tester,

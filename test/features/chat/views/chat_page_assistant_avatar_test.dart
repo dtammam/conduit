@@ -262,14 +262,14 @@ void main() {
         await tester.pump(const Duration(milliseconds: 200));
       }
       // The sheet opens on Activity; the clips are under Appearance.
-      await tester.tap(find.text('Appearance'));
+      await tester.tap(find.byKey(const ValueKey('omni-tab-appearance')));
       for (var frame = 0; frame < 3; frame++) {
         await tester.pump(const Duration(milliseconds: 200));
       }
       check(find.byKey(const ValueKey('assistant-avatar-row-idle')).evaluate())
           .length
           .equals(1);
-      await tester.tapAt(const Offset(8, 8));
+      await tester.tap(find.byKey(const ValueKey('assistant-page-menu')));
       for (var frame = 0; frame < 3; frame++) {
         await tester.pump(const Duration(milliseconds: 200));
       }
