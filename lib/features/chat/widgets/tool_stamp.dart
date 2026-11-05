@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 
 import '../../../shared/theme/theme_extensions.dart';
+import '../../../shared/utils/external_link_launcher.dart';
 import '../avatar/assistant_action_log.dart';
 
 /// Calls that are plumbing, not actions worth proving.
@@ -193,7 +194,7 @@ List<AssistantActionRecord> toolRecordsFromOutput(
         chatId: '',
         messageId: '',
         toolName: item['name']?.toString() ?? '',
-        arguments: '',
+        arguments: _outputArguments(item['arguments']),
         result: result,
         status: failed
             ? AssistantActionStatus.failed
@@ -204,6 +205,16 @@ List<AssistantActionRecord> toolRecordsFromOutput(
     );
   }
   return records;
+}
+
+String _outputArguments(Object? raw) {
+  if (raw is String) return raw;
+  if (raw is Map) {
+    try {
+      return jsonEncode(raw);
+    } catch (_) {}
+  }
+  return '';
 }
 
 bool _jsonErrorField(String result) {
@@ -339,12 +350,147 @@ List<ToolSummarySegment> buildToolSummary(
   ];
 }
 
+/// A page the reply's web tools found or opened. It comes only from a tool
+/// result, never from text the model wrote.
+class WebSource {
+  const WebSource({required this.url, required this.title});
+
+  final String url;
+  final String title;
+
+  /// The short site name: host without a leading "www.".
+  String get domain {
+    final host = Uri.tryParse(url)?.host ?? '';
+    return host.startsWith('www.') ? host.substring(4) : host;
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is WebSource && other.url == url && other.title == title;
+
+  @override
+  int get hashCode => Object.hash(url, title);
+}
+
+/// Most source pills under one reply.
+const int kWebSourceLimit = 6;
+
+/// http and https URLs with a host only; anything else is not shown.
+String? _webUrl(Object? raw) {
+  if (raw is! String) return null;
+  final text = raw.trim();
+  final uri = Uri.tryParse(text);
+  if (uri == null || !uri.hasAuthority || uri.host.isEmpty) return null;
+  if (uri.scheme != 'http' && uri.scheme != 'https') return null;
+  return uri.removeFragment().toString();
+}
+
+final RegExp _titleLinkPair = RegExp(
+  r'"title"\s*:\s*"((?:[^"\\]|\\.)*)"[^{}]*?"(?:link|url)"\s*:\s*"((?:[^"\\]|\\.)*)"',
+);
+final RegExp _linkOnly = RegExp(r'"(?:link|url)"\s*:\s*"((?:[^"\\]|\\.)*)"');
+
+String _unescapeJson(String body) {
+  try {
+    final v = jsonDecode('"$body"');
+    return v is String ? v : body;
+  } catch (_) {
+    return body;
+  }
+}
+
+void _collectSources(Object? node, List<WebSource> out, int depth) {
+  if (depth > 4) return;
+  if (node is List) {
+    for (final item in node) {
+      _collectSources(item, out, depth + 1);
+    }
+  } else if (node is Map) {
+    final url = _webUrl(node['link'] ?? node['url'] ?? node['source']);
+    if (url != null) {
+      out.add(WebSource(url: url, title: (node['title'] ?? '').toString()));
+    }
+    final text = node['text'];
+    if (text is String) _parseSourceText(text, out, depth + 1);
+    for (final key in const ['results', 'data', 'items']) {
+      if (node[key] is List) _collectSources(node[key], out, depth + 1);
+    }
+  }
+}
+
+void _parseSourceText(String text, List<WebSource> out, int depth) {
+  final body = text.trim();
+  if (body.isEmpty) return;
+  if (body.startsWith('[') || body.startsWith('{')) {
+    try {
+      _collectSources(jsonDecode(body), out, depth);
+      return;
+    } catch (_) {
+      // Clipped or not JSON: read the pairs that are whole.
+    }
+  }
+  final pairs = _titleLinkPair.allMatches(body).toList();
+  if (pairs.isNotEmpty) {
+    for (final m in pairs) {
+      final url = _webUrl(_unescapeJson(m.group(2)!));
+      if (url != null) {
+        out.add(WebSource(url: url, title: _unescapeJson(m.group(1)!)));
+      }
+    }
+    return;
+  }
+  for (final m in _linkOnly.allMatches(body)) {
+    final url = _webUrl(_unescapeJson(m.group(1)!));
+    if (url != null) out.add(WebSource(url: url, title: ''));
+  }
+}
+
+/// The pages behind a reply's web steps, read from the tool results of
+/// `search_web` (title and link) and `fetch_url` (the page opened). Pages
+/// opened come first, then search hits; each URL once; at most
+/// [kWebSourceLimit]. Failed calls add nothing.
+List<WebSource> webSourcesFromRecords(Iterable<AssistantActionRecord> records) {
+  final opened = <WebSource>[];
+  final found = <WebSource>[];
+  for (final record in records) {
+    if (record.failed || _resultSaysFailed(record.result)) continue;
+    final name = record.toolName.trim();
+    final base =
+        name.contains('_') && name.substring(0, name.indexOf('_')).contains('-')
+        ? name.substring(name.indexOf('_') + 1)
+        : name;
+    if (base == 'fetch_url') {
+      final list = <WebSource>[];
+      _parseSourceText(record.result, list, 0);
+      if (list.isEmpty) {
+        // The page the tool actually fetched is named in the call it ran.
+        try {
+          final args = jsonDecode(record.arguments);
+          final url = args is Map ? _webUrl(args['url']) : null;
+          if (url != null) list.add(WebSource(url: url, title: ''));
+        } catch (_) {}
+      }
+      if (list.isNotEmpty) opened.add(list.first);
+    } else if (base == 'search_web') {
+      _parseSourceText(record.result, found, 0);
+    }
+  }
+  final seen = <String>{};
+  return [
+    for (final s in [...opened, ...found])
+      if (seen.add(s.url)) s,
+  ].take(kWebSourceLimit).toList();
+}
+
 /// Everything the stamp shows for one reply, from its stored tool calls.
 class ToolStampData {
-  const ToolStampData(this.entries, this.summary);
+  const ToolStampData(this.entries, this.summary, [this.sources = const []]);
 
   final List<ToolStampEntry> entries;
   final List<ToolSummarySegment> summary;
+
+  /// Pages the web steps found or opened (see [webSourcesFromRecords]).
+  final List<WebSource> sources;
 
   bool get isEmpty => entries.isEmpty;
 
@@ -352,7 +498,11 @@ class ToolStampData {
 
   factory ToolStampData.fromRecords(Iterable<AssistantActionRecord> records) {
     final list = records.toList();
-    return ToolStampData(buildToolStamp(list), buildToolSummary(list));
+    return ToolStampData(
+      buildToolStamp(list),
+      buildToolSummary(list),
+      webSourcesFromRecords(list),
+    );
   }
 }
 
@@ -445,7 +595,7 @@ class _ToolStampState extends State<ToolStamp> {
     }
 
     final detail = data.entries.map((e) => e.label).join(' · ');
-    return Semantics(
+    final stamp = Semantics(
       label:
           'Tools used: ${summary.map((s) => s.text).join(', ')}. '
           '${_expanded ? 'Tap to collapse' : 'Tap for details'}',
@@ -492,6 +642,91 @@ class _ToolStampState extends State<ToolStamp> {
                 ),
             ],
           ),
+        ),
+      ),
+    );
+    if (data.sources.isEmpty) return stamp;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        stamp,
+        WebSourcePills(sources: data.sources),
+      ],
+    );
+  }
+}
+
+/// Very small tappable pills under the web step, one per source: the site's
+/// short domain, the whole URL opened in the system browser on tap. They
+/// scroll sideways, so the bubble does not grow.
+class WebSourcePills extends StatelessWidget {
+  const WebSourcePills({super.key, required this.sources, this.onOpen});
+
+  final List<WebSource> sources;
+
+  /// Opens [url]; a test replaces it. Defaults to the system browser.
+  final void Function(String url)? onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final shown = [
+      for (final s in sources)
+        if (s.domain.isNotEmpty) s,
+    ];
+    if (shown.isEmpty) return const SizedBox.shrink();
+    final theme = context.conduitTheme;
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: SizedBox(
+        height: 22,
+        child: ListView.separated(
+          key: const ValueKey<String>('web-source-pills'),
+          scrollDirection: Axis.horizontal,
+          itemCount: shown.length,
+          separatorBuilder: (_, _) => const SizedBox(width: 4),
+          itemBuilder: (context, i) {
+            final source = shown[i];
+            return Semantics(
+              button: true,
+              link: true,
+              label: source.title.isEmpty
+                  ? source.domain
+                  : '${source.title}, ${source.domain}',
+              excludeSemantics: true,
+              child: GestureDetector(
+                key: ValueKey<String>('web-source-${source.url}'),
+                behavior: HitTestBehavior.opaque,
+                onTap: () {
+                  try {
+                    final open = onOpen;
+                    if (open != null) {
+                      open(source.url);
+                    } else {
+                      launchExternalLink(source.url, scope: 'chat/web-source');
+                    }
+                  } catch (_) {}
+                },
+                child: Container(
+                  alignment: Alignment.center,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  decoration: BoxDecoration(
+                    color: theme.surfaceContainer,
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: theme.cardBorder, width: 0.5),
+                  ),
+                  child: Text(
+                    source.domain,
+                    maxLines: 1,
+                    style: TextStyle(
+                      fontSize: 11,
+                      height: 1.1,
+                      color: theme.textSecondary,
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
         ),
       ),
     );

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:conduit/features/chat/widgets/tool_stamp.dart';
 import 'package:conduit/features/chat/avatar/assistant_action_log.dart';
 import 'package:flutter/material.dart';
@@ -291,6 +293,167 @@ void summaryTests() {
       await tester.tap(find.byKey(const ValueKey('tool-stamp')));
       await tester.pump();
       expect(find.byKey(const ValueKey('tool-stamp-detail')), findsNothing);
+    });
+  });
+
+  group('web source pills', () {
+    AssistantActionRecord web(
+      String name,
+      String result, {
+      String args = '',
+      bool failed = false,
+    }) => AssistantActionRecord(
+      id: '$name${result.hashCode}',
+      chatId: '',
+      messageId: '',
+      toolName: name,
+      arguments: args,
+      result: result,
+      status: failed
+          ? AssistantActionStatus.failed
+          : AssistantActionStatus.succeeded,
+      startedAt: DateTime.fromMillisecondsSinceEpoch(0),
+      finishedAt: DateTime.fromMillisecondsSinceEpoch(0),
+    );
+
+    const search =
+        '[{"title":"DDR Community","link":"https://www.ddrcommunity.com/a?x=1",'
+        '"snippet":"s"},{"title":"Dupe","link":"https://www.ddrcommunity.com/a?x=1","snippet":"s"},'
+        '{"title":"Odd","link":"javascript:alert(1)","snippet":"s"},'
+        '{"title":"File","link":"file:///etc/passwd","snippet":"s"},'
+        '{"title":"Other","link":"http://example.org/p","snippet":"s"}]';
+
+    test('search_web gives title and link, deduped, http and https only', () {
+      final s = webSourcesFromRecords([web('search_web', search)]);
+      expect(s.map((e) => e.url), [
+        'https://www.ddrcommunity.com/a?x=1',
+        'http://example.org/p',
+      ]);
+      expect(s.first.title, 'DDR Community');
+      expect(s.first.domain, 'ddrcommunity.com');
+    });
+
+    test('pages opened with fetch_url come first; failures add nothing', () {
+      final s = webSourcesFromRecords([
+        web('search_web', search),
+        web('fetch_url', '{"url":"https://news.site/story","content":"x"}'),
+        web('fetch_url', '', args: '{"url":"https://args.site/p"}'),
+        web(
+          'search_web',
+          search.replaceAll('example.org', 'bad.org'),
+          failed: true,
+        ),
+      ]);
+      expect(s.map((e) => e.domain).toList(), [
+        'news.site',
+        'args.site',
+        'ddrcommunity.com',
+        'example.org',
+      ]);
+    });
+
+    test('capped at six', () {
+      final many = [
+        for (var i = 0; i < 12; i++)
+          {'title': 't$i', 'link': 'https://s$i.com/'},
+      ];
+      expect(
+        webSourcesFromRecords([web('search_web', jsonEncode(many))]).length,
+        kWebSourceLimit,
+      );
+    });
+
+    test('a clipped result still yields its whole entries', () {
+      const clipped =
+          '[{"title":"One","link":"https://one.com/","snippet":"aaa"},'
+          '{"title":"Two","link":"https://two.com/","snippet":"bb';
+      expect(
+        webSourcesFromRecords([web('search_web', clipped)])
+            .map((e) => e.domain),
+        ['one.com', 'two.com'],
+      );
+    });
+
+    test('content parts wrapping the JSON text are read', () {
+      final wrapped = jsonEncode([
+        {'type': 'text', 'text': search},
+      ]);
+      expect(webSourcesFromRecords([web('search_web', wrapped)]).length, 2);
+    });
+
+    test('text the model wrote is never a source; no web step shows none', () {
+      expect(
+        webSourcesFromRecords([web('calendar-mcp_event_list', search)]),
+        isEmpty,
+      );
+      final fromContent = toolRecordsFromContent(
+        messageId: 'm',
+        content: 'See https://evil.example/x for more.',
+      );
+      expect(webSourcesFromRecords(fromContent), isEmpty);
+    });
+
+    test('read from a stored output array (an old chat reopened)', () {
+      final records = toolRecordsFromOutput([
+        {
+          'type': 'function_call',
+          'call_id': 'a',
+          'name': 'search_web',
+          'status': 'completed',
+          'arguments': '{"query":"ddr"}',
+        },
+        {'type': 'function_call_output', 'call_id': 'a', 'output': search},
+      ]);
+      expect(webSourcesFromRecords(records).length, 2);
+      expect(ToolStampData.fromRecords(records).sources.length, 2);
+    });
+
+    testWidgets('pills show the domain, open the exact URL, label with title', (
+      tester,
+    ) async {
+      final opened = <String>[];
+      final data = ToolStampData.fromRecords([web('search_web', search)]);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: WebSourcePills(sources: data.sources, onOpen: opened.add),
+          ),
+        ),
+      );
+      expect(find.text('ddrcommunity.com'), findsWidgets);
+      expect(find.text('example.org'), findsOneWidget);
+      await tester.tap(find.text('example.org'));
+      expect(opened, ['http://example.org/p']);
+      expect(
+        find.bySemanticsLabel('DDR Community, ddrcommunity.com'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('a stamp with sources shows pills in a short row', (
+      tester,
+    ) async {
+      final data = ToolStampData.fromRecords([web('search_web', search)]);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(body: ToolStamp(data: data)),
+        ),
+      );
+      expect(find.byKey(const ValueKey('web-source-pills')), findsOneWidget);
+      expect(
+        tester.getSize(find.byKey(const ValueKey('web-source-pills'))).height,
+        22,
+      );
+    });
+
+    testWidgets('no web step, no pills', (tester) async {
+      final data = ToolStampData.fromRecords([_rec('calendar-mcp_event_list')]);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(body: ToolStamp(data: data)),
+        ),
+      );
+      expect(find.byKey(const ValueKey('web-source-pills')), findsNothing);
     });
   });
 }
