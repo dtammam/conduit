@@ -42,6 +42,7 @@ import 'package:conduit_core/features/chat/server_speech/server_speech_providers
 import 'package:conduit_core/features/direct_connections/providers/direct_connection_providers.dart';
 
 import 'message_action_menu.dart';
+import 'share_progress_pill.dart';
 
 import '../../../shared/widgets/model_avatar.dart';
 import '../../../shared/widgets/conduit_components.dart';
@@ -877,6 +878,12 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
   }
 
   bool _isExportingMp3 = false;
+  ShareProgress? _shareProgress;
+
+  void _endShareProgress() {
+    _shareProgress?.dismiss();
+    _shareProgress = null;
+  }
 
   /// Renders the whole reply in the current voice and opens the share sheet
   /// with an .m4a file (AirDrop, Messages, Discord, Files).
@@ -891,10 +898,11 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
         ? box.localToGlobal(Offset.zero) & box.size
         : null;
     setState(() => _isExportingMp3 = true);
-    AdaptiveSnackBar.show(
+    // The pill stays until the share sheet opens or an error shows.
+    _endShareProgress();
+    _shareProgress = ShareProgress.show(
       context,
-      message: asVideo ? l10n.shareAsVideoPreparing : l10n.shareAsMp3Preparing,
-      type: AdaptiveSnackBarType.info,
+      asVideo ? l10n.shareAsVideoPreparing : l10n.shareAsMp3Preparing,
     );
     try {
       final speechText = await _buildTtsPlainTextOnDemand(_displayedContent);
@@ -927,14 +935,12 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
           if (!mounted) return;
           final eta = ReplyMp3Export.etaWords(ticket.renderSeconds);
           if (eta.isEmpty) return;
-          AdaptiveSnackBar.show(
-            context,
-            message: asVideo
+          _shareProgress?.update(
+            asVideo
                 ? l10n.shareAsVideoPreparingEta(
                     ReplyMp3Export.etaWords((ticket.renderSeconds ?? 0) + 5),
                   )
                 : l10n.shareAsMp3PreparingEta(eta),
-            type: AdaptiveSnackBarType.info,
           );
         },
       );
@@ -952,19 +958,21 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
               : null,
         );
         if (!mounted) return;
+        _endShareProgress();
         await ReplyMp3Export.shareFile(
           video,
           mimeType: 'video/mp4',
           origin: origin,
         );
       } else if (saveToFiles) {
-        await ReplyMp3Export.saveToFiles(
-          await ReplyMp3Export.toM4a(exported.file),
-        );
+        final audio = await ReplyMp3Export.toM4a(exported.file);
+        _endShareProgress();
+        await ReplyMp3Export.saveToFiles(audio);
       } else {
         // An .m4a shared as a plain file: Discord attaches it, an MP3 not.
         final audio = await ReplyMp3Export.toM4a(exported.file);
         if (!mounted) return;
+        _endShareProgress();
         await ReplyMp3Export.shareFile(
           audio,
           mimeType: audio.path.endsWith('.m4a')
@@ -974,6 +982,7 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
         );
       }
     } catch (error) {
+      _endShareProgress();
       if (!mounted) return;
       AdaptiveSnackBar.show(
         context,
@@ -981,6 +990,7 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
         type: AdaptiveSnackBarType.error,
       );
     } finally {
+      _endShareProgress();
       if (mounted) setState(() => _isExportingMp3 = false);
     }
   }
@@ -1399,6 +1409,7 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
 
   @override
   void dispose() {
+    _endShareProgress();
     WidgetsBinding.instance.removeObserver(this);
     _streamingContentSub?.close();
     _resetTtsPlainTextState();
