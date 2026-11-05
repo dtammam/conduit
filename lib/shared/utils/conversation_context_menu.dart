@@ -15,6 +15,7 @@ import 'package:conduit/shared/widgets/themed_sheets.dart';
 import 'package:cupertino_ui/cupertino_ui.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:conduit/core/services/haptic_service.dart';
+import 'package:conduit/features/chat/services/speech_take_store.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -968,6 +969,8 @@ Future<bool> deleteConversationNow(
           .read(conversationsProvider.notifier)
           .removeConversation(conversationId);
     }
+    // The audio kept from this chat's replies goes with it.
+    unawaited(SpeechTakeStore.instance.removeChat(conversationId));
     ConduitHaptics.mediumImpact();
     final active = ref.read(activeConversationProvider);
     if (active != null && conversationMatchesScopedId(active, conversationId)) {

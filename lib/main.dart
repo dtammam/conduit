@@ -4,6 +4,7 @@ import 'dart:developer' as developer;
 import 'package:conduit_core/features/chat/voice_mode/voice_event_log.dart';
 import 'package:conduit_core/conduit_core.dart';
 import 'package:conduit/shared/widgets/platform_ui/platform_ui.dart';
+import 'package:conduit/features/chat/services/speech_take_store.dart';
 import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart'
     show
@@ -312,6 +313,13 @@ void main() {
       _startupTimeline!.start('app_startup');
       _startupTimeline!.instant('bindings_initialized');
       unawaited(_configureUserAgent());
+      // Old saved reply audio goes after startup settles, in another isolate.
+      unawaited(
+        Future<void>.delayed(
+          const Duration(seconds: 20),
+          () => SpeechTakeStore.instance.sweep(),
+        ),
+      );
 
       _registerBundledLicenses();
       // Read by the synchronous avatar resolver; awaited before runApp.

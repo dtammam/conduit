@@ -9,6 +9,7 @@ import '../../../shared/utils/platform_scroll_physics.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart' show listEquals, visibleForTesting;
 import 'package:conduit/core/services/haptic_service.dart';
+import 'package:conduit/features/chat/services/speech_take_store.dart';
 import 'package:cupertino_ui/cupertino_ui.dart';
 
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
@@ -3930,6 +3931,10 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       messageIds,
       isStillCurrent: () => mounted,
     );
+    if (outcome == ChatMessageDeleteOutcome.deleted) {
+      // The audio kept from these replies goes with them.
+      unawaited(SpeechTakeStore.instance.removeMessages(messageIds));
+    }
     if (outcome != ChatMessageDeleteOutcome.persistFailed || !mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(AppLocalizations.of(context)!.errorMessage)),

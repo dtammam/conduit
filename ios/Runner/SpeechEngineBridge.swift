@@ -80,6 +80,19 @@ final class SpeechEngineBridge: ConduitBridge {
         self.saveAudioFile(args, result: result)
         return
       }
+      if call.method == "excludeFromBackup" {
+        // Saved reply audio stays on the phone: out of iCloud and backups.
+        var url = URL(fileURLWithPath: args["path"] as? String ?? "")
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        do {
+          try url.setResourceValues(values)
+          result(true)
+        } catch {
+          result(false)
+        }
+        return
+      }
       if call.method == "makeReplyVideo" {
         ReplyVideoMaker.make(args) { reply in DispatchQueue.main.async { result(reply) } }
         return
