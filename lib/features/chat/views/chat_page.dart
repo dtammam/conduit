@@ -94,6 +94,7 @@ import '../reactions/quick_reply_reactions.dart';
 import '../widgets/routine_post_actions.dart' show isRoutinePostAt;
 import '../musey/break_prompt_bar.dart';
 import '../musey/musey_api.dart';
+import '../musey/musey_feed_providers.dart' show turnReactionProvider;
 import '../musey/musey_flags.dart';
 import '../providers/assistant_name_provider.dart';
 
@@ -1640,6 +1641,10 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     if (mounted) setState(() {});
     final latestUserIdBefore = _latestUserMessageId();
     var dispatched = false;
+    // The relay picks an emoji for this turn, shown at the top beside the
+    // working state. It runs beside the send and nothing waits for it.
+    final reaction = ref.read(turnReactionProvider.notifier);
+    if (text.trim().isNotEmpty) reaction.request(text);
     try {
       dispatched = await _sendMessageAfterAdmission(
         text,
@@ -1652,6 +1657,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     } finally {
       _releaseMessageSendAdmission(sendOwner);
       _recordSendReceipt(latestUserIdBefore, dispatched: dispatched);
+      if (!dispatched) reaction.cancel();
     }
     return (admitted: true, dispatched: dispatched);
   }
@@ -3729,7 +3735,9 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     final museyOn = rowRef.watch(museyApiProvider.select((api) => api != null));
     // A routine or check-in post of the Omni chat, not a reply to Dean.
     final isRoutinePost =
-        isOmniChatId(rowRef.watch(activeConversationProvider.select((c) => c?.id))) &&
+        isOmniChatId(
+          rowRef.watch(activeConversationProvider.select((c) => c?.id)),
+        ) &&
         rowRef.watch(
           chatMessagesProvider.select((messages) {
             final i = messages.indexWhere((m) => m.id == messageId);

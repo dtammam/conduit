@@ -53,6 +53,14 @@ class _FakeApi implements MuseyFeedApi {
   Uint8List? bytes;
   LinkPreview? preview;
   final List<String> calls = [];
+
+  /// What the next topics save answers; null saves what was asked.
+  TopicsResult? topicsAnswer;
+  Completer<void>? topicsGate;
+  DismissResult dismissAnswer = DismissResult.done;
+  Completer<void>? dismissGate;
+  Completer<String?>? reactGate;
+  String? reactAnswer;
   final List<String> previewUrls = [];
   int byteFetches = 0;
 
@@ -66,6 +74,27 @@ class _FakeApi implements MuseyFeedApi {
   Future<bool> setFeedPrompt(String prompt) async {
     calls.add('prompt:$prompt');
     return true;
+  }
+
+  @override
+  Future<TopicsResult> setFeedTopics(List<String> topics) async {
+    calls.add('topics:${topics.join('|')}');
+    await topicsGate?.future;
+    return topicsAnswer ?? TopicsResult.saved(topics);
+  }
+
+  @override
+  Future<DismissResult> dismissFeedItem(String id) async {
+    calls.add('feed-dismiss:$id');
+    await dismissGate?.future;
+    return dismissAnswer;
+  }
+
+  @override
+  Future<String?> react(String text) async {
+    calls.add('react:$text');
+    final gate = reactGate;
+    return gate != null ? await gate.future : reactAnswer;
   }
 
   @override
@@ -467,27 +496,209 @@ void main() {
       check(find.text('Source: example.com').evaluate()).length.equals(1);
     });
 
-    testWidgets('the prompt box edits and saves through the relay', (
+    testWidgets('an older relay without topics shows the prompt read only', (
       tester,
     ) async {
       final api = _FakeApi(feed: const FeedData(enabled: true, prompt: 'old'));
       final container = makeContainer(api: api);
       await mountPage(tester, container, tab: AssistantSheetTab.feed);
       await tester.pump(const Duration(milliseconds: 100));
+      check(find.byKey(const ValueKey('musey-feed-prompt')).evaluate())
+          .length
+          .equals(1);
+      check(find.text('old').evaluate()).length.equals(1);
+      check(find.byKey(const ValueKey('musey-feed-topic-field')).evaluate())
+          .isEmpty();
+    });
 
-      await tester.tap(find.byKey(const ValueKey('musey-feed-prompt')));
-      await tester.pumpAndSettle();
+    testWidgets('interests are chips: add and remove each save at once', (
+      tester,
+    ) async {
+      final api = _FakeApi(
+        feed: const FeedData(enabled: true, topics: ['AI tools', 'Games']),
+      );
+      final container = makeContainer(api: api);
+      await mountPage(tester, container, tab: AssistantSheetTab.feed);
+      await tester.pump(const Duration(milliseconds: 100));
+      check(find.byKey(const ValueKey('musey-feed-topic-AI tools')).evaluate())
+          .length
+          .equals(1);
+
       await tester.enterText(
         find.descendant(
-          of: find.byKey(const ValueKey('musey-feed-prompt-field')),
+          of: find.byKey(const ValueKey('musey-feed-topic-field')),
           matching: find.byType(EditableText),
         ),
-        'AI tools',
+        '  Space  ',
       );
-      await tester.tap(find.byKey(const ValueKey('musey-feed-prompt-save')));
+      await tester.tap(find.byKey(const ValueKey('musey-feed-topic-add')));
+      await tester.pump(const Duration(milliseconds: 50));
+      check(api.calls).contains('topics:AI tools|Games|Space');
+      check(container.read(feedProvider).topics)
+          .isNotNull()
+          .deepEquals(['AI tools', 'Games', 'Space']);
+
+      await tester.tap(find.byKey(const ValueKey('musey-feed-topic-Games')));
+      await tester.pump(const Duration(milliseconds: 50));
+      check(api.calls).contains('topics:AI tools|Space');
+      check(find.byKey(const ValueKey('musey-feed-topic-Games')).evaluate())
+          .isEmpty();
+    });
+
+    testWidgets('the relay list is the truth, a failure keeps the old list', (
+      tester,
+    ) async {
+      final api = _FakeApi(
+        feed: const FeedData(enabled: true, topics: ['A']),
+      );
+      final container = makeContainer(api: api);
+      await mountPage(tester, container, tab: AssistantSheetTab.feed);
+      await tester.pump(const Duration(milliseconds: 100));
+      final notifier = container.read(feedProvider.notifier);
+
+      api.topicsAnswer = const TopicsResult.saved(['A', 'B (kept by relay)']);
+      await notifier.addTopic('B');
+      check(container.read(feedProvider).topics)
+          .isNotNull()
+          .deepEquals(['A', 'B (kept by relay)']);
+
+      api.topicsAnswer = const TopicsResult.failed('at most 6 interests');
+      final outcome = await notifier.addTopic('C');
+      check(outcome).equals(TopicOutcome.failed);
+      check(container.read(feedProvider).topics)
+          .isNotNull()
+          .deepEquals(['A', 'B (kept by relay)']);
+      check(container.read(feedProvider).savingTopics).isFalse();
+    });
+
+    testWidgets('no duplicate request while one is out, repeats are ignored', (
+      tester,
+    ) async {
+      final api = _FakeApi(
+        feed: const FeedData(enabled: true, topics: ['A']),
+      );
+      api.topicsGate = Completer<void>();
+      final container = makeContainer(api: api);
+      await mountPage(tester, container, tab: AssistantSheetTab.feed);
+      await tester.pump(const Duration(milliseconds: 100));
+      final notifier = container.read(feedProvider.notifier);
+
+      final first = notifier.addTopic('B');
+      final second = notifier.addTopic('C');
+      check(await second).equals(TopicOutcome.busy);
+      check(await notifier.addTopic('a')).equals(TopicOutcome.same);
+      api.topicsGate!.complete();
+      check(await first).equals(TopicOutcome.saved);
+      check(api.calls.where((c) => c.startsWith('topics:')).length).equals(1);
+    });
+
+    testWidgets('at six the field is gone and the page says why', (
+      tester,
+    ) async {
+      final api = _FakeApi(
+        feed: const FeedData(
+          enabled: true,
+          topics: ['a', 'b', 'c', 'd', 'e', 'f'],
+        ),
+      );
+      final container = makeContainer(api: api);
+      await mountPage(tester, container, tab: AssistantSheetTab.feed);
+      await tester.pump(const Duration(milliseconds: 100));
+      check(find.byKey(const ValueKey('musey-feed-topic-field')).evaluate())
+          .isEmpty();
+      check(find.byKey(const ValueKey('musey-feed-topics-full')).evaluate())
+          .length
+          .equals(1);
+      final outcome = await container
+          .read(feedProvider.notifier)
+          .addTopic('g');
+      check(outcome).equals(TopicOutcome.full);
+      check(api.calls.where((c) => c.startsWith('topics:'))).isEmpty();
+    });
+
+    testWidgets('swiping a card left removes it and tells the relay', (
+      tester,
+    ) async {
+      final api = _FakeApi(
+        feed: FeedData(enabled: true, items: [_item('a'), _item('b')]),
+      );
+      final container = makeContainer(api: api);
+      await mountPage(tester, container, tab: AssistantSheetTab.feed);
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.fling(
+        find.byKey(const ValueKey('musey-feed-item-a')),
+        const Offset(-500, 0),
+        1500,
+      );
       await tester.pumpAndSettle();
-      check(api.calls).contains('prompt:AI tools');
-      check(container.read(feedProvider).prompt).equals('AI tools');
+      check(api.calls).contains('feed-dismiss:a');
+      check(container.read(feedProvider).items.map((i) => i.id).toList())
+          .deepEquals(['b']);
+
+      // A swipe to the right does nothing.
+      await tester.fling(
+        find.byKey(const ValueKey('musey-feed-item-b')),
+        const Offset(500, 0),
+        1500,
+      );
+      await tester.pumpAndSettle();
+      check(container.read(feedProvider).items.length).equals(1);
+    });
+
+    testWidgets('a vertical drag scrolls and does not dismiss', (tester) async {
+      final api = _FakeApi(
+        feed: FeedData(
+          enabled: true,
+          items: [for (var i = 0; i < 12; i++) _item('i$i')],
+        ),
+      );
+      final container = makeContainer(api: api);
+      await mountPage(tester, container, tab: AssistantSheetTab.feed);
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.drag(
+        find.byKey(const ValueKey('musey-feed-list')),
+        const Offset(-40, -300),
+      );
+      await tester.pumpAndSettle();
+      check(container.read(feedProvider).items.length).equals(12);
+      check(api.calls.where((c) => c.startsWith('feed-dismiss'))).isEmpty();
+    });
+
+    testWidgets('a failed dismissal puts the card back and says so', (
+      tester,
+    ) async {
+      final api = _FakeApi(
+        feed: FeedData(enabled: true, items: [_item('a'), _item('b')]),
+      )..dismissAnswer = DismissResult.failed;
+      final container = makeContainer(api: api);
+      await mountPage(tester, container, tab: AssistantSheetTab.feed);
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.fling(
+        find.byKey(const ValueKey('musey-feed-item-a')),
+        const Offset(-500, 0),
+        1500,
+      );
+      await tester.pumpAndSettle();
+      check(container.read(feedProvider).items.map((i) => i.id).toList())
+          .deepEquals(['a', 'b']);
+      check(find.text('Could not remove that, it is back').evaluate())
+          .isNotEmpty();
+    });
+
+    testWidgets('a 404 on dismiss counts as gone', (tester) async {
+      final api = _FakeApi(
+        feed: FeedData(enabled: true, items: [_item('a')]),
+      )..dismissAnswer = DismissResult.gone;
+      final container = makeContainer(api: api);
+      await mountPage(tester, container, tab: AssistantSheetTab.feed);
+      await tester.pump(const Duration(milliseconds: 100));
+      final stays = await container
+          .read(feedProvider.notifier)
+          .dismissItem('a');
+      check(stays).isTrue();
+      check(container.read(feedProvider).items).isEmpty();
     });
 
     testWidgets('the refresh button starts a run and the pull reloads only', (

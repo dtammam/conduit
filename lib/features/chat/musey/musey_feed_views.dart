@@ -6,7 +6,7 @@ import 'package:conduit/shared/theme/theme_extensions.dart';
 import 'package:conduit/shared/utils/external_link_launcher.dart';
 import 'package:conduit/shared/widgets/conduit_loading.dart';
 import 'package:conduit/shared/widgets/platform_ui/platform_ui.dart';
-import 'package:conduit/shared/widgets/themed_sheets.dart';
+import 'package:flutter/services.dart' show TextInputAction;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -203,19 +203,13 @@ class _FeedTabState extends ConsumerState<FeedTab> {
     });
   }
 
-  Future<void> _editPrompt() async {
+  Future<void> _dismiss(String id) async {
     final l10n = AppLocalizations.of(context)!;
-    final initial = ref.read(feedProvider).prompt;
-    final saved = await ThemedSheets.showSurface<String>(
-      context: context,
-      builder: (sheetContext) => _PromptSheet(initial: initial),
-    );
-    if (saved == null || !mounted) return;
-    final ok = await ref.read(feedProvider.notifier).savePrompt(saved.trim());
-    if (!ok && mounted) {
+    final stays = await ref.read(feedProvider.notifier).dismissItem(id);
+    if (!stays && mounted) {
       AdaptiveSnackBar.show(
         context,
-        message: l10n.museyFeedPromptFailed,
+        message: l10n.museyFeedDismissFailed,
         type: AdaptiveSnackBarType.info,
       );
     }
@@ -225,7 +219,6 @@ class _FeedTabState extends ConsumerState<FeedTab> {
   Widget build(BuildContext context) {
     final state = ref.watch(feedProvider);
     final theme = context.conduitTheme;
-    final l10n = AppLocalizations.of(context)!;
     return ConduitRefreshIndicator(
       onRefresh: () => ref.read(feedProvider.notifier).load(),
       child: ListView(
@@ -235,50 +228,20 @@ class _FeedTabState extends ConsumerState<FeedTab> {
         children: [
           Padding(
             padding: const EdgeInsets.only(bottom: Spacing.md),
-            child: GestureDetector(
-              key: const ValueKey('musey-feed-prompt'),
-              behavior: HitTestBehavior.opaque,
-              onTap: _editPrompt,
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: Spacing.md,
-                  vertical: Spacing.md,
-                ),
-                decoration: BoxDecoration(
-                  color: theme.surfaceContainer,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      cupertinoIconForSFSymbol('magnifyingglass'),
-                      size: IconSize.sm,
-                      color: theme.textSecondary,
-                    ),
-                    const SizedBox(width: Spacing.sm),
-                    Expanded(
-                      child: Text(
-                        state.prompt.isEmpty
-                            ? l10n.museyFeedPromptHint
-                            : state.prompt,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTypography.bodyMediumStyle.copyWith(
-                          color: state.prompt.isEmpty
-                              ? theme.textSecondary
-                              : theme.textPrimary,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+            child: _Interests(state: state),
           ),
           if (state.loaded && state.items.isEmpty) const _Empty(),
           for (final item in state.items) ...[
             const _Divider(),
-            _FeedRow(item: item, onDiscuss: widget.onDiscuss),
+            Dismissible(
+              key: ValueKey('musey-feed-dismiss-${item.id}'),
+              // Right to left only: the left edge stays the back swipe, and
+              // the list's own vertical drag wins over a mostly vertical one.
+              direction: DismissDirection.endToStart,
+              onDismissed: (_) => unawaited(_dismiss(item.id)),
+              background: Container(color: theme.surfaceContainer),
+              child: _FeedRow(item: item, onDiscuss: widget.onDiscuss),
+            ),
           ],
         ],
       ),
@@ -286,65 +249,200 @@ class _FeedTabState extends ConsumerState<FeedTab> {
   }
 }
 
-class _PromptSheet extends StatefulWidget {
-  const _PromptSheet({required this.initial});
+/// The Feed's interests: one removable chip each and a field that adds one.
+/// Each change saves at once and the relay's list is what shows. An older
+/// relay that sends no list gets the old prompt as one read-only line.
+class _Interests extends ConsumerStatefulWidget {
+  const _Interests({required this.state});
 
-  final String initial;
+  final FeedState state;
 
   @override
-  State<_PromptSheet> createState() => _PromptSheetState();
+  ConsumerState<_Interests> createState() => _InterestsState();
 }
 
-class _PromptSheetState extends State<_PromptSheet> {
-  late final TextEditingController controller = TextEditingController(
-    text: widget.initial,
-  );
+class _InterestsState extends ConsumerState<_Interests> {
+  final TextEditingController _controller = TextEditingController();
 
   @override
   void dispose() {
-    controller.dispose();
+    _controller.dispose();
     super.dispose();
+  }
+
+  void _say(String message) {
+    AdaptiveSnackBar.show(
+      context,
+      message: message,
+      type: AdaptiveSnackBarType.info,
+    );
+  }
+
+  Future<void> _add() async {
+    final l10n = AppLocalizations.of(context)!;
+    final text = _controller.text;
+    final outcome = await ref.read(feedProvider.notifier).addTopic(text);
+    if (!mounted) return;
+    switch (outcome) {
+      case TopicOutcome.saved:
+        _controller.clear();
+      case TopicOutcome.failed:
+        _say(l10n.museyFeedPromptFailed);
+      case TopicOutcome.full:
+        _say(l10n.museyFeedTopicsFull);
+      case TopicOutcome.same:
+        // A repeat or an empty field: nothing to save.
+        if (text.trim().isNotEmpty) _controller.clear();
+      case TopicOutcome.busy:
+        break;
+    }
+  }
+
+  Future<void> _remove(String topic) async {
+    final l10n = AppLocalizations.of(context)!;
+    final outcome = await ref.read(feedProvider.notifier).removeTopic(topic);
+    if (!mounted) return;
+    if (outcome == TopicOutcome.failed) _say(l10n.museyFeedPromptFailed);
   }
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
     final theme = context.conduitTheme;
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        Spacing.modalPadding,
-        Spacing.sm,
-        Spacing.modalPadding,
-        Spacing.lg + MediaQuery.viewInsetsOf(context).bottom,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            l10n.museyFeedPromptTitle,
-            style: AppTypography.titleMediumStyle.copyWith(
-              color: theme.textPrimary,
-              fontWeight: FontWeight.w600,
+    final l10n = AppLocalizations.of(context)!;
+    final topics = widget.state.topics;
+    final box = BoxDecoration(
+      color: theme.surfaceContainer,
+      borderRadius: BorderRadius.circular(16),
+    );
+    if (topics == null) {
+      final prompt = widget.state.prompt;
+      return Container(
+        key: const ValueKey('musey-feed-prompt'),
+        padding: const EdgeInsets.all(Spacing.md),
+        decoration: box,
+        child: Row(
+          children: [
+            Icon(
+              cupertinoIconForSFSymbol('magnifyingglass'),
+              size: IconSize.sm,
+              color: theme.textSecondary,
             ),
-          ),
-          const SizedBox(height: Spacing.md),
-          AdaptiveTextField(
-            key: const ValueKey('musey-feed-prompt-field'),
-            controller: controller,
-            placeholder: l10n.museyFeedPromptHint,
-            minLines: 2,
-            maxLines: 5,
-            autofocus: true,
-          ),
-          const SizedBox(height: Spacing.md),
-          AdaptiveButton(
-            key: const ValueKey('musey-feed-prompt-save'),
-            onPressed: () => Navigator.of(context).pop(controller.text),
-            label: l10n.save,
-            style: AdaptiveButtonStyle.filled,
-            useNative: false,
-          ),
+            const SizedBox(width: Spacing.sm),
+            Expanded(
+              child: Text(
+                prompt.isEmpty ? l10n.museyFeedPromptHint : prompt,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.bodyMediumStyle.copyWith(
+                  color: prompt.isEmpty
+                      ? theme.textSecondary
+                      : theme.textPrimary,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    final full = topics.length >= FeedController.maxTopics;
+    final saving = widget.state.savingTopics;
+    return Container(
+      key: const ValueKey('musey-feed-topics'),
+      padding: const EdgeInsets.all(Spacing.md),
+      decoration: box,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (topics.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: Spacing.sm),
+              child: Wrap(
+                spacing: Spacing.xs,
+                runSpacing: Spacing.xs,
+                children: [
+                  for (final topic in topics)
+                    GestureDetector(
+                      key: ValueKey('musey-feed-topic-$topic'),
+                      behavior: HitTestBehavior.opaque,
+                      onTap: saving ? null : () => unawaited(_remove(topic)),
+                      child: Semantics(
+                        button: true,
+                        label: l10n.museyFeedRemoveTopic(topic),
+                        excludeSemantics: true,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: Spacing.sm,
+                            vertical: Spacing.xs,
+                          ),
+                          decoration: BoxDecoration(
+                            color: theme.surfaceBackground,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  topic,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTypography.bodyMediumStyle.copyWith(
+                                    color: theme.textPrimary,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: Spacing.xs),
+                              Icon(
+                                cupertinoIconForSFSymbol('xmark'),
+                                size: IconSize.xs,
+                                color: theme.textSecondary,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          if (full)
+            Text(
+              l10n.museyFeedTopicsFull,
+              key: const ValueKey('musey-feed-topics-full'),
+              style: AppTypography.bodySmallStyle.copyWith(
+                color: theme.textSecondary,
+              ),
+            )
+          else
+            Row(
+              children: [
+                Icon(
+                  cupertinoIconForSFSymbol('plus'),
+                  size: IconSize.sm,
+                  color: theme.textSecondary,
+                ),
+                const SizedBox(width: Spacing.sm),
+                Expanded(
+                  child: AdaptiveTextField(
+                    key: const ValueKey('musey-feed-topic-field'),
+                    controller: _controller,
+                    placeholder: l10n.museyFeedAddTopicHint,
+                    textInputAction: TextInputAction.done,
+                    maxLength: 60,
+                    enabled: !saving,
+                    onSubmitted: (_) => unawaited(_add()),
+                  ),
+                ),
+                AdaptiveButton(
+                  key: const ValueKey('musey-feed-topic-add'),
+                  onPressed: saving ? null : () => unawaited(_add()),
+                  label: l10n.museyFeedAdd,
+                  style: AdaptiveButtonStyle.tinted,
+                  size: AdaptiveButtonSize.small,
+                  useNative: false,
+                ),
+              ],
+            ),
         ],
       ),
     );

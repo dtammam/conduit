@@ -22,6 +22,7 @@ import 'assistant_avatar_accent.dart';
 import 'assistant_avatar_media.dart';
 import 'assistant_avatar_sheet.dart';
 import 'assistant_pending_approval.dart';
+import '../musey/musey_feed_providers.dart' show turnReactionProvider;
 import 'persona_appearance_service.dart';
 
 const String _logScope = 'chat/avatar';
@@ -567,6 +568,13 @@ class _AssistantAvatarStripState extends ConsumerState<AssistantAvatarStrip>
       assistantApprovalProvider.select((approval) => approval != null),
     );
     final busy = activity != AssistantActivity.idle;
+    // The emoji only shows while the assistant is working or making; it is
+    // cleared by the next send, so an old one never reaches a new turn.
+    final reaction =
+        (activity == AssistantActivity.working ||
+            activity == AssistantActivity.making)
+        ? ref.watch(turnReactionProvider)
+        : null;
     final pillTap = busy ? widget.onActivityPressed : widget.onNamePressed;
     // Idle and tappable, the name is the model picker. No chevron marks it,
     // so the hint says it for VoiceOver.
@@ -655,17 +663,34 @@ class _AssistantAvatarStripState extends ConsumerState<AssistantAvatarStrip>
                                             ),
                                       ),
                                       if (busy)
-                                        Text(
-                                          stateLine,
-                                          key: const ValueKey(
-                                            'assistant-avatar-pill-state',
-                                          ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: AppTypography.captionStyle
-                                              .copyWith(
-                                                color: theme.textSecondary,
+                                        Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Flexible(
+                                              child: Text(
+                                                stateLine,
+                                                key: const ValueKey(
+                                                  'assistant-avatar-pill-state',
+                                                ),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: AppTypography
+                                                    .captionStyle
+                                                    .copyWith(
+                                                      color:
+                                                          theme.textSecondary,
+                                                    ),
                                               ),
+                                            ),
+                                            _TurnEmoji(
+                                              emoji: reaction,
+                                              label: reaction == null
+                                                  ? null
+                                                  : l10n.museyReactionLabel(
+                                                      reaction,
+                                                    ),
+                                            ),
+                                          ],
                                         ),
                                     ],
                                   ),
@@ -722,6 +747,47 @@ class _AssistantAvatarStripState extends ConsumerState<AssistantAvatarStrip>
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// The emoji the relay picked for the turn, fading and scaling in beside the
+/// state word. It takes no room until it arrives and is one line high like
+/// the caption, so the pill's height and the name never move.
+class _TurnEmoji extends StatelessWidget {
+  const _TurnEmoji({required this.emoji, required this.label});
+
+  final String? emoji;
+  final String? label;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOut,
+      alignment: Alignment.centerLeft,
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 220),
+        transitionBuilder: (child, animation) => FadeTransition(
+          opacity: animation,
+          child: ScaleTransition(scale: animation, child: child),
+        ),
+        child: emoji == null
+            ? const SizedBox.shrink(key: ValueKey('assistant-avatar-no-emoji'))
+            : Padding(
+                key: ValueKey('assistant-avatar-emoji-$emoji'),
+                padding: const EdgeInsets.only(left: Spacing.xs),
+                child: Semantics(
+                  label: label,
+                  excludeSemantics: true,
+                  child: Text(
+                    emoji!,
+                    maxLines: 1,
+                    style: AppTypography.captionStyle.copyWith(height: 1.0),
+                  ),
+                ),
+              ),
       ),
     );
   }

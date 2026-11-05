@@ -73,11 +73,16 @@ class FeedData {
   const FeedData({
     this.enabled = false,
     this.prompt = '',
+    this.topics,
     this.items = const <FeedItem>[],
   });
 
   final bool enabled;
   final String prompt;
+
+  /// The interests as separate things; null when the relay does not send
+  /// them (an older relay), then only [prompt] is known.
+  final List<String>? topics;
   final List<FeedItem> items;
 }
 
@@ -114,9 +119,36 @@ FeedData? parseFeed(Object? data) {
   return FeedData(
     enabled: enabled,
     prompt: prompt is String ? prompt : '',
+    topics: parseTopics(data['topics']),
     items: enabled ? items : const <FeedItem>[],
   );
 }
+
+/// The interests of an answer: strings only, trimmed, empty ones dropped.
+/// Null when [raw] is not a list.
+List<String>? parseTopics(Object? raw) {
+  if (raw is! List) return null;
+  return [
+    for (final t in raw)
+      if (t is String && t.trim().isNotEmpty) t.trim(),
+  ];
+}
+
+/// What `POST /musey/feed/topics` answered: [topics] is the relay's list when
+/// it took the change, else [error] says why in the relay's words (or null).
+@immutable
+class TopicsResult {
+  const TopicsResult.saved(List<String> this.topics) : error = null;
+  const TopicsResult.failed([this.error]) : topics = null;
+
+  final List<String>? topics;
+  final String? error;
+  bool get ok => topics != null;
+}
+
+/// How a dismissal ended: the relay took it, the story was already gone (a
+/// 404, which counts as done), or the call failed.
+enum DismissResult { done, gone, failed }
 
 String? _httpOnly(String? url) {
   if (url == null) return null;
@@ -207,6 +239,12 @@ class LinkPreview {
 abstract class MuseyFeedApi {
   Future<FeedData?> getFeed();
   Future<bool> setFeedPrompt(String prompt);
+  Future<TopicsResult> setFeedTopics(List<String> topics);
+  Future<DismissResult> dismissFeedItem(String id);
+
+  /// The emoji that fits [text], or null for none, an error or a missing
+  /// route.
+  Future<String?> react(String text);
 
   /// True when the relay started a run.
   Future<bool> refreshFeed();
@@ -276,6 +314,43 @@ class DioMuseyFeedApi implements MuseyFeedApi {
   @override
   Future<bool> setFeedPrompt(String prompt) async =>
       _ok(await _call('POST', '/musey/feed/prompt', data: {'prompt': prompt}));
+
+  @override
+  Future<TopicsResult> setFeedTopics(List<String> topics) async {
+    final r = await _call(
+      'POST',
+      '/musey/feed/topics',
+      data: {'topics': topics},
+    );
+    if (r == null) return const TopicsResult.failed();
+    final d = r.data;
+    if (_ok(r)) {
+      final list = d is Map ? parseTopics(d['topics']) : null;
+      return list == null
+          ? const TopicsResult.failed()
+          : TopicsResult.saved(list);
+    }
+    final e = d is Map ? _str(d['error']) : null;
+    return TopicsResult.failed(r.statusCode == 400 ? e : null);
+  }
+
+  @override
+  Future<DismissResult> dismissFeedItem(String id) async {
+    final r = await _call(
+      'POST',
+      '/musey/feed/${Uri.encodeComponent(id)}/dismiss',
+    );
+    if (_ok(r)) return DismissResult.done;
+    return r?.statusCode == 404 ? DismissResult.gone : DismissResult.failed;
+  }
+
+  @override
+  Future<String?> react(String text) async {
+    final r = await _call('POST', '/musey/react', data: {'text': text});
+    if (!_ok(r)) return null;
+    final d = r!.data;
+    return d is Map ? _str(d['emoji']) : null;
+  }
 
   @override
   Future<bool> refreshFeed() async {
