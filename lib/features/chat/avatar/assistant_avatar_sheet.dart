@@ -20,7 +20,7 @@ import 'persona_appearance_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:material_ui/material_ui.dart'
-    show MaterialPageRoute, Scaffold, Tooltip;
+    show Scaffold, Tooltip;
 
 import '../widgets/message_bubble_colors.dart';
 import 'assistant_action_log.dart';
@@ -113,9 +113,16 @@ Future<void> showAssistantPage(
   required AssistantAvatarSheet Function() builder,
 }) {
   return Navigator.of(context).push<void>(
-    MaterialPageRoute<void>(
+    // A short fade, not the iOS slide (2026-11-05): these are tabs, and in Dean's
+    // recording the slide left the body black on the left for about half a second
+    // with native glass views on both pages. The back button still returns.
+    PageRouteBuilder<void>(
       settings: const RouteSettings(name: 'assistant-page'),
-      builder: (_) => builder(),
+      transitionDuration: const Duration(milliseconds: 140),
+      reverseTransitionDuration: const Duration(milliseconds: 140),
+      pageBuilder: (_, _, _) => builder(),
+      transitionsBuilder: (_, animation, _, child) =>
+          FadeTransition(opacity: animation, child: child),
     ),
   );
 }
