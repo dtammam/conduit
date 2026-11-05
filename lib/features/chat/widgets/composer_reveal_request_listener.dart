@@ -46,8 +46,6 @@ class _ComposerRevealRequestListenerState
     final notifier = ref.read(composerRevealRequestProvider.notifier);
     if (!notifier.consume()) return;
     closeSidebarDrawerIfOverlay(context);
-    ref.read(composerAutofocusEnabledProvider.notifier).set(true);
-    ref.read(inputFocusTriggerProvider.notifier).increment();
   }
 
   @override

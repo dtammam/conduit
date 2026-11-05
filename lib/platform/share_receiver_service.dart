@@ -26,6 +26,7 @@ import 'package:path/path.dart' as path;
 import '../shared/services/navigation_service.dart';
 import '../features/navigation/providers/conversation_selection_provider.dart'
     show conversationSelectionProvider, ConversationSelectionDisposition;
+
 import 'package:conduit_core/features/chat/omni/omni_chat.dart';
 import 'package:conduit_core/services/settings_service.dart';
 
@@ -1383,9 +1384,7 @@ Future<SharedPayloadProcessResult> _processPayload(
     // Prefill text in the composer (do not auto-send) and request focus
     if (hasText) {
       ref.read(prefilledInputTextProvider.notifier).set(text);
-      // Bump focus trigger to ensure input focuses after navigation/build
-      final current = ref.read(inputFocusTriggerProvider);
-      ref.read(inputFocusTriggerProvider.notifier).set(current + 1);
+      // The shared text waits in the composer with the keyboard down.
     }
     // Show the composer that now holds the share. Navigating to the chat
     // route is not enough on phones: the chats drawer may still cover it.

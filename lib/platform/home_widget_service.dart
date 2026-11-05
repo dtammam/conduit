@@ -448,9 +448,8 @@ class HomeWidgetCoordinator extends _$HomeWidgetCoordinator {
   /// Bumps [inputFocusTriggerProvider] once so the composer takes focus after
   /// attachments are added — independent of when the uploads finish.
   void _focusComposer() {
-    if (!ref.mounted) return;
-    final tick = ref.read(inputFocusTriggerProvider);
-    ref.read(inputFocusTriggerProvider.notifier).set(tick + 1);
+    // Kept as the place to decide it later: the composer no longer takes
+    // focus on its own when a widget action opens the app (2026-11-05).
   }
 
   /// Update widget data displayed on home screen.

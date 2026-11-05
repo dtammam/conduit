@@ -1056,10 +1056,9 @@ class AppIntentCoordinator extends _$AppIntentCoordinator
       startNewChat(ref);
     }
 
-    if (focusComposer) {
-      final tick = ref.read(inputFocusTriggerProvider);
-      ref.read(inputFocusTriggerProvider.notifier).set(tick + 1);
-    }
+    // [focusComposer] no longer raises the keyboard: an app intent, a quick
+    // action or a Siri phrase opens the chat with the keyboard down, and it
+    // comes up when the person taps the field (Dean, 2026-11-05).
   }
 
   Future<void> _startVoiceCall() async {

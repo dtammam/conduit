@@ -564,7 +564,7 @@ class _StableNativeComposerIconButtonState
 }
 
 class _ModernChatInputState extends ConsumerState<ModernChatInput>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   static const Duration _contextSuggestionDelay = Duration(milliseconds: 250);
   static const int _maxContextSuggestionsPerType = 4;
 
@@ -667,6 +667,13 @@ class _ModernChatInputState extends ConsumerState<ModernChatInput>
   void initState() {
     super.initState();
     ThemedSheets.activeSheetListenable.addListener(_handleActiveSheetChanged);
+    // The composer never takes focus because it opened: a focus request that
+    // was raised before this composer existed (a launch, a share, a widget) is
+    // already "handled". Only a request made while it is on screen counts.
+    try {
+      _lastHandledFocusTick = ref.read(inputFocusTriggerProvider);
+    } catch (_) {}
+    WidgetsBinding.instance.addObserver(this);
 
     // Apply any prefilled text on first frame (focus handled via inputFocusTrigger)
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -759,10 +766,7 @@ class _ModernChatInputState extends ConsumerState<ModernChatInput>
 
   @override
   void dispose() {
-    final launchListener = _launchListener;
-    if (launchListener != null) {
-      OmniLaunchGate.settled.removeListener(launchListener);
-    }
+    WidgetsBinding.instance.removeObserver(this);
     // Note: Avoid using ref in dispose as per Riverpod best practices
     // The focus state will be naturally cleared when the widget is disposed
     _controller.removeListener(_handleComposerChanged);
@@ -824,32 +828,22 @@ class _ModernChatInputState extends ConsumerState<ModernChatInput>
     setState(() {});
   }
 
-  VoidCallback? _launchListener;
-
-  void _focusAfterLaunch() {
-    if (_launchListener != null) return;
-    void onSettled() {
-      if (!OmniLaunchGate.settled.value) return;
-      OmniLaunchGate.settled.removeListener(onSettled);
-      _launchListener = null;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || _isDeactivated) return;
-        _ensureFocusedIfEnabled();
-      });
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Leaving the app drops the composer's focus, so coming back does not
+    // bring the keyboard up by itself (Dean, 2026-11-05). The text stays.
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden) {
+      if (_focusNode.hasFocus) _focusNode.unfocus();
     }
-
-    _launchListener = onSettled;
-    OmniLaunchGate.settled.addListener(onSettled);
   }
 
   void _ensureFocusedIfEnabled() {
-    // A cold start into the Omni chat: no focus until the launch has its final
-    // chat on screen, then once (the keyboard flashed up for the chat being
-    // left, dropped, and came back, 2026-11-01)
-    if (!OmniLaunchGate.settled.value) {
-      _focusAfterLaunch();
-      return;
-    }
+    // A cold start into the Omni chat: no focus while the launch is still
+    // choosing its chat (the keyboard flashed up for the chat being left,
+    // 2026-11-01), and none after it either: the keyboard comes up only when
+    // the person taps the field (2026-11-05).
+    if (!OmniLaunchGate.settled.value) return;
     // Respect global suppression flag to avoid re-opening keyboard
     final autofocusEnabled = ref.read(composerAutofocusEnabledProvider);
     final hasFocus = _focusNode.hasFocus;

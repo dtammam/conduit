@@ -616,7 +616,6 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   /// The tallest keyboard seen (a typical one to start), to turn its inset
   /// into how far up it is.
   double _keyboardFullInset = 300;
-  bool _didStartupFocus = false; // one-time auto-focus on startup
   String? _lastConversationId;
   int _conversationOwnerGeneration = 0;
   int? _timelineHistoryIndexDesyncLogGeneration;
@@ -4464,15 +4463,6 @@ class _ChatPageState extends ConsumerState<ChatPage> {
 
     // Whether the messages list can actually scroll (avoids showing button when not needed)
     final canScroll = _hasScrollableTranscriptContent();
-
-    // Focus composer on app startup once (minimal delay for layout to settle)
-    if (!_didStartupFocus) {
-      _didStartupFocus = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        ref.read(inputFocusTriggerProvider.notifier).increment();
-      });
-    }
 
     Widget page = PopScope(
       canPop: false,

@@ -48,9 +48,8 @@ void main() {
 
     check(layoutKey.currentState!.isOpen).isFalse();
     check(container.read(composerRevealRequestProvider)).isFalse();
-    check(container.read(composerAutofocusEnabledProvider)).isTrue();
-    check(container.read(inputFocusTriggerProvider))
-        .isGreaterThan(focusTickBefore);
+    // The composer is shown, but a share never raises the keyboard.
+    check(container.read(inputFocusTriggerProvider)).equals(focusTickBefore);
   });
 
   testWidgets('a request raised before the chat page mounts is honored', (
@@ -69,8 +68,7 @@ void main() {
 
     check(container.read(composerRevealRequestProvider)).isFalse();
     check(layoutKey.currentState!.isOpen).isFalse();
-    check(container.read(inputFocusTriggerProvider))
-        .isGreaterThan(focusTickBefore);
+    check(container.read(inputFocusTriggerProvider)).equals(focusTickBefore);
   });
 
   testWidgets('the persistent tablet sidebar stays docked', (tester) async {
