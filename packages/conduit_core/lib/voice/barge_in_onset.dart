@@ -131,6 +131,9 @@ class BargeInOnsetDetector {
 
   bool get isArmed => _armed && !_fired;
 
+  /// Playback time heard since [arm], for the call log.
+  Duration get sinceArmed => _sinceArmed;
+
   /// The level a frame needs to count as speech.
   double get thresholdDb =>
       math.max((_floorDb ?? minThresholdDb) + marginDb, minThresholdDb);

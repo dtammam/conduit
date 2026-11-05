@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:conduit_core/conduit_core.dart';
+import 'package:conduit_core/features/chat/voice_mode/voice_event_log.dart';
 import 'package:conduit_core/utils/debug_logger.dart';
 import 'package:flutter/services.dart';
 
@@ -77,7 +78,12 @@ class EngineVoiceCapture implements AudioCapturePort {
     if (disabled || !engineEnabled) {
       final first = callPath == null;
       callPath ??= disabled ? 'record-fallback' : 'record';
-      if (first) await _logDiagnostics(_channel, 'call-start');
+      if (first) {
+        VoiceEventLog.instance.add('capture-path', <String, Object?>{
+          'path': callPath,
+        });
+        await _logDiagnostics(_channel, 'call-start');
+      }
       return _fallback.startStream(config);
     }
     try {
@@ -94,6 +100,10 @@ class EngineVoiceCapture implements AudioCapturePort {
       });
       _usingEngine = true;
       callPath = 'engine';
+      VoiceEventLog.instance.add('capture-path', <String, Object?>{
+        'path': 'engine',
+        'echoCancel': config.echoCancel,
+      });
       await _logDiagnostics(_channel, 'call-start');
       DebugLogger.info(
         'voice-engine-capture',
@@ -108,6 +118,12 @@ class EngineVoiceCapture implements AudioCapturePort {
         data: {'error': error.toString()},
       );
       fallbacks += 1;
+      VoiceEventLog.instance.add('engine-fallback', <String, Object?>{
+        'error': error.toString().length > 160
+            ? error.toString().substring(0, 160)
+            : error.toString(),
+        'count': fallbacks,
+      });
       await _logNative(
         _channel,
         'capture fallback to record (#$fallbacks): $error',

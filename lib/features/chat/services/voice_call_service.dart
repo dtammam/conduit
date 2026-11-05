@@ -68,7 +68,7 @@ class VoiceCallService {
   }
 
   Future<void> stopCall() {
-    return _ref.read(chatVoiceModeControllerProvider.notifier).stop();
+    return _ref.read(chatVoiceModeControllerProvider.notifier).stop(reason: 'service');
   }
 
   Future<void> dispose() async {

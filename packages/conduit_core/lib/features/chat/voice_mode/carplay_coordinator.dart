@@ -164,7 +164,7 @@ final class CarPlayCoordinator {
       final claimedOwnership = startResult == ChatVoiceModeStartResult.started;
       if (claimedOwnership &&
           (snapshot.isActive || snapshot.phase == ChatVoiceModePhase.error)) {
-        await _ref.read(chatVoiceModeControllerProvider.notifier).stop();
+        await _ref.read(chatVoiceModeControllerProvider.notifier).stop(reason: 'carplay');
       }
       if (claimedOwnership) {
         _startedByCarPlay = false;
@@ -198,7 +198,7 @@ final class CarPlayCoordinator {
   Future<Map<String, Object?>> _endVoiceConversation() async {
     final snapshot = _ref.read(chatVoiceModeControllerProvider);
     if (snapshot.isActive || snapshot.phase == ChatVoiceModePhase.error) {
-      await _ref.read(chatVoiceModeControllerProvider.notifier).stop();
+      await _ref.read(chatVoiceModeControllerProvider.notifier).stop(reason: 'carplay');
     }
     _startedByCarPlay = false;
     return _success();
@@ -228,7 +228,7 @@ final class CarPlayCoordinator {
     _markSceneDisconnected();
     final snapshot = _ref.read(chatVoiceModeControllerProvider);
     if (_startedByCarPlay && snapshot.isActive) {
-      await _ref.read(chatVoiceModeControllerProvider.notifier).stop();
+      await _ref.read(chatVoiceModeControllerProvider.notifier).stop(reason: 'carplay');
     }
     _startedByCarPlay = false;
     return _success();

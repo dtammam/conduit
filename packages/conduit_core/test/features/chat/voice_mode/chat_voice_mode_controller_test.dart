@@ -9,6 +9,7 @@ import 'package:conduit_core/features/chat/realtime_call/realtime_call_availabil
 import 'package:conduit_core/features/chat/realtime_call/realtime_call_ports.dart';
 import 'package:conduit_core/features/chat/voice_call/voice_call_eligibility.dart';
 import 'package:conduit_core/features/chat/voice_mode/chat_voice_mode_controller.dart';
+import 'package:conduit_core/features/chat/voice_mode/voice_event_log.dart';
 import 'package:conduit_core/features/direct_connections/models/direct_connection_profile.dart';
 import 'package:conduit_core/features/direct_connections/models/direct_remote_model.dart';
 import 'package:conduit_core/features/direct_connections/providers/direct_connection_providers.dart';
@@ -1712,23 +1713,128 @@ void main() {
       await controller.stop();
     });
 
-    test('an interruption the system will not undo ends the call', () async {
-      final container = build(callKitEnabled: false);
-      final controller = container.read(
-        chatVoiceModeControllerProvider.notifier,
-      );
-      await controller.start(startNewConversation: false);
+    test(
+      'an interruption the system will not undo holds the call paused',
+      () async {
+        // Flipped on purpose (was: ends the call). The call is the person's
+        // to end; a held call shows Resume and End on the call screen.
+        final container = build(callKitEnabled: false);
+        final controller = container.read(
+          chatVoiceModeControllerProvider.notifier,
+        );
+        await controller.start(startNewConversation: false);
+        ChatVoiceModePhase phase() =>
+            container.read(chatVoiceModeControllerProvider).phase;
 
-      audioSession.sessionEventController
-        ..add(const VoiceAudioInterruptionBegan())
-        ..add(const VoiceAudioInterruptionEnded(shouldResume: false));
+        audioSession.sessionEventController
+          ..add(const VoiceAudioInterruptionBegan())
+          ..add(const VoiceAudioInterruptionEnded(shouldResume: false));
 
+        await _until(() => phase() == ChatVoiceModePhase.paused);
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+        check(phase()).equals(ChatVoiceModePhase.paused);
+        check(audioSession.deactivateCalls).equals(0);
+        check(container.read(chatVoiceModeControllerProvider).canResume)
+            .isTrue();
+
+        // The person can still resume it.
+        await controller.resume();
+        check(phase()).equals(ChatVoiceModePhase.listening);
+        await controller.stop();
+      },
+    );
+
+    test('every way a call ends writes its reason on call-end', () async {
+      final sent = <Map<String, Object?>>[];
+      Future<bool> sender(Map<String, Object?> body) async {
+        sent.addAll((body['events']! as List).cast<Map<String, Object?>>());
+        return true;
+      }
+
+      addTearDown(() => VoiceEventLog.instance.stop());
+
+      Future<Map<String, Object?>> lastEnd() async {
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        return sent.lastWhere((e) => e['kind'] == 'call-end');
+      }
+
+      Future<ProviderContainer> begin({required bool callKitOn}) async {
+        final container = build(callKitEnabled: callKitOn);
+        VoiceEventLog.instance.start(sender: sender);
+        await container
+            .read(chatVoiceModeControllerProvider.notifier)
+            .start(startNewConversation: false);
+        return container;
+      }
+
+      // Overlay End.
+      var container = await begin(callKitOn: false);
+      await container
+          .read(chatVoiceModeControllerProvider.notifier)
+          .stop(reason: 'overlay-end');
+      var end = await lastEnd();
+      check(end['reason']).equals('overlay-end');
+      check(end['phase']).equals('listening');
+      check(end['callKitOn']).equals(false);
+
+      // The system ends the CallKit call.
+      container = await begin(callKitOn: true);
+      callKit.emit(const VoiceCallKitEnded('call-1'));
       await _until(
         () =>
             container.read(chatVoiceModeControllerProvider).phase ==
             ChatVoiceModePhase.ended,
       );
-      check(audioSession.deactivateCalls).equals(1);
+      end = await lastEnd();
+      check(end['reason']).equals('callkit');
+      check(end['callKitOn']).equals(true);
+
+      // The recognizer fails.
+      container = await begin(callKitOn: false);
+      input.emitError(StateError('recognizer failed'));
+      await _until(
+        () =>
+            container.read(chatVoiceModeControllerProvider).phase ==
+            ChatVoiceModePhase.error,
+      );
+      end = await lastEnd();
+      check((end['reason']! as String).startsWith('fail:')).isTrue();
+
+      // A response capture failure.
+      container = await begin(callKitOn: false);
+      audioSession.emitResponseCaptureFailure(StateError('mic held lost'));
+      await _until(
+        () =>
+            container.read(chatVoiceModeControllerProvider).phase ==
+            ChatVoiceModePhase.error,
+      );
+      end = await lastEnd();
+      check((end['reason']! as String).startsWith('fail:')).isTrue();
+
+      // An interruption that will not resume holds the call; ending it then
+      // is the person's, not the interruption's.
+      container = await begin(callKitOn: false);
+      audioSession.sessionEventController
+        ..add(const VoiceAudioInterruptionBegan())
+        ..add(const VoiceAudioInterruptionEnded(shouldResume: false));
+      await _until(
+        () =>
+            container.read(chatVoiceModeControllerProvider).phase ==
+            ChatVoiceModePhase.paused,
+      );
+      await container
+          .read(chatVoiceModeControllerProvider.notifier)
+          .stop(reason: 'pill-end');
+      end = await lastEnd();
+      check(end['reason']).equals('pill-end');
+      check(end['phase']).equals('paused');
+      check(sent.map((e) => e['kind']))
+          .containsEqualInOrder(['interruption-began', 'interruption-ended']);
+      check(
+        sent.lastWhere(
+          (e) => e['kind'] == 'interruption-ended',
+        )['shouldResume'],
+      ).equals(false);
     });
 
     test('a lost route pauses and waits for the user', () async {
@@ -2165,8 +2271,10 @@ void main() {
         check(input.bargeInLookbacks).deepEquals(<Duration>[
           const Duration(milliseconds: 756),
         ]);
+        // The panel keeps showing the speech until the take is judged real
+        // (changed 2026-11-05, was listening).
         check(call.container.read(chatVoiceModeControllerProvider).phase)
-            .equals(ChatVoiceModePhase.listening);
+            .equals(ChatVoiceModePhase.speaking);
 
         // The take ends on the server path's own end of speech: real words
         // stop the assistant and are sent.
@@ -2393,6 +2501,95 @@ void main() {
       await _until(() => userTurns(call.container).length == 2);
       check(tts.stopCalls).equals(1);
       await call.controller.stop();
+    });
+
+    Future<List<ChatVoiceModePhase>> provisionalCall(
+      _FakeVoiceInputService input,
+      _FakeTextToSpeechService tts,
+      void Function(
+        ({
+          ProviderContainer container,
+          ChatVoiceModeController controller,
+          int Function() stopGenerationCalls,
+        })
+        call,
+        List<ChatVoiceModePhase> seen,
+      )
+      body,
+    ) async {
+      final call = setUpCall(input, tts, settings: serverBargeIn);
+      final seen = <ChatVoiceModePhase>[];
+      await call.controller.start(startNewConversation: false);
+      await input.completeCurrent('tell me a long story');
+      await _until(
+        () =>
+            call.container.read(chatVoiceModeControllerProvider).phase ==
+            ChatVoiceModePhase.speaking,
+      );
+      call.container.listen(
+        chatVoiceModeControllerProvider,
+        (_, next) => seen.add(next.phase),
+      );
+      await input.emitLevels(-60, 20);
+      await input.emitLevels(-25, 10);
+      await _until(() => input.beginCalls == 2);
+      body(call, seen);
+      return seen;
+    }
+
+    test('a provisional barge-in that is dropped never shows listening',
+        () async {
+      final input = serverInput();
+      final tts = _FakeTextToSpeechService()..holdCompletion = true;
+      late ({
+        ProviderContainer container,
+        ChatVoiceModeController controller,
+        int Function() stopGenerationCalls,
+      })
+      c;
+      final seen = await provisionalCall(input, tts, (call, _) => c = call);
+      check(c.container.read(chatVoiceModeControllerProvider).phase)
+          .equals(ChatVoiceModePhase.speaking);
+      await input.completeCurrent('');
+      await _until(() => tts.resumeCalls == 1);
+      check(seen).not((it) => it.contains(ChatVoiceModePhase.listening));
+      check(c.container.read(chatVoiceModeControllerProvider).phase)
+          .equals(ChatVoiceModePhase.speaking);
+      await c.controller.stop();
+    });
+
+    test('a provisional barge-in that is confirmed shows listening', () async {
+      final input = serverInput();
+      final tts = _FakeTextToSpeechService()..holdCompletion = true;
+      late ({
+        ProviderContainer container,
+        ChatVoiceModeController controller,
+        int Function() stopGenerationCalls,
+      })
+      c;
+      final seen = await provisionalCall(input, tts, (call, _) => c = call);
+      await input.completeCurrent('actually, stop there');
+      await _until(() => userTurns(c.container).length == 2);
+      check(seen).contains(ChatVoiceModePhase.listening);
+      await c.controller.stop();
+    });
+
+    test('a call that ended mid-provisional leaves the next one clean',
+        () async {
+      final input = serverInput();
+      final tts = _FakeTextToSpeechService()..holdCompletion = true;
+      late ({
+        ProviderContainer container,
+        ChatVoiceModeController controller,
+        int Function() stopGenerationCalls,
+      })
+      c;
+      await provisionalCall(input, tts, (call, _) => c = call);
+      await c.controller.stop();
+      await c.controller.start(startNewConversation: false);
+      check(c.container.read(chatVoiceModeControllerProvider).phase)
+          .equals(ChatVoiceModePhase.listening);
+      await c.controller.stop();
     });
 
     test('a chunk starting moves the panel from Thinking to Speaking', () async {

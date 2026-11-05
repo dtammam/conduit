@@ -49,6 +49,9 @@ final class SpeechEngineQueue {
     case starved
     /// Every item is finished and has played.
     case drained
+    /// A fact for the call's event log (engine configuration changes, starts,
+    /// stops, voice processing toggles, how long a part really played).
+    case note(String, [String: Any])
   }
 
   struct EngineError: LocalizedError {
@@ -99,6 +102,18 @@ final class SpeechEngineQueue {
 
   /// Called on the engine's queue.
   var onEvent: ((Event) -> Void)?
+
+  /// Frames scheduled per item and when each item began playing, for the
+  /// `part-end` note (played time against the audio's own length).
+  private var scheduledFrames: [Int: Int] = [:]
+  private var startUptime: [Int: TimeInterval] = [:]
+
+  private func note(_ name: String, _ fields: [String: Any] = [:]) {
+    var f = fields
+    f["engineRunning"] = engine.isRunning
+    f["playerPlaying"] = player.isPlaying
+    onEvent?(.note(name, f))
+  }
 
   init(
     engine: AVAudioEngine = AVAudioEngine(),
@@ -302,7 +317,10 @@ final class SpeechEngineQueue {
       } else {
         try Self.objc { self.player.stop() }
       }
-      if engine.isRunning { try Self.objc { self.engine.stop() } }
+      if engine.isRunning {
+        try Self.objc { self.engine.stop() }
+        note("engine-stop", ["why": "release-idle"])
+      }
       return true
     }) ?? false
   }
@@ -388,9 +406,15 @@ final class SpeechEngineQueue {
     }
     countDiag { recoveries += 1 }
     Self.log.notice("recover after configuration change, wants=\(wants, privacy: .public)")
-    guard wants else { return }
+    guard wants else {
+      queue.sync { note("config-change", ["wants": false, "recovered": false]) }
+      return
+    }
     try queue.sync { try startEngineIfNeeded() }
     try seek(toItem: resumeItem)
+    queue.sync {
+      note("config-change", ["wants": true, "recovered": true, "resumeItem": resumeItem])
+    }
   }
 
   // MARK: - Voice capture (one engine for the call's playback and microphone)
@@ -416,6 +440,7 @@ final class SpeechEngineQueue {
       togglingVoiceProcessing = true
     }
     Self.log.notice("setVoiceProcessing \(on, privacy: .public)")
+    queue.sync { note("voice-processing", ["on": on, "wasRunning": wasRunning, "resumeItem": resumeItem]) }
     defer { countDiag { togglingVoiceProcessing = false } }
     inputUsed = true
     try Self.objc {
@@ -528,7 +553,14 @@ final class SpeechEngineQueue {
     configChanges += 1
     if togglingVoiceProcessing { configChangesDuringToggle += 1 }
     let n = configChanges
+    let duringToggle = togglingVoiceProcessing
     diagLock.unlock()
+    onEvent?(.note("engine-config-change", [
+      "n": n,
+      "duringToggle": duringToggle,
+      "engineRunning": engine.isRunning,
+      "playerPlaying": player.isPlaying,
+    ]))
     Self.log.notice("configuration change #\(n, privacy: .public)")
   }
 
@@ -598,6 +630,7 @@ final class SpeechEngineQueue {
   }
 
   func shutDown() {
+    note("engine-stop", ["why": "shut-down"])
     try? stop()
     if capturing { try? stopCapture() }
     _ = try? Self.objc { self.engine.stop() }
@@ -623,6 +656,8 @@ final class SpeechEngineQueue {
 
   private func resetEndTracking() {
     scheduledCount.removeAll()
+    scheduledFrames.removeAll()
+    startUptime.removeAll()
     playedCount.removeAll()
     endedItems.removeAll()
     lastEndUptime = nil
@@ -635,7 +670,17 @@ final class SpeechEngineQueue {
           let scheduled = scheduledCount[item], scheduled > 0,
           playedCount[item, default: 0] >= scheduled else { return }
     endedItems.insert(item)
-    lastEndUptime = ProcessInfo.processInfo.systemUptime
+    let nowUp = ProcessInfo.processInfo.systemUptime
+    lastEndUptime = nowUp
+    var partFields: [String: Any] = [
+      "part": item,
+      "expectedMs": Int((Double(scheduledFrames[item] ?? 0) * 1000 / format.sampleRate).rounded()),
+      "rate": Double(timePitch.rate),
+    ]
+    if let began = startUptime[item] {
+      partFields["playedMs"] = max(0, Int(((nowUp - began) * 1000).rounded()))
+    }
+    note("part-end", partFields)
     onEvent?(.itemEnded(item))
   }
 
@@ -652,8 +697,51 @@ final class SpeechEngineQueue {
         to: self.engine.mainMixerNode,
         format: self.format
       )
+      self.installOutputLevelTap()
     }
     wired = true
+  }
+
+  /// Measures what the player really sends out, about once a second while
+  /// playback is wanted, as an `out-level` note (RMS and peak in dBFS and the
+  /// frames seen). Tells silent audio from audible audio when speech seems to
+  /// stop while the queue keeps running. One note a second at most.
+  private func installOutputLevelTap() {
+    var sumSquares = 0.0
+    var peak: Float = 0
+    var frames = 0
+    var windowStart = ProcessInfo.processInfo.systemUptime
+    engine.mainMixerNode.installTap(onBus: 0, bufferSize: 4096, format: nil) {
+      [weak self] buffer, _ in
+      guard let self, let data = buffer.floatChannelData else { return }
+      let n = Int(buffer.frameLength)
+      let channels = Int(buffer.format.channelCount)
+      if n > 0, channels > 0 {
+        let ch = data[0]
+        for i in 0..<n {
+          let v = ch[i]
+          sumSquares += Double(v * v)
+          let a = abs(v)
+          if a > peak { peak = a }
+        }
+        frames += n
+      }
+      let now = ProcessInfo.processInfo.systemUptime
+      guard now - windowStart >= 1 else { return }
+      if self.wantsPlayback, frames > 0 {
+        let rms = (sumSquares / Double(frames)).squareRoot()
+        func db(_ x: Double) -> Int { x <= 0.00001 ? -100 : Int((20 * log10(x)).rounded()) }
+        self.onEvent?(.note("out-level", [
+          "rmsDb": db(rms),
+          "peakDb": db(Double(peak)),
+          "frames": frames,
+        ]))
+      }
+      sumSquares = 0
+      peak = 0
+      frames = 0
+      windowStart = now
+    }
   }
 
   private func startEngineIfNeeded() throws {
@@ -663,6 +751,7 @@ final class SpeechEngineQueue {
       self.engine.prepare()
       try self.engine.start()
     }
+    note("engine-start", ["voiceProcessing": voiceProcessing])
     // 10 ms of silence first, so the hardware starts on zeros.
     if outstanding == 0,
        let lead = AVAudioPCMBuffer(
@@ -724,6 +813,7 @@ final class SpeechEngineQueue {
     }
     outstanding += 1
     scheduledCount[item, default: 0] += 1
+    scheduledFrames[item, default: 0] += Int(buffer.frameLength)
     if first, streamItems.contains(item) { onEvent?(.streamScheduled(item)) }
     if first {
       // The item starts when everything scheduled before it has played.
@@ -750,6 +840,7 @@ final class SpeechEngineQueue {
   private func reportStarted(_ item: Int) {
     guard lastStartedItem != item else { return }
     lastStartedItem = item
+    startUptime[item] = ProcessInfo.processInfo.systemUptime
     var gap: Int?
     if item > 0, let ended = lastEndUptime {
       gap = max(0, Int(((ProcessInfo.processInfo.systemUptime - ended) * 1000).rounded()))

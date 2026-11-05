@@ -263,12 +263,17 @@ class EngineSpeechPlayback
     }
   }
 
+  int _lastOutLevelMs = 0;
+
   Future<Object?> _onCall(MethodCall call) async {
     if (call.method != 'event') return null;
     final args = call.arguments;
     if (args is! Map) return null;
     switch (args['type']) {
       case 'failed':
+        VoiceEventLog.instance.add('engine-failed', <String, Object?>{
+          'message': '${args['message'] ?? ''}',
+        });
         _fail(StateError('${args['message'] ?? 'speech engine failed'}'));
       case 'started':
         final item = args['item'];
@@ -295,6 +300,21 @@ class EngineSpeechPlayback
         _emit(AudioProcessingState.buffering);
       case 'drained':
         _emit(AudioProcessingState.completed);
+      case 'native':
+        final name = args['name'];
+        final fields = args['fields'];
+        if (name == 'out-level') {
+          // At most about one a second, so a call's log cannot be flooded.
+          final now = DateTime.now().millisecondsSinceEpoch;
+          if (now - _lastOutLevelMs < 900) return null;
+          _lastOutLevelMs = now;
+        }
+        if (name is String) {
+          VoiceEventLog.instance.add('native-$name', <String, Object?>{
+            if (fields is Map)
+              for (final e in fields.entries) '${e.key}': e.value,
+          });
+        }
     }
     return null;
   }

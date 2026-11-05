@@ -662,7 +662,7 @@ class TtsManager {
     if (session.chunks.isEmpty) {
       _activeSession = null;
       _resetPlaybackState();
-      _emitEvent(const TtsCompleted());
+      _emitEvent(const TtsCompleted(), why: 'completed-queue-empty');
       return;
     }
 
@@ -1148,7 +1148,7 @@ class TtsManager {
       }
       _activeSession = null;
       _resetPlaybackState();
-      _emitEvent(const TtsCompleted());
+      _emitEvent(const TtsCompleted(), why: 'completed-queue-empty');
       return;
     }
 
@@ -1443,7 +1443,7 @@ class TtsManager {
       _keepTake(session);
       _activeSession = null;
       _resetPlaybackState();
-      _emitEvent(const TtsCompleted());
+      _emitEvent(const TtsCompleted(), why: 'completed-queue-empty');
       return;
     }
 
@@ -1800,7 +1800,16 @@ class TtsManager {
     });
   }
 
+  /// The part and part count playback was on when it was last reset, so a
+  /// `speech-stopped` event emitted just after the reset still names them.
+  int _lastStopPart = -1;
+  int _lastStopTotal = 0;
+
   void _resetPlaybackState() {
+    if (_currentChunkIndex >= 0) {
+      _lastStopPart = _currentChunkIndex;
+      _lastStopTotal = _activeSession?.chunks.length ?? _lastStopTotal;
+    }
     _loggedPlayEnd = -1;
     _lastPlayEndMs = null;
     _starvedSinceMs = null;
@@ -1867,7 +1876,26 @@ class TtsManager {
     return _serverAudioBuffer[index];
   }
 
-  void _emitEvent(TtsEvent event) {
+  void _emitEvent(TtsEvent event, {String? why}) {
+    final reason = switch (event) {
+      TtsCompleted() => why ?? 'completed',
+      TtsCancelled() => why ?? 'cancelled',
+      TtsError(:final message) =>
+        'tts-error: ${message.length > 160 ? message.substring(0, 160) : message}',
+      _ => null,
+    };
+    if (reason != null) {
+      final total = _activeSession?.chunks.length ?? _lastStopTotal;
+      final part = _currentChunkIndex >= 0 ? _currentChunkIndex : _lastStopPart;
+      VoiceEventLog.instance.add('speech-stopped', <String, Object?>{
+        'source': 'tts-manager',
+        'reason': reason,
+        'part': part,
+        'queued': event is TtsCompleted || part < 0 || total <= 0
+            ? 0
+            : (total - part - 1).clamp(0, total),
+      });
+    }
     if (!_eventController.isClosed) {
       _eventController.add(event);
     }

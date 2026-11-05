@@ -223,7 +223,7 @@ class _ExpandedVoicePanel extends ConsumerWidget {
                   icon: Platform.isIOS
                       ? CupertinoIcons.phone_down_fill
                       : Icons.call_end_rounded,
-                  onPressed: controller.stop,
+                  onPressed: () => controller.stop(reason: 'overlay-end'),
                 ),
               ],
             ),
@@ -288,7 +288,7 @@ class _CollapsedVoicePill extends ConsumerWidget {
                 const SizedBox(width: Spacing.xxs),
                 _AdaptiveVoiceAction(
                   tooltip: l10n.voiceCallEnd,
-                  onPressed: controller.stop,
+                  onPressed: () => controller.stop(reason: 'pill-end'),
                   icon: Platform.isIOS
                       ? CupertinoIcons.phone_down_fill
                       : Icons.call_end_rounded,

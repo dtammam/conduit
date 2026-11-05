@@ -25,6 +25,8 @@ import 'package:conduit_core/providers/app_providers.dart'
         selectedModelProvider,
         socketServiceProvider;
 
+import 'package:conduit_core/providers/host_ports.dart'
+    show appLifecycleProvider;
 import 'package:conduit_core/services/settings_service.dart';
 import 'package:conduit_core/services/socket_service.dart'
     show SocketBackgroundActivityLease, SocketService;
@@ -200,6 +202,23 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
   /// voice coming back through the microphone (playback resumes).
   bool _bargeInProvisional = false;
 
+  /// The last `speech-stopped` reason, so the next `listening-start` can say
+  /// whether it followed a failure or a clean finish.
+  String? _lastSpeechStopReason;
+
+  /// What the barge-in detector saw at the onset, for the call log.
+  Map<String, Object?> _onsetInfo = const <String, Object?>{};
+
+  String _listeningSource(String why) => switch (why) {
+    'barge-in-provisional' => 'onset',
+    'after-assistant-speech' =>
+      (_lastSpeechStopReason ?? '').startsWith('tts-error')
+          ? 'tts-error'
+          : 'completed',
+    'call-start' => 'call-start',
+    _ => 'resume',
+  };
+
   /// The reply preview when a provisional barge-in began, restored on resume.
   String _previewBeforeBargeIn = '';
 
@@ -283,6 +302,20 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
   String? _lastSubmittedTranscript;
   bool _stoppingFromCallKit = false;
 
+  /// Why the call is ending, the phase it was in and whether the system call
+  /// UI was on, noted by the first path to end it (it wins) and written on the
+  /// log's `call-end` by [_disposeResources].
+  String? _endReason;
+  String? _endPhase;
+  bool _endCallKitOn = false;
+
+  void _noteEnd(String reason) {
+    if (_endReason != null) return;
+    _endReason = reason;
+    _endPhase = state.phase.name;
+    _endCallKitOn = _activeCallId != null;
+  }
+
   /// Whether this call runs without the system call UI: the app owns the
   /// audio session and answers interruptions and lost routes itself.
   bool _appOwnsSession = false;
@@ -313,6 +346,17 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
     ref.listen<List<ChatMessage>>(chatMessagesProvider, (_, next) {
       _handleChatMessagesChanged(next);
     });
+
+    // The app going to the background or coming back while a call is live is
+    // the first thing to read when speech stops (the log only records inside
+    // a call).
+    final lifecycleSub = ref.read(appLifecycleProvider).changes.listen((phase) {
+      VoiceEventLog.instance.add('app-lifecycle', <String, Object?>{
+        'state': phase.name,
+        'phase': state.phase.name,
+      });
+    }, onError: (Object _) {});
+    ref.onDispose(() => unawaited(lifecycleSub.cancel()));
 
     ref.onDispose(() {
       // Invalidate every detached transcript/TTS continuation before tearing
@@ -611,6 +655,7 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
           await _beginVoiceEventLog(settings);
           await _startListening(
             startToken,
+            why: 'call-start',
             beforeAcceptingTranscripts: startNewConversation
                 ? () {
                     cancelIfRequested();
@@ -634,7 +679,7 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
             error is VoiceCallEligibilityResolutionCancelled) {
           result = ChatVoiceModeStartResult.cancelled;
           if (startToken != null) {
-            await _stopInternal(endCallKit: true);
+            await _stopInternal(endCallKit: true, reason: 'start-cancelled');
           }
           return;
         }
@@ -877,9 +922,14 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
   bool get isWaitingForStartReadiness =>
       _pendingStartReadinessCancellation != null;
 
-  Future<void> stop() {
+  /// Ends the call. [reason] names who asked (overlay-end, pill-end, carplay,
+  /// ...) and goes on the call's `call-end` event.
+  Future<void> stop({String reason = 'stop'}) {
+    if (state.isActive || state.phase == ChatVoiceModePhase.error) {
+      _noteEnd(reason);
+    }
     _cancelStart();
-    return _enqueue(() => _stopInternal(endCallKit: true));
+    return _enqueue(() => _stopInternal(endCallKit: true, reason: reason));
   }
 
   /// Stops a start under way before it goes further. A realtime voice still
@@ -975,7 +1025,7 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
         return;
       }
 
-      await _startListening(token);
+      await _startListening(token, why: 'resume-from-pause');
     }
   }
 
@@ -1003,6 +1053,9 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
       case VoiceAudioInterruptionBegan():
         // A phone call, Siri or an alarm has the session. Hold the call; it
         // goes on when the system says it may.
+        VoiceEventLog.instance.add('interruption-began', <String, Object?>{
+          'phase': state.phase.name,
+        });
         unawaited(
           _enqueue(() async {
             if (!state.canPause) return;
@@ -1011,12 +1064,20 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
           }),
         );
       case VoiceAudioInterruptionEnded(:final shouldResume):
+        VoiceEventLog.instance.add('interruption-ended', <String, Object?>{
+          'shouldResume': shouldResume,
+          'phase': state.phase.name,
+        });
         unawaited(
           _enqueue(() async {
             if (!shouldResume) {
-              // The system will not give the session back on its own.
-              if (state.isActive || state.canResume) {
-                await _stopInternal(endCallKit: false);
+              // The system will not give the session back on its own, but
+              // the call is not ours to end: hold it paused (the pause the
+              // interruption began, or one made now) and let the person
+              // resume or end it from the call screen.
+              if (state.canPause) {
+                _pausedByInterruption = true;
+                await _pauseNow();
               }
               return;
             }
@@ -1143,7 +1204,7 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
         isMuted: false,
         clearErrorMessage: true,
       );
-      await _startListening(_token);
+      await _startListening(_token, why: 'unmute');
     });
   }
 
@@ -1175,13 +1236,14 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
       }
       final tts = _textToSpeech;
       if (tts == null) return;
+      _logSpeechStopped('cancel-speaking');
       await tts.stopStreamingTts();
       await tts.stop();
       if (_disposed) return;
       _streamingTtsStarted = false;
       _assistantFinalized = true;
       if (state.isActive && !state.isMuted) {
-        await _startListening(_token);
+        await _startListening(_token, why: 'cancel-speaking');
       }
     });
   }
@@ -1279,6 +1341,27 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
     });
   }
 
+  /// A `speech-stopped` event: the controller's view of why assistant speech
+  /// ended or handed back to listening, with the part it was on and how many
+  /// parts were still waiting.
+  void _logSpeechStopped(
+    String reason, [
+    Map<String, Object?> extra = const {},
+  ]) {
+    _lastSpeechStopReason = reason;
+    final total = _assistantSpeechChunks.length;
+    final index = _activeAssistantSpeechChunkIndex;
+    VoiceEventLog.instance.add('speech-stopped', <String, Object?>{
+      'reason': reason,
+      'part': index,
+      'queued': total == 0 || index < 0
+          ? 0
+          : (total - index - 1).clamp(0, total),
+      'phase': state.phase.name,
+      ...extra,
+    });
+  }
+
   void _handleCallKitEvent(VoiceCallKitEvent event) {
     if (_disposed) return;
     final callId = _activeCallId;
@@ -1288,8 +1371,11 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
       case VoiceCallKitEnded(callId: final endedCallId):
         if (endedCallId == callId) {
           _stoppingFromCallKit = true;
+          _noteEnd('callkit');
           _cancelStart();
-          unawaited(_enqueue(() => _stopInternal(endCallKit: false)));
+          unawaited(
+            _enqueue(() => _stopInternal(endCallKit: false, reason: 'callkit')),
+          );
         }
       case VoiceCallKitMuteToggled(callId: final mutedCallId, :final isMuted):
         if (mutedCallId == callId && isMuted != state.isMuted) {
@@ -1321,6 +1407,15 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
         case TtsCancelled():
           break;
         case TtsError(:final message):
+          _logSpeechStopped('tts-error', <String, Object?>{
+            'error': message.length > 160 ? message.substring(0, 160) : message,
+          });
+          VoiceEventLog.instance.add('tts-error', <String, Object?>{
+            'message': message.length > 160
+                ? message.substring(0, 160)
+                : message,
+            'phase': state.phase.name,
+          });
           state = state.copyWith(
             errorMessage: message,
             errorKind: ChatVoiceModeError.other,
@@ -1483,6 +1578,7 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
 
   Future<void> _startListening(
     int token, {
+    String why = 'unspecified',
     void Function()? beforeAcceptingTranscripts,
     Duration? heldAudioLookback,
   }) async {
@@ -1490,6 +1586,12 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
       return;
     }
 
+    VoiceEventLog.instance.add('listening-start', <String, Object?>{
+      'why': why,
+      'source': _listeningSource(why),
+      'phase': state.phase.name,
+      'afterSpeech': _awaitingAssistant || _assistantFinalized,
+    });
     final input = _voiceInput!;
     final transferResponseCaptureToLocalStt = input.willUseNativeLocalStt;
     if (!transferResponseCaptureToLocalStt) {
@@ -1550,14 +1652,20 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
 
     _currentTranscript = '';
     _prewarmForNextTurn(minGap: Duration.zero);
-    state = state.copyWith(
-      phase: ChatVoiceModePhase.listening,
-      transcript: '',
-      assistantPreview: '',
-      clearSpokenResponse: true,
-      intensity: 0,
-      clearErrorMessage: true,
-    );
+    if (_bargeInProvisional) {
+      // A take that may be the assistant's own echo: the panel goes on
+      // showing the speech until the take is judged real.
+      state = state.copyWith(intensity: 0, clearErrorMessage: true);
+    } else {
+      state = state.copyWith(
+        phase: ChatVoiceModePhase.listening,
+        transcript: '',
+        assistantPreview: '',
+        clearSpokenResponse: true,
+        intensity: 0,
+        clearErrorMessage: true,
+      );
+    }
 
     final callId = state.activeCallId;
     if (!_markedCallConnected && callId != null) {
@@ -1641,7 +1749,9 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
       // listening phase just did.
       _prewarmForNextTurn(minGap: const Duration(seconds: 5));
     }
-    if (state.isActive && state.phase != ChatVoiceModePhase.paused) {
+    if (state.isActive &&
+        state.phase != ChatVoiceModePhase.paused &&
+        !_bargeInProvisional) {
       state = state.copyWith(transcript: event.text);
     }
 
@@ -1734,6 +1844,11 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
       }
       final lookback = detector.add(level);
       if (lookback != null) {
+        _onsetInfo = <String, Object?>{
+          'levelDb': level.dbfs.round(),
+          'thresholdDb': detector.thresholdDb.round(),
+          'sinceArmMs': detector.sinceArmed.inMilliseconds,
+        };
         unawaited(_handleServerBargeInOnset(token, lookback));
       }
     });
@@ -1772,6 +1887,7 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
         _lastProvisionalSpeechAt = null;
         VoiceEventLog.instance.add('barge-in-provisional', <String, Object?>{
           'lookbackMs': lookback.inMilliseconds,
+          ..._onsetInfo,
           'preview': _clip(_previewBeforeBargeIn),
         });
         _provisionalDucked = await _textToSpeech!.duck(
@@ -1790,7 +1906,11 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
         if (!_isCurrent(token)) return;
         _pendingFinalTranscripts.clear();
         _lastSubmittedTranscript = null;
-        await _startListening(token, heldAudioLookback: lookback);
+        await _startListening(
+          token,
+          heldAudioLookback: lookback,
+          why: 'barge-in-provisional',
+        );
       } catch (error, stackTrace) {
         if (!_isCurrent(token)) return;
         DebugLogger.error(
@@ -1860,6 +1980,12 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
       // Real words: the drain below stops the assistant and sends them.
       _bargeInProvisional = false;
       _provisionalDucked = false;
+      state = state.copyWith(
+        phase: ChatVoiceModePhase.listening,
+        assistantPreview: '',
+        clearSpokenResponse: true,
+        intensity: 0,
+      );
     } else if (_awaitingAssistant && transcript == _ignoredEchoTranscript) {
       // The same take reported a second time (final event and end of take).
       return;
@@ -1874,7 +2000,10 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
   }
 
   Future<void> _handleListeningDone(int token) async {
-    if (!_isCurrent(token) || state.phase != ChatVoiceModePhase.listening) {
+    if (!_isCurrent(token) ||
+        (state.phase != ChatVoiceModePhase.listening &&
+            !(_bargeInProvisional &&
+                state.phase == ChatVoiceModePhase.speaking))) {
       return;
     }
 
@@ -1991,7 +2120,7 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
     );
     await Future<void>.delayed(Duration(milliseconds: delayMs));
     if (_isCurrent(token) && state.phase == ChatVoiceModePhase.listening) {
-      await _startListening(token);
+      await _startListening(token, why: 'empty-transcript-retry');
     }
   }
 
@@ -2234,6 +2363,7 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
     final tts = _textToSpeech!;
     await tts.stopStreamingTts();
     await tts.stop();
+    _logSpeechStopped('barge-in-confirmed');
     VoiceEventLog.instance.add('barge-in-stop');
     if (!_isCurrent(token)) return;
 
@@ -2355,7 +2485,7 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
     _pausedDuringAssistantTurn = false;
 
     if (!_awaitingAssistant) {
-      await _startListening(token);
+      await _startListening(token, why: 'resume-no-assistant-turn');
       return;
     }
 
@@ -2432,6 +2562,7 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
       return;
     }
 
+    _logSpeechStopped('assistant-turn-done');
     _awaitingAssistant = false;
     _streamingTtsStarted = false;
     await _stopWatchingForServerBargeIn();
@@ -2450,7 +2581,7 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
       return;
     }
 
-    await _startListening(token);
+    await _startListening(token, why: 'after-assistant-speech');
   }
 
   Set<String> _currentAssistantMessageIds() {
@@ -2535,6 +2666,7 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
     ChatVoiceModeError kind = ChatVoiceModeError.other,
   ]) async {
     if (!_isCurrent(token)) return;
+    _noteEnd('fail:${kind.name}');
     // Invalidate transcript/TTS callbacks before resources are detached. The
     // lifecycle gate may delay subscription cancellation, and a recognizer is
     // allowed to deliver buffered data or onDone after onError.
@@ -2565,10 +2697,14 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
     );
   }
 
-  Future<void> _stopInternal({required bool endCallKit}) async {
+  Future<void> _stopInternal({
+    required bool endCallKit,
+    String reason = 'stop',
+  }) async {
     if (!state.isActive && state.phase != ChatVoiceModePhase.error) {
       return;
     }
+    _noteEnd(reason);
 
     ++_token;
     final stopToken = _token;
@@ -2597,7 +2733,16 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
     required bool endCallKit,
     required int ownershipToken,
   }) async {
-    VoiceEventLog.instance.stop();
+    VoiceEventLog.instance.stop(
+      reason: _endReason ?? 'unknown',
+      fields: <String, Object?>{
+        'phase': _endPhase ?? state.phase.name,
+        'callKitOn': _endReason == null ? _activeCallId != null : _endCallKitOn,
+      },
+    );
+    _endReason = null;
+    _endPhase = null;
+    _endCallKitOn = false;
     final input = _voiceInput;
     final tts = _textToSpeech;
     final callKit = _callKit;
@@ -2827,6 +2972,12 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
     _assistantSpeechChunks = const <String>[];
     _activeAssistantSpeechChunkIndex = -1;
     _assistantSpeechStartedAt = null;
+    _bargeInProvisional = false;
+    _provisionalDucked = false;
+    _cancelProvisionalWatchdog();
+    _provisionalStartedAt = null;
+    _lastProvisionalSpeechAt = null;
+    _previewBeforeBargeIn = '';
   }
 
   void _replaceSocketBackgroundLease(SocketService? socket) {

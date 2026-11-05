@@ -70,9 +70,15 @@ class VoiceEventLog {
   }
 
   /// Ends the call's log: the last events are posted, then logging stops.
-  void stop() {
+  ///
+  /// [reason] says why the call ended (overlay-end, callkit, a failure kind...)
+  /// and [fields] carries what was true at that moment.
+  void stop({String? reason, Map<String, Object?> fields = const {}}) {
     if (!active) return;
-    add('call-end');
+    add('call-end', <String, Object?>{
+      'reason': ?reason,
+      ...fields,
+    });
     flush();
     _timer?.cancel();
     _timer = null;

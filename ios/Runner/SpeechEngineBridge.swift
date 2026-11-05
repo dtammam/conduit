@@ -448,6 +448,8 @@ final class SpeechEngineBridge: ConduitBridge {
     case .drained:
       payload = ["type": "drained"]
       scheduleRelease(after: Self.releaseAfterStop)
+    case .note(let name, let fields):
+      payload = ["type": "native", "name": name, "fields": fields]
     }
     DispatchQueue.main.async { [weak self] in
       self?.methodChannel?.invokeMethod("event", arguments: payload)

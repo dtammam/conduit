@@ -437,7 +437,7 @@ final class _FakeVoiceCallController extends ChatVoiceModeController {
   }
 
   @override
-  Future<void> stop() async {
+  Future<void> stop({String reason = 'stop'}) async {
     stopCalls += 1;
     state = const ChatVoiceModeSnapshot(phase: ChatVoiceModePhase.ended);
   }
