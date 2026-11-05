@@ -210,6 +210,7 @@ void main() {
         'voice-provider-transcription-model': 'whisper-1',
         'voice-provider-speech-model': 'tts-1',
         'voice-provider-speech-voice': 'alloy',
+        'voice-provider-prepare-audio': true,
         'voice-provider-stream-speech': false,
         'voice-provider-all-chats': true,
         'voice-provider-realtime-model': 'gpt-realtime-2.1-mini',
@@ -220,6 +221,7 @@ void main() {
         fields.keys.toSet()..removeAll([
           'voice-provider-connection',
           // Toggles, not text fields.
+          'voice-provider-prepare-audio',
           'voice-provider-stream-speech',
           'voice-provider-all-chats',
         ]),

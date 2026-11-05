@@ -9517,6 +9517,14 @@
   "@voiceProviderForAllChatsDescription": {
     "description": "Explains the toggle that uses the Voice provider for all chats."
   },
+  "prepareReplyAudio": "Prepare audio for replies",
+  "@prepareReplyAudio": {
+    "description": "Toggle: render each finished reply's audio in the background so Listen and Share are instant"
+  },
+  "prepareReplyAudioDescription": "Makes each reply's audio in the background once it is done, so Listen starts at once and Share needs no wait. Uses the Voice provider's server a little after each reply.",
+  "@prepareReplyAudioDescription": {
+    "description": "Explains the Prepare audio for replies toggle."
+  },
   "voiceProviderStreamSpeech": "Stream speech",
   "@voiceProviderStreamSpeech": {
     "description": "Toggle that asks the Voice provider to stream speech audio."

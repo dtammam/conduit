@@ -1169,6 +1169,12 @@ class _ConduitAppState extends ConsumerState<ConduitApp> {
                 .read(appSettingsProvider.notifier)
                 .setDirectVoiceProvider(current.withStreamSpeech(value));
           }
+        case 'voice-provider-prepare-audio':
+          if (value is bool) {
+            await ref
+                .read(appSettingsProvider.notifier)
+                .setPrepareReplyAudio(value);
+          }
         case 'voice-provider-all-chats':
           if (value is bool) {
             await ref

@@ -32,7 +32,9 @@ import 'enhanced_attachment.dart';
 import 'package:conduit/shared/widgets/chat_action_button.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../providers/reply_audio_prefetch_provider.dart';
 import '../services/reply_audio_flow.dart';
+import '../services/reply_audio_prefetch.dart';
 import '../services/reply_mp3_export.dart';
 import '../services/speech_take_store.dart';
 import 'reply_audio_preview_sheet.dart';
@@ -355,6 +357,49 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
     _primeInitialStreamingContentFade();
     _updateActionRowSettle();
     _syncStreamingContentSubscription();
+    // A reply already finished when this row appears: prepare its audio if it
+    // has none (newest first, a few per chat; see ReplyAudioPrefetcher).
+    if (!widget.isStreaming) {
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => unawaited(_offerAudioPrefetch(opened: true)),
+      );
+    }
+  }
+
+  /// Offers this reply to the background audio preparation. Builds the same
+  /// speech text Listen and Share build, without touching the row's state.
+  Future<void> _offerAudioPrefetch({required bool opened}) async {
+    try {
+      if (!mounted ||
+          widget.readOnly ||
+          widget.isStreaming ||
+          _isVoiceReply ||
+          _activeVersionIndex >= 0) {
+        return;
+      }
+      final id = _messageId;
+      final raw = _displayedContent;
+      if (id.isEmpty || raw.trim().isEmpty) return;
+      final text = _buildTtsPlainTextFromRaw(raw);
+      if (text.isEmpty || !mounted) return;
+      final conversation = ref.read(activeConversationProvider);
+      final item = ReplyAudioPrefetchItem(
+        messageId: id,
+        text: text,
+        chatId: conversation == null ? null : conversationScopedId(conversation),
+        // Read again when the render is about to start, after the text settles.
+        latestText: () =>
+            mounted ? _buildTtsPlainTextFromRaw(_displayedContent) : text,
+      );
+      final prefetcher = ref.read(replyAudioPrefetcherProvider);
+      if (opened) {
+        await prefetcher.chatOpened(item);
+      } else {
+        prefetcher.replyFinished(item);
+      }
+    } catch (_) {
+      // Preparing ahead is a convenience; it never disturbs the row.
+    }
   }
 
   @override
@@ -378,6 +423,13 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
     super.didUpdateWidget(oldWidget);
 
     final messageChanged = oldWidget.message.id != widget.message.id;
+
+    if (!messageChanged && oldWidget.isStreaming && !widget.isStreaming) {
+      // The reply just finished: once its text has settled, prepare its audio.
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => unawaited(_offerAudioPrefetch(opened: false)),
+      );
+    }
 
     if (messageChanged) {
       _lastStreamingContent = null;
@@ -858,6 +910,9 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
       return;
     }
     final controller = ref.read(textToSpeechControllerProvider.notifier);
+    // Listen plays live and keeps its own take; a render of this reply that is
+    // still running is dropped, never waited on.
+    ref.read(replyAudioPrefetcherProvider).drop(messageId);
     final ttsState = ref.read(textToSpeechControllerProvider);
     final isActiveMessage = ttsState.activeMessageId == messageId;
     final hasActivePlayback =
@@ -947,18 +1002,12 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
       );
       final flow = ReplyAudioFlow(exporter: exporter);
       final conversation = ref.read(activeConversationProvider);
-      final heardKey = TtsManager.instance.voiceKey;
-      final renderKey =
-          voice != null && voice.settings.canSynthesize
-          ? 'direct|${voice.settings.speechModel ?? ''}|'
-                '${voice.settings.speechVoice ?? ''}'
-          : (heardKey ?? 'default');
-      final request = ReplyAudioRequest(
+      final request = ReplyAudioRequest.forReply(
         messageId: _messageId,
         text: speechText,
         chatId: conversation == null ? null : conversationScopedId(conversation),
-        lookupVoiceKeys: [?heardKey, renderKey],
-        renderVoiceKey: renderKey,
+        voice: voice?.settings,
+        heardKey: TtsManager.instance.voiceKey,
       );
 
       Future<SpeechTake> render({bool showPill = true}) async {
@@ -991,6 +1040,22 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
         }
       }
 
+      // A background render of this reply already running is the same work:
+      // wait for it (the pill shows) rather than render twice.
+      final inFlight = ref
+          .read(replyAudioPrefetcherProvider)
+          .inFlightFor(_messageId);
+      if (inFlight != null) {
+        _shareProgress = ShareProgress.show(
+          context,
+          asVideo ? l10n.shareAsVideoPreparing : l10n.shareAsMp3Preparing,
+        );
+        try {
+          await inFlight.timeout(const Duration(minutes: 5));
+        } catch (_) {}
+        _endShareProgress();
+        if (!mounted) return;
+      }
       final take = await flow.choose(
         request,
         preview: preview,

@@ -1084,6 +1084,14 @@ NativeAudioSheetParts buildNativeAudioSheetParts(
               'alloy',
             ),
             NativeSheetItemConfig(
+              id: 'voice-provider-prepare-audio',
+              title: l10n.prepareReplyAudio,
+              subtitle: l10n.prepareReplyAudioDescription,
+              sfSymbol: 'waveform.badge.plus',
+              kind: NativeSheetItemKind.toggle,
+              value: appSettings.prepareReplyAudio,
+            ),
+            NativeSheetItemConfig(
               id: 'voice-provider-stream-speech',
               title: l10n.voiceProviderStreamSpeech,
               subtitle: l10n.voiceProviderStreamSpeechDescription,

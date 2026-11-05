@@ -217,6 +217,9 @@ class _VoiceProviderSettingsPageState
     final forAllChats = ref.watch(
       appSettingsProvider.select((s) => s.voiceProviderForAllChats),
     );
+    final prepareAudio = ref.watch(
+      appSettingsProvider.select((s) => s.prepareReplyAudio),
+    );
     final candidates = voiceProviderCandidates(ref);
     final chosen = candidates.any(
       (profile) => profile.id == settings?.profileId,
@@ -273,6 +276,18 @@ class _VoiceProviderSettingsPageState
                   DirectVoiceProviderField.speechVoice,
                   label: l10n.voice,
                   hint: 'alloy',
+                ),
+                _toggleTile(
+                  title: l10n.prepareReplyAudio,
+                  subtitle: l10n.prepareReplyAudioDescription,
+                  value: prepareAudio,
+                  onChanged: ref
+                      .read(appSettingsProvider.notifier)
+                      .setPrepareReplyAudio,
+                  icon: UiUtils.platformIcon(
+                    ios: CupertinoIcons.waveform_circle,
+                    android: Icons.graphic_eq,
+                  ),
                 ),
                 _toggleTile(
                   title: l10n.voiceProviderStreamSpeech,

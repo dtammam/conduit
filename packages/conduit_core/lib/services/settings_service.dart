@@ -342,6 +342,7 @@ class SettingsService {
       PreferenceKeys.voiceCallKitEnabled: settings.voiceCallKitEnabled,
       PreferenceKeys.voiceProviderForAllChats:
           settings.voiceProviderForAllChats,
+      PreferenceKeys.prepareReplyAudio: settings.prepareReplyAudio,
       PreferenceKeys.voiceEngineEchoCancel: settings.voiceEngineEchoCancel,
       PreferenceKeys.voiceShortFirstClause: settings.voiceShortFirstClause,
       PreferenceKeys.voiceCallMode: settings.voiceCallMode.name,
@@ -838,6 +839,7 @@ class SettingsService {
           get<bool>(PreferenceKeys.voiceCallKitEnabled) ?? false,
       voiceProviderForAllChats:
           get<bool>(PreferenceKeys.voiceProviderForAllChats) ?? true,
+      prepareReplyAudio: get<bool>(PreferenceKeys.prepareReplyAudio) ?? true,
       voiceEngineEchoCancel:
           get<bool>(PreferenceKeys.voiceEngineEchoCancel) ?? true,
       voiceShortFirstClause:
@@ -1025,6 +1027,10 @@ class AppSettings {
   /// endpoints. A request it cannot serve falls back to the server's.
   final bool voiceProviderForAllChats;
 
+  /// Render each finished reply's audio in the background so Listen and Share
+  /// find it ready.
+  final bool prepareReplyAudio;
+
   /// Whether an iOS voice call takes its microphone from the speech engine
   /// that plays the assistant, with the platform's voice processing (echo
   /// cancellation against that playback). Off, the call records through the
@@ -1112,6 +1118,7 @@ class AppSettings {
     this.voiceBargeInEnabled = false,
     this.voiceCallKitEnabled = false,
     this.voiceProviderForAllChats = true,
+    this.prepareReplyAudio = true,
     this.voiceEngineEchoCancel = true,
     this.voiceShortFirstClause = false,
     this.voiceCallMode = VoiceCallMode.auto,
@@ -1182,6 +1189,7 @@ class AppSettings {
     bool? voiceBargeInEnabled,
     bool? voiceCallKitEnabled,
     bool? voiceProviderForAllChats,
+    bool? prepareReplyAudio,
     bool? voiceEngineEchoCancel,
     bool? voiceShortFirstClause,
     VoiceCallMode? voiceCallMode,
@@ -1266,6 +1274,7 @@ class AppSettings {
       voiceCallKitEnabled: voiceCallKitEnabled ?? this.voiceCallKitEnabled,
       voiceProviderForAllChats:
           voiceProviderForAllChats ?? this.voiceProviderForAllChats,
+      prepareReplyAudio: prepareReplyAudio ?? this.prepareReplyAudio,
       voiceEngineEchoCancel:
           voiceEngineEchoCancel ?? this.voiceEngineEchoCancel,
       voiceShortFirstClause:
@@ -1365,6 +1374,7 @@ class AppSettings {
         other.voiceBargeInEnabled == voiceBargeInEnabled &&
         other.voiceCallKitEnabled == voiceCallKitEnabled &&
         other.voiceProviderForAllChats == voiceProviderForAllChats &&
+        other.prepareReplyAudio == prepareReplyAudio &&
         other.voiceEngineEchoCancel == voiceEngineEchoCancel &&
         other.voiceShortFirstClause == voiceShortFirstClause &&
         other.voiceCallMode == voiceCallMode &&
@@ -1438,6 +1448,7 @@ class AppSettings {
       voiceBargeInEnabled,
       voiceCallKitEnabled,
       voiceProviderForAllChats,
+      prepareReplyAudio,
       voiceEngineEchoCancel,
       voiceShortFirstClause,
       voiceCallMode,
@@ -1960,6 +1971,11 @@ class AppSettingsNotifier extends _$AppSettingsNotifier {
 
   Future<void> setVoiceBargeInEnabled(bool value) async {
     state = state.copyWith(voiceBargeInEnabled: value);
+    await SettingsService.saveSettings(state);
+  }
+
+  Future<void> setPrepareReplyAudio(bool value) async {
+    state = state.copyWith(prepareReplyAudio: value);
     await SettingsService.saveSettings(state);
   }
 
