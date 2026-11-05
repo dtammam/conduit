@@ -49,6 +49,7 @@ Widget _app(Widget child) => MaterialApp(
 );
 
 void main() {
+  _pillTests();
   const text = 'Making the audio…';
 
   testWidgets('shows from the tap and clears on success', (tester) async {
@@ -132,4 +133,52 @@ void main() {
     gate.complete();
     await tester.pump();
   });
+}
+
+void _pillStaysClearOfComposer({required double keyboard}) {
+  testWidgets('sits at the top, clear of the composer (keyboard $keyboard)', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(400, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final gate = Completer<void>();
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(TweakcnThemes.t3Chat),
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(
+            viewPadding: const EdgeInsets.only(top: 47, bottom: 34),
+            viewInsets: EdgeInsets.only(bottom: keyboard),
+          ),
+          child: child!,
+        ),
+        home: Scaffold(
+          body: Column(
+            children: [
+              _Host(work: (p) => gate.future),
+              const Spacer(),
+              const TextField(key: Key('composer')),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('go'));
+    await tester.pump();
+    final pill = tester.getRect(find.byType(ShareProgressPill));
+    // The composer sits above the keyboard (or the home indicator) and is at
+    // least 56 high.
+    final composerTop = 800 - (keyboard > 0 ? keyboard : 34) - 56;
+    expect(pill.bottom, lessThan(composerTop));
+    expect(pill.top, greaterThanOrEqualTo(47 + kTextTabBarHeight));
+    expect(pill.bottom, lessThan(200));
+    gate.complete();
+    await tester.pump();
+  });
+}
+
+void _pillTests() {
+  _pillStaysClearOfComposer(keyboard: 0);
+  _pillStaysClearOfComposer(keyboard: 336);
 }

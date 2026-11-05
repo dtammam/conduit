@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 
 import '../../../shared/theme/theme_extensions.dart';
+import '../../../shared/widgets/adaptive_toolbar_components.dart';
 import '../../../shared/widgets/conduit_components.dart';
 
 /// A small pill with a spinner and a line of text, shown over the chat while
@@ -67,8 +68,9 @@ class ShareProgress {
   final ValueNotifier<String> _message;
   bool _done = false;
 
-  /// Puts the pill above the bottom of the screen. Returns null without an
-  /// overlay.
+  /// Puts the pill at the top of the screen, below the status bar and the app
+  /// bar, so it never covers the composer (keyboard up or down). Returns null
+  /// without an overlay.
   static ShareProgress? show(BuildContext context, String message) {
     final overlay = Overlay.maybeOf(context, rootOverlay: true);
     if (overlay == null) return null;
@@ -77,7 +79,10 @@ class ShareProgress {
       builder: (context) => Positioned(
         left: Spacing.lg,
         right: Spacing.lg,
-        bottom: MediaQuery.viewPaddingOf(context).bottom + 96,
+        top:
+            MediaQuery.viewPaddingOf(context).top +
+            conduitAdaptiveToolbarHeightOf(context) +
+            Spacing.sm,
         child: IgnorePointer(
           child: Center(
             child: ValueListenableBuilder<String>(

@@ -1,7 +1,11 @@
 import 'dart:async';
 
+import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart' show FocusManager;
 import 'package:riverpod/riverpod.dart';
 
+import 'package:conduit_core/features/chat/providers/chat_providers.dart'
+    show composerAutofocusEnabledProvider;
 import 'package:conduit_core/providers/app_providers.dart';
 
 import '../../../../shared/services/navigation_service.dart';
@@ -19,6 +23,18 @@ class VoiceCallStartException implements Exception {
 
   @override
   String toString() => message;
+}
+
+/// Hides the keyboard for voice mode and keeps the composer from taking focus
+/// back on its own. Leaving voice mode does not bring the keyboard back.
+void dismissComposerForVoiceMode(Ref ref) {
+  try {
+    ref.read(composerAutofocusEnabledProvider.notifier).set(false);
+  } catch (_) {}
+  FocusManager.instance.primaryFocus?.unfocus();
+  try {
+    SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
+  } catch (_) {}
 }
 
 /// Unified launcher for all voice-call entry points.
@@ -42,6 +58,9 @@ class VoiceCallLauncher {
       await NavigationService.navigateToChat();
       await Future<void>.delayed(const Duration(milliseconds: 50));
     }
+
+    // Every entry point passes through here: hide the keyboard once.
+    dismissComposerForVoiceMode(_ref);
 
     final result = await _ref
         .read(chatVoiceModeControllerProvider.notifier)
