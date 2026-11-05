@@ -220,4 +220,30 @@ void main() {
     await r.settle();
     expect(r.renders, isEmpty);
   });
+
+  test('Share while a background render runs: it is dropped, Share keeps one take', () async {
+    final r = _Rig();
+    r.gates['a'] = Completer<void>();
+    r.prefetcher.replyFinished(r.item('a'));
+    await r.settle();
+    expect(r.renders, ['a']);
+    // Share is pressed: the background render is dropped, not waited on.
+    r.prefetcher.drop('a');
+    // Share's own render (priority above background) makes the take.
+    final shareTake = SpeechTake(
+      file: File('/tmp/share-a.mp3'),
+      extension: 'mp3',
+      created: DateTime(2026),
+      bytes: 1,
+      messageId: 'a',
+      voiceKey: r.voice,
+    );
+    r.takes['a|${r.voice}'] = shareTake;
+    r.gates['a']!.complete();
+    await r.settle();
+    // The background result was thrown away: Share's take is the one kept.
+    expect(r.takes['a|${r.voice}'], same(shareTake));
+    expect(r.takes, hasLength(1));
+    expect(r.renders, ['a'], reason: 'no second background render');
+  });
 }

@@ -1040,22 +1040,9 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
         }
       }
 
-      // A background render of this reply already running is the same work:
-      // wait for it (the pill shows) rather than render twice.
-      final inFlight = ref
-          .read(replyAudioPrefetcherProvider)
-          .inFlightFor(_messageId);
-      if (inFlight != null) {
-        _shareProgress = ShareProgress.show(
-          context,
-          asVideo ? l10n.shareAsVideoPreparing : l10n.shareAsMp3Preparing,
-        );
-        try {
-          await inFlight.timeout(const Duration(minutes: 5));
-        } catch (_) {}
-        _endShareProgress();
-        if (!mounted) return;
-      }
+      // A background render of this reply is not waited on (it ranks below a
+      // pressed Share on the relay): it is dropped and Share sends its own.
+      ref.read(replyAudioPrefetcherProvider).drop(_messageId);
       final take = await flow.choose(
         request,
         preview: preview,

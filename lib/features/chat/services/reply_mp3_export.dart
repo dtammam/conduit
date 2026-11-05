@@ -68,14 +68,24 @@ class ReplyMp3Export {
   /// Starts the relay's export with the Voice provider's client ([dio] has the
   /// provider's base address and key). Null when the relay has no export
   /// (404), so the caller falls back.
-  static Future<Mp3ExportTicket?> startWith(Dio dio, String text) async {
+  ///
+  /// [background] marks a render nobody is waiting for (preparing a reply's
+  /// audio ahead): the relay ranks it below live speech and below a Share or
+  /// Try again, which send no priority header.
+  static Future<Mp3ExportTicket?> startWith(
+    Dio dio,
+    String text, {
+    bool background = false,
+  }) async {
     try {
       final response = await dio.post<Object?>(
         'audio/export',
         data: {'text': text, 'wait': false},
         options: Options(
           sendTimeout: const Duration(seconds: 20),
-          receiveTimeout: const Duration(seconds: 30),
+          // The relay answers at once with a link; generous in case it is busy.
+          receiveTimeout: const Duration(seconds: 60),
+          headers: {if (background) priorityHeader: 'background'},
         ),
       );
       final ticket = Mp3ExportTicket.fromJson(response.data);
@@ -88,6 +98,9 @@ class ReplyMp3Export {
       rethrow;
     }
   }
+
+  /// The header that ranks a render below live speech and a pressed Share.
+  static const String priorityHeader = 'x-audio-export-priority';
 
   /// Fetches a signed export link; the relay holds the request until the
   /// file is ready (up to 10 minutes).

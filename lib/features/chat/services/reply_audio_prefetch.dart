@@ -45,7 +45,7 @@ class ReplyAudioPrefetcher {
     this.recheck = const Duration(seconds: 4),
     this.maxRechecks = 45,
     this.openCap = 5,
-    this.maxChars = 6000,
+    this.maxChars = 4000,
   });
 
   final bool Function() enabled;
@@ -73,7 +73,10 @@ class ReplyAudioPrefetcher {
   /// Most replies rendered when a chat is opened (newest first).
   final int openCap;
 
-  /// Longer replies are left for Share to render on request.
+  /// Longer replies are left for Share to render on request. Background
+  /// exports yield to live speech and can run well over their measured time;
+  /// the relay holds a render link for 10 minutes, so this keeps one well
+  /// inside it (about 4 minutes of audio).
   final int maxChars;
 
   final List<_Job> _queue = <_Job>[];
@@ -109,8 +112,9 @@ class ReplyAudioPrefetcher {
     if (_enqueue(item, front: false)) _openAccepted++;
   }
 
-  /// Listen was pressed (or Share took over): this reply's render, queued or
-  /// running, is dropped.
+  /// Listen was pressed, or Share was (Share sends its own request, ranked
+  /// above background ones): this reply's background render, queued or
+  /// running, is dropped and its result thrown away.
   void drop(String messageId) {
     _queue.removeWhere((job) {
       if (job.item.messageId != messageId) return false;

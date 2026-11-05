@@ -33,7 +33,11 @@ final replyAudioPrefetcherProvider = Provider<ReplyAudioPrefetcher>((ref) {
             : (text) async {
                 final lease = pool.acquire(voice.profile);
                 try {
-                  return await ReplyMp3Export.startWith(lease.dio, text);
+                  return await ReplyMp3Export.startWith(
+                    lease.dio,
+                    text,
+                    background: true,
+                  );
                 } finally {
                   lease.release();
                 }
