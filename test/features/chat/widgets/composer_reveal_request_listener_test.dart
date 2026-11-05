@@ -48,7 +48,8 @@ void main() {
 
     check(layoutKey.currentState!.isOpen).isFalse();
     check(container.read(composerRevealRequestProvider)).isFalse();
-    // The composer is shown, but a share never raises the keyboard.
+    // The reveal only shows the composer; typing is a separate ask
+    // (composerFocusIntentProvider) that a share or an intent makes.
     check(container.read(inputFocusTriggerProvider)).equals(focusTickBefore);
   });
 

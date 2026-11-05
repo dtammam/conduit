@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:conduit/features/chat/widgets/composer_focus_intent.dart';
 import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
@@ -448,8 +449,8 @@ class HomeWidgetCoordinator extends _$HomeWidgetCoordinator {
   /// Bumps [inputFocusTriggerProvider] once so the composer takes focus after
   /// attachments are added — independent of when the uploads finish.
   void _focusComposer() {
-    // Kept as the place to decide it later: the composer no longer takes
-    // focus on its own when a widget action opens the app (2026-11-05).
+    if (!ref.mounted) return;
+    ref.read(composerFocusIntentProvider.notifier).request();
   }
 
   /// Update widget data displayed on home screen.

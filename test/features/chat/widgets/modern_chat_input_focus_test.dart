@@ -1,5 +1,6 @@
 import 'package:checks/checks.dart';
 import 'package:conduit/core/startup/omni_launch_gate.dart';
+import 'package:conduit/features/chat/widgets/composer_focus_intent.dart';
 import 'package:conduit/features/chat/widgets/modern_chat_input.dart';
 import 'package:conduit/l10n/app_localizations.dart';
 import 'package:conduit/l10n/conduit_localizations.dart';
@@ -126,5 +127,77 @@ void main() {
     container.read(inputFocusTriggerProvider.notifier).increment();
     await tester.pump(const Duration(milliseconds: 300));
     check(_focused(tester)).isTrue();
+  });
+
+  group('an explicit ask to type', () {
+    testWidgets('focuses the composer with the cursor after the shared text', (
+      tester,
+    ) async {
+      final container = await _mount(tester);
+      container.read(prefilledInputTextProvider.notifier).set('shared words');
+      container.read(composerFocusIntentProvider.notifier).request();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      check(_focused(tester)).isTrue();
+      final field = tester.widget<TextField>(find.byType(TextField));
+      check(field.controller!.text).equals('shared words');
+      check(field.controller!.selection.baseOffset).equals(12);
+      check(field.controller!.selection.extentOffset).equals(12);
+      check(container.read(composerFocusIntentProvider)).isFalse();
+    });
+
+    testWidgets(
+      'an ask made before the composer exists is served once it does',
+      (tester) async {
+        final early = ProviderContainer(
+          overrides: [apiServiceProvider.overrideWithValue(null)],
+        );
+        addTearDown(early.dispose);
+        early.read(composerFocusIntentProvider.notifier).request();
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: early,
+            child: MaterialApp(
+              localizationsDelegates: conduitLocalizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              home: Scaffold(
+                body: Align(
+                  alignment: Alignment.bottomCenter,
+                  child: ModernChatInput(onSendMessage: (_) {}),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pump(const Duration(milliseconds: 300));
+        check(_focused(tester)).isTrue();
+      },
+    );
+
+    testWidgets(
+      'on a cold start it waits for the launch gate, no flash before',
+      (tester) async {
+        OmniLaunchGate.settled.value = false;
+        addTearDown(() => OmniLaunchGate.settled.value = true);
+        final container = await _mount(tester);
+        container.read(composerFocusIntentProvider.notifier).request();
+        await tester.pump(const Duration(milliseconds: 300));
+        check(_focused(tester)).isFalse();
+        check(container.read(composerFocusIntentProvider)).isTrue();
+        OmniLaunchGate.settled.value = true;
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+        check(_focused(tester)).isTrue();
+      },
+    );
+
+    testWidgets('without an ask a plain open and a reveal leave it down', (
+      tester,
+    ) async {
+      final container = await _mount(tester);
+      container.read(composerRevealRequestProvider.notifier).request();
+      await tester.pump(const Duration(milliseconds: 300));
+      check(_focused(tester)).isFalse();
+    });
   });
 }

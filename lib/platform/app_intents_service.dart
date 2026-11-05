@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
+import 'package:conduit/features/chat/widgets/composer_focus_intent.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -1056,9 +1057,11 @@ class AppIntentCoordinator extends _$AppIntentCoordinator
       startNewChat(ref);
     }
 
-    // [focusComposer] no longer raises the keyboard: an app intent, a quick
-    // action or a Siri phrase opens the chat with the keyboard down, and it
-    // comes up when the person taps the field (Dean, 2026-11-05).
+    // An app intent, a quick action or a Siri phrase that asks to type brings
+    // the keyboard up once the composer is ready (Dean, 2026-11-05).
+    if (focusComposer) {
+      ref.read(composerFocusIntentProvider.notifier).request();
+    }
   }
 
   Future<void> _startVoiceCall() async {

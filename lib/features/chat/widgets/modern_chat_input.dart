@@ -1,4 +1,5 @@
 import 'package:conduit/core/startup/omni_launch_gate.dart';
+import 'package:conduit/features/chat/widgets/composer_focus_intent.dart';
 import 'package:conduit/shared/widgets/platform_ui/platform_ui.dart';
 import 'package:flutter/foundation.dart'
     show ValueNotifier, kIsWeb, visibleForTesting;
@@ -674,6 +675,7 @@ class _ModernChatInputState extends ConsumerState<ModernChatInput>
       _lastHandledFocusTick = ref.read(inputFocusTriggerProvider);
     } catch (_) {}
     WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _serveFocusIntent());
 
     // Apply any prefilled text on first frame (focus handled via inputFocusTrigger)
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -767,6 +769,10 @@ class _ModernChatInputState extends ConsumerState<ModernChatInput>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    final intentListener = _intentListener;
+    if (intentListener != null) {
+      OmniLaunchGate.settled.removeListener(intentListener);
+    }
     // Note: Avoid using ref in dispose as per Riverpod best practices
     // The focus state will be naturally cleared when the widget is disposed
     _controller.removeListener(_handleComposerChanged);
@@ -826,6 +832,46 @@ class _ModernChatInputState extends ConsumerState<ModernChatInput>
       return;
     }
     setState(() {});
+  }
+
+  VoidCallback? _intentListener;
+
+  /// Serves an explicit ask to type ([composerFocusIntentProvider]): after the
+  /// launch has settled (no keyboard flash before then), one frame after any
+  /// text was filled in, with the cursor at its end.
+  void _serveFocusIntent() {
+    if (!mounted || _isDeactivated) return;
+    if (!ref.read(composerFocusIntentProvider)) return;
+    if (!OmniLaunchGate.settled.value) {
+      if (_intentListener != null) return;
+      void onSettled() {
+        if (!OmniLaunchGate.settled.value) return;
+        OmniLaunchGate.settled.removeListener(onSettled);
+        _intentListener = null;
+        WidgetsBinding.instance.ensureVisualUpdate();
+        WidgetsBinding.instance.addPostFrameCallback(
+          (_) => _serveFocusIntent(),
+        );
+      }
+
+      _intentListener = onSettled;
+      OmniLaunchGate.settled.addListener(onSettled);
+      return;
+    }
+    if (!widget.enabled) return;
+    WidgetsBinding.instance.ensureVisualUpdate();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _isDeactivated || !widget.enabled) return;
+      if (!ref.read(composerFocusIntentProvider.notifier).consume()) return;
+      try {
+        ref.read(composerAutofocusEnabledProvider.notifier).set(true);
+      } catch (_) {}
+      final length = _controller.text.length;
+      if (length > 0) {
+        _controller.selection = TextSelection.collapsed(offset: length);
+      }
+      _focusNode.requestFocus();
+    });
   }
 
   @override
@@ -3242,6 +3288,13 @@ class _ModernChatInputState extends ConsumerState<ModernChatInput>
       }
     });
 
+    ref.listen<bool>(composerFocusIntentProvider, (previous, next) {
+      if (next) {
+        WidgetsBinding.instance.addPostFrameCallback(
+          (_) => _serveFocusIntent(),
+        );
+      }
+    });
     ref.listen<String?>(prefilledInputTextProvider, (previous, next) {
       final incoming = next?.trim();
       if (incoming == null || incoming.isEmpty) return;

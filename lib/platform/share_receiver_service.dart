@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:io';
 
+import 'package:conduit/features/chat/widgets/composer_focus_intent.dart';
 import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
@@ -1384,7 +1385,9 @@ Future<SharedPayloadProcessResult> _processPayload(
     // Prefill text in the composer (do not auto-send) and request focus
     if (hasText) {
       ref.read(prefilledInputTextProvider.notifier).set(text);
-      // The shared text waits in the composer with the keyboard down.
+      // The shared text fills in and the keyboard comes up with the cursor
+      // at its end, once the composer is ready.
+      ref.read(composerFocusIntentProvider.notifier).request();
     }
     // Show the composer that now holds the share. Navigating to the chat
     // route is not enough on phones: the chats drawer may still cover it.
