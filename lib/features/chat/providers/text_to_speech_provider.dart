@@ -280,7 +280,15 @@ class TextToSpeechController extends Notifier<TextToSpeechState> {
       if (!ref.mounted) {
         return;
       }
-      await _service.speak(cleanText);
+      final chat = ref.read(activeConversationProvider);
+      await _service.speak(
+        cleanText,
+        take: SpeechTakeTarget(
+          messageId: messageId,
+          text: text,
+          chatId: chat == null ? null : conversationScopedId(chat),
+        ),
+      );
       if (!ref.mounted) {
         return;
       }

@@ -9,7 +9,8 @@ import 'server_speech.dart';
 /// Every request goes to [primary] first. When it is not set up for the job
 /// or the request fails, the same request goes to [fallback] and the failure
 /// is logged, so voice keeps working when the Voice provider is down.
-final class FallbackServerSpeech implements StreamingServerSpeech {
+final class FallbackServerSpeech
+    implements StreamingServerSpeech, SpeechVoiceIdentity {
   const FallbackServerSpeech({required this.primary, required this.fallback});
 
   final ServerSpeechProvider primary;
@@ -23,6 +24,15 @@ final class FallbackServerSpeech implements StreamingServerSpeech {
 
   @override
   bool get canTranscribe => primary.canTranscribe || fallback.canTranscribe;
+
+  /// The voice of whoever speaks: the primary's while it can.
+  @override
+  String get voiceKey {
+    final speaker = primary.canSynthesize ? primary : fallback;
+    return speaker is SpeechVoiceIdentity
+        ? (speaker as SpeechVoiceIdentity).voiceKey
+        : speaker.source.name;
+  }
 
   @override
   bool get canSynthesize => primary.canSynthesize || fallback.canSynthesize;

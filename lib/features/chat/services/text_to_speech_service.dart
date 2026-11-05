@@ -162,7 +162,7 @@ class TextToSpeechService implements VoiceModeSpeech {
   }
 
   /// Speaks the given text.
-  Future<void> speak(String text) async {
+  Future<void> speak(String text, {SpeechTakeTarget? take}) async {
     if (text.trim().isEmpty) {
       throw ArgumentError('Cannot speak empty text');
     }
@@ -171,7 +171,7 @@ class TextToSpeechService implements VoiceModeSpeech {
       await initialize();
     }
 
-    await TtsManager.instance.speak(text);
+    await TtsManager.instance.speak(text, take: take);
   }
 
   /// Starts an incremental TTS session for streaming assistant responses.

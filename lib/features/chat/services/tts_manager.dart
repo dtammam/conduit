@@ -22,6 +22,8 @@ import 'package:conduit_markdown/conduit_markdown.dart' as speech;
 import 'package:conduit_core/voice/voice_events.dart';
 
 import 'native_tts_service.dart';
+import 'speech_take_recorder.dart';
+import 'speech_take_store.dart';
 
 export 'package:conduit_core/voice/voice_events.dart'
     show
@@ -106,6 +108,20 @@ bool _isServerTtsPlaybackComplete({
   return processingState == AudioProcessingState.completed &&
       currentIndex >= lastChunkIndex &&
       lastEnqueuedIndex >= lastChunkIndex;
+}
+
+/// Where the take of a spoken reply should be kept: the message it belongs to
+/// and the text it is read from.
+class SpeechTakeTarget {
+  const SpeechTakeTarget({
+    required this.messageId,
+    required this.text,
+    this.chatId,
+  });
+
+  final String messageId;
+  final String text;
+  final String? chatId;
 }
 
 // =============================================================================
@@ -252,6 +268,18 @@ class TtsManager {
   /// finished. Stopping cancels them so no request outlives the playback.
   final List<ProgressiveAudio> _serverProgressive = <ProgressiveAudio>[];
 
+  /// Keeps the clips of the reply now playing, to save as a take if it plays
+  /// to its end (null for device speech and when nothing is kept).
+  SpeechTakeRecorder? _takeRecorder;
+  SpeechTakeStore _takeStore = SpeechTakeStore.instance;
+
+  /// The save the last completed reply started, for tests.
+  @visibleForTesting
+  Future<SpeechTake?>? lastTakeSave;
+
+  @visibleForTesting
+  set takeStoreForTesting(SpeechTakeStore store) => _takeStore = store;
+
   /// Bumped whenever playback state is reset, so a request that was in flight
   /// can tell its session is over once it answers.
   int _serverEpoch = 0;
@@ -275,6 +303,38 @@ class TtsManager {
   /// Whether the user picks the server voice in Audio settings; see
   /// [ServerSpeechProvider.offersVoiceChoice].
   bool get serverOffersVoiceChoice => _serverSpeech?.offersVoiceChoice == true;
+
+  /// Names the model and voice server speech would use now, for telling one
+  /// voice's saved take from another's; null without server speech.
+  String? get voiceKey {
+    final speech = _serverSpeech;
+    if (speech == null) return null;
+    if (speech is SpeechVoiceIdentity) {
+      return (speech as SpeechVoiceIdentity).voiceKey;
+    }
+    final voice = _config.serverVoice?.trim() ?? '';
+    return '${speech.source.name}|$voice';
+  }
+
+  SpeechTakeRecorder? _newTakeRecorder(
+    TtsPlaybackSession session,
+    SpeechTakeTarget? target,
+  ) {
+    try {
+      final key = voiceKey;
+      if (key == null) return null;
+      return SpeechTakeRecorder(
+        store: _takeStore,
+        voiceKey: key,
+        sessionName: 'tts-${session.id}',
+        messageId: target?.messageId ?? '',
+        chatId: target?.chatId,
+        text: target?.text,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
 
   /// Whether any TTS is available.
   bool get isAvailable => _deviceEngineAvailable || serverAvailable;
@@ -407,7 +467,11 @@ class TtsManager {
   ///
   /// Returns the playback session. If another session is active, it will be
   /// cancelled first.
-  Future<TtsPlaybackSession?> speak(String text, {bool? useServer}) async {
+  Future<TtsPlaybackSession?> speak(
+    String text, {
+    bool? useServer,
+    SpeechTakeTarget? take,
+  }) async {
     if (text.trim().isEmpty) {
       return null;
     }
@@ -436,6 +500,9 @@ class TtsManager {
       serverSpeech: shouldUseServer ? _serverSpeech : null,
     );
     _activeSession = session;
+    _takeRecorder = shouldUseServer && take != null
+        ? _newTakeRecorder(session, take)
+        : null;
 
     // Start playback
     try {
@@ -467,6 +534,8 @@ class TtsManager {
             useServerTts: false,
           );
           _activeSession = fallbackSession;
+          _takeRecorder?.discard();
+          _takeRecorder = null;
           await _startDevicePlayback(fallbackSession);
           return fallbackSession;
         } catch (e2) {
@@ -477,6 +546,8 @@ class TtsManager {
       }
 
       _activeSession = null;
+      _takeRecorder?.discard();
+      _takeRecorder = null;
       return null;
     }
   }
@@ -495,6 +566,8 @@ class TtsManager {
       serverSpeech: shouldUseServer ? _serverSpeech : null,
     );
     _activeSession = session;
+    // A voice call has no message yet: the take is kept by its text and voice.
+    _takeRecorder = shouldUseServer ? _newTakeRecorder(session, null) : null;
     _isStreamingSession = true;
     _streamingFinalized = false;
     _streamingFedChunkCount = 0;
@@ -538,6 +611,9 @@ class TtsManager {
     }
 
     _streamingFinalized = true;
+    if (finalText != null && finalText.trim().isNotEmpty) {
+      _takeRecorder?.text = finalText;
+    }
     await _enqueueStreamingText(session, finalText ?? '', finalized: true);
     if (session.chunks.isEmpty) {
       _activeSession = null;
@@ -1289,6 +1365,7 @@ class TtsManager {
         _markStarved();
         return;
       }
+      _keepTake(session);
       _activeSession = null;
       _resetPlaybackState();
       _emitEvent(const TtsCompleted());
@@ -1315,6 +1392,20 @@ class TtsManager {
       final voice = _serverPlaybackVoice ?? _config.serverVoice;
       unawaited(_recoverMissingServerChunk(session, voice, nextIndex));
     }
+  }
+
+  /// Every sentence has played: hand the recorder the word so it joins what
+  /// it kept and saves it. Never waits and never throws into playback.
+  void _keepTake(TtsPlaybackSession session) {
+    final recorder = _takeRecorder;
+    _takeRecorder = null;
+    if (recorder == null) return;
+    try {
+      if (_isStreamingSession && recorder.text == null) {
+        recorder.text = session.chunks.join(' ');
+      }
+      lastTakeSave = recorder.finish(clipCount: session.chunks.length);
+    } catch (_) {}
   }
 
   Future<void> _recoverMissingServerChunk(
@@ -1596,6 +1687,8 @@ class TtsManager {
     _deviceWaitingForStreamingChunk = false;
     _serverLastFetchScheduledIndex = -1;
     _serverFetchingIndices.clear();
+    _takeRecorder?.discard();
+    _takeRecorder = null;
     _cancelServerProgressive();
     unawaited(_stopServerBackgroundLease());
     unawaited(_cleanupServerTempFiles());
@@ -1616,6 +1709,12 @@ class TtsManager {
       _serverAudioBuffer.add(null);
     }
     _serverAudioBuffer[index] = chunk;
+    _takeRecorder?.addClip(
+      index,
+      progressive: chunk.progressive,
+      bytes: chunk.progressive == null ? chunk.bytes : null,
+      mimeType: chunk.mimeType,
+    );
   }
 
   bool _hasBufferedServerChunk(int index) {

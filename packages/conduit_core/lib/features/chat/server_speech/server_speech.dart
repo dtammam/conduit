@@ -72,3 +72,10 @@ abstract interface class StreamingServerSpeech implements ServerSpeechProvider {
     double? speed,
   });
 }
+
+/// A backend that can say which voice it speaks in, as a stable string, so a
+/// saved take can tell one voice from another.
+abstract interface class SpeechVoiceIdentity {
+  /// Names the model and voice a request would be spoken in.
+  String get voiceKey;
+}

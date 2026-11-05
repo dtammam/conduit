@@ -17,7 +17,8 @@ import 'transcription_response.dart';
 
 /// Speech through the Voice provider's OpenAI-compatible audio endpoints,
 /// reached with the same client, key, headers and certificates its chats use.
-final class DirectServerSpeech implements StreamingServerSpeech {
+final class DirectServerSpeech
+    implements StreamingServerSpeech, SpeechVoiceIdentity {
   const DirectServerSpeech({
     required DirectConnectionProfile profile,
     required DirectVoiceProviderSettings settings,
@@ -44,6 +45,10 @@ final class DirectServerSpeech implements StreamingServerSpeech {
 
   @override
   bool get streamsSpeech => _settings.streamSpeech && _settings.canSynthesize;
+
+  @override
+  String get voiceKey =>
+      'direct|${_settings.speechModel ?? ''}|${_settings.speechVoice ?? ''}';
 
   /// The interval, in seconds, a streaming server cuts its audio at.
   static const double streamingIntervalSeconds = 0.5;

@@ -2,11 +2,11 @@ import 'package:checks/checks.dart';
 import 'package:conduit/features/chat/providers/text_to_speech_provider.dart';
 import 'package:conduit/features/chat/services/reply_mp3_export.dart';
 import 'package:conduit/features/chat/services/text_to_speech_service.dart';
+import 'package:conduit/features/chat/services/tts_manager.dart' show SpeechTakeTarget;
 
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:conduit_core/conduit_core.dart';
 import 'package:conduit_core/features/chat/voice_mode/chat_voice_mode_controller.dart';
 import 'package:conduit_core/services/settings_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -58,7 +58,7 @@ class _Service extends TextToSpeechService {
   }) async => true;
 
   @override
-  Future<void> speak(String text) async => spoken.add(text);
+  Future<void> speak(String text, {SpeechTakeTarget? take}) async => spoken.add(text);
 
   @override
   Future<void> stop() async => _cancel?.call();
