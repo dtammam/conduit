@@ -815,7 +815,9 @@ void main() {
       await tester.pump();
       await tester.tap(find.byKey(const ValueKey('assistant-avatar-circle')));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('omni-tab-appearance')));
+      await tester.tap(find.byKey(const ValueKey('omni-tab-more')));
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.byKey(const ValueKey('musey-more-appearance')));
       await tester.pumpAndSettle();
       // Hidden while message bubbles are off.
       check(find.byKey(const ValueKey('bubble-color-auto')).evaluate())

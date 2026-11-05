@@ -308,7 +308,9 @@ void main() {
     testWidgets('Approvals says nothing waits', (tester) async {
       await mount(tester);
       await openSheet(tester);
-      await tester.tap(find.byKey(const ValueKey('omni-tab-approvals')));
+      await tester.tap(find.byKey(const ValueKey('omni-tab-more')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('musey-more-approvals')));
       await tester.pumpAndSettle();
 
       check(find.text('Nothing waiting for you').evaluate()).length.equals(1);
@@ -328,8 +330,7 @@ void main() {
       check(find.byKey(const ValueKey('assistant-approval-deny')).evaluate())
           .length
           .equals(1);
-      check(find.byKey(const ValueKey('omni-tab-badge-approvals')).evaluate())
-          .length
+      check(find.byKey(const ValueKey('omni-tab-badge-more')).evaluate()).length
           .equals(1);
     });
 
@@ -356,7 +357,7 @@ void main() {
       await openSheet(tester);
 
       check(find.byTooltip('Routines').evaluate()).isEmpty();
-      check(find.byTooltip('Appearance').evaluate()).length.equals(1);
+      check(find.byTooltip('More').evaluate()).length.equals(1);
     });
 
     testWidgets('Routines shows when automations are available', (
@@ -391,12 +392,7 @@ void main() {
         check(find.byKey(const ValueKey('assistant-sheet-tabs')).evaluate())
             .isEmpty();
 
-        for (final id in const [
-          'approvals',
-          'routines',
-          'appearance',
-          'activity',
-        ]) {
+        for (final id in const ['feed', 'routines', 'more', 'ideas']) {
           await tester.tap(find.byKey(ValueKey('omni-tab-$id')));
           await tester.pumpAndSettle();
           check(tester.getRect(pill)).equals(pillAt);
@@ -435,7 +431,9 @@ void main() {
     testWidgets('Appearance keeps the four state rows', (tester) async {
       await mount(tester);
       await openSheet(tester);
-      await tester.tap(find.byKey(const ValueKey('omni-tab-appearance')));
+      await tester.tap(find.byKey(const ValueKey('omni-tab-more')));
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.byKey(const ValueKey('musey-more-appearance')));
       await tester.pumpAndSettle();
 
       for (final state in const ['idle', 'working', 'making', 'done']) {
@@ -454,10 +452,10 @@ void main() {
         await openSheet(tester);
         final clear = find.byKey(const ValueKey('assistant-activity-clear'));
         for (final (id, title) in const [
-          ('activity', 'Activity'),
-          ('approvals', 'Approvals'),
+          ('feed', 'Feed'),
+          ('ideas', 'Ideas'),
           ('routines', 'Routines'),
-          ('appearance', 'Appearance'),
+          ('more', 'More'),
         ]) {
           await tester.tap(find.byKey(ValueKey('omni-tab-$id')));
           await tester.pumpAndSettle();
@@ -472,8 +470,21 @@ void main() {
           );
           check(text.data).equals(title);
           check(text.style?.fontSize).equals(28);
-          check(clear.evaluate().length).equals(id == 'activity' ? 1 : 0);
+          check(clear.evaluate()).isEmpty();
+          check(
+            find.byKey(const ValueKey('musey-feed-refresh')).evaluate().length,
+          ).equals(id == 'feed' ? 1 : 0);
         }
+        // Activity, under More, has the clear action; its top-left button goes
+        // back to More, which closes the page.
+        await tester.tap(find.byKey(const ValueKey('musey-more-activity')));
+        await tester.pumpAndSettle();
+        check(clear.evaluate()).length.equals(1);
+        await tester.tap(find.byKey(const ValueKey('assistant-page-menu')));
+        await tester.pumpAndSettle();
+        check(find.byKey(const ValueKey('musey-more-list')).evaluate()).length
+            .equals(1);
+        check(clear.evaluate()).isEmpty();
       },
     );
 

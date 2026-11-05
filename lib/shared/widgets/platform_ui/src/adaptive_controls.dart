@@ -45,6 +45,17 @@ IconData? cupertinoIconForSFSymbol(String symbol) => switch (symbol) {
   'checkmark.seal' => CupertinoIcons.checkmark_seal,
   'alarm' => CupertinoIcons.alarm,
   'paintpalette' => CupertinoIcons.paintbrush,
+  'line.3.horizontal' => CupertinoIcons.line_horizontal_3,
+  'square.grid.2x2' => CupertinoIcons.square_grid_2x2,
+  'lightbulb' => CupertinoIcons.lightbulb,
+  'newspaper' => CupertinoIcons.news,
+  'heart' => CupertinoIcons.heart,
+  'heart.fill' => CupertinoIcons.heart_fill,
+  'info.circle' => CupertinoIcons.info,
+  'arrow.clockwise' => CupertinoIcons.arrow_clockwise,
+  'chevron.left' => CupertinoIcons.chevron_left,
+  'chevron.right' => CupertinoIcons.chevron_right,
+  'link' => CupertinoIcons.link,
   _ => null,
 };
 

@@ -7,6 +7,7 @@ import 'package:conduit/l10n/conduit_localizations.dart';
 import 'package:conduit/shared/theme/app_theme.dart';
 import 'package:conduit/shared/theme/tweakcn_themes.dart';
 import 'package:conduit_core/features/automations/providers/automation_providers.dart';
+import 'package:conduit_core/models/openwebui_chat_prompt.dart';
 import 'package:conduit_core/services/settings_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
@@ -68,15 +69,16 @@ void main() {
       check(find.byKey(const ValueKey('omni-tab-bar')).evaluate()).length
           .equals(1);
       for (final (id, tab) in [
-        ('activity', AssistantSheetTab.activity),
-        ('approvals', AssistantSheetTab.approvals),
+        ('chat', AssistantSheetTab.chat),
+        ('feed', AssistantSheetTab.feed),
+        ('ideas', AssistantSheetTab.ideas),
         ('routines', AssistantSheetTab.routines),
-        ('appearance', AssistantSheetTab.appearance),
+        ('more', AssistantSheetTab.more),
       ]) {
         await tester.tap(find.byKey(ValueKey('omni-tab-$id')));
         check(opened.last).equals(tab);
       }
-      check(opened.length).equals(4);
+      check(opened.length).equals(5);
     });
   }
 
@@ -85,12 +87,11 @@ void main() {
     (tester) async {
       final semantics = tester.ensureSemantics();
       await _mount(tester);
-      for (final label in ['Activity', 'Approvals', 'Routines', 'Appearance']) {
+      for (final label in ['Chat', 'Feed', 'Ideas', 'Routines', 'More']) {
         check(find.text(label).evaluate()).isEmpty();
         check(find.byTooltip(label).evaluate()).length.equals(1);
         check(find.bySemanticsLabel(label).evaluate()).isNotEmpty;
       }
-      check(find.byKey(const ValueKey('omni-tab-chat')).evaluate()).isEmpty();
       semantics.dispose();
     },
   );
@@ -158,10 +159,10 @@ void main() {
       ),
     );
     await tester.pump();
-    check(find.byKey(const ValueKey('omni-tab-selected-approvals')).evaluate())
+    check(find.byKey(const ValueKey('omni-tab-selected-more')).evaluate())
         .length
         .equals(1);
-    check(find.byKey(const ValueKey('omni-tab-selected-activity')).evaluate())
+    check(find.byKey(const ValueKey('omni-tab-selected-feed')).evaluate())
         .isEmpty();
   });
 
@@ -185,12 +186,33 @@ void main() {
   testWidgets('no Routines button without a routines source', (tester) async {
     await _mount(tester, routines: false);
     check(find.byKey(const ValueKey('omni-tab-routines')).evaluate()).isEmpty();
-    check(find.byKey(const ValueKey('omni-tab-appearance')).evaluate()).length
+    check(find.byKey(const ValueKey('omni-tab-more')).evaluate()).length
         .equals(1);
   });
 
   testWidgets('no badge without a waiting approval', (tester) async {
     await _mount(tester);
+    check(find.byKey(const ValueKey('omni-tab-badge-more')).evaluate())
+        .isEmpty();
+  });
+
+  testWidgets('a waiting approval puts the dot on More, in the warning color', (
+    tester,
+  ) async {
+    await _mount(
+      tester,
+      approval: const AssistantApproval(
+        conversationId: 'chat',
+        prompt: OpenWebUiComposerPrompt(
+          identity: 'saved:m1:c1',
+          kind: OpenWebUiComposerPromptKind.toolApproval,
+          title: 'create_event',
+          message: '{}',
+        ),
+      ),
+    );
+    check(find.byKey(const ValueKey('omni-tab-badge-more')).evaluate()).length
+        .equals(1);
     check(find.byKey(const ValueKey('omni-tab-badge-approvals')).evaluate())
         .isEmpty();
   });

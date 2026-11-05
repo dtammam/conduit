@@ -91,6 +91,7 @@ import '../widgets/openwebui_chat_settings_sheet.dart';
 import '../widgets/modern_chat_input.dart';
 import '../widgets/user_message_bubble.dart';
 import '../reactions/quick_reply_reactions.dart';
+import '../widgets/routine_post_actions.dart' show isRoutinePostAt;
 import '../musey/break_prompt_bar.dart';
 import '../musey/musey_api.dart';
 import '../musey/musey_flags.dart';
@@ -3726,12 +3727,23 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       flaggedMessagesProvider.select((ids) => ids.contains(messageId)),
     );
     final museyOn = rowRef.watch(museyApiProvider.select((api) => api != null));
+    // A routine or check-in post of the Omni chat, not a reply to Dean.
+    final isRoutinePost =
+        isOmniChatId(rowRef.watch(activeConversationProvider.select((c) => c?.id))) &&
+        rowRef.watch(
+          chatMessagesProvider.select((messages) {
+            final i = messages.indexWhere((m) => m.id == messageId);
+            return isRoutinePostAt(messages, i);
+          }),
+        );
     Widget buildRow(
       QuickReplyReaction? quickReplyBadge,
     ) => assistant.AssistantMessageWidget(
       message: displayedMessage,
       isStreaming: latestMessage.isStreaming,
       showFollowUps: rowMetadata.showFollowUps,
+      isRoutinePost: isRoutinePost,
+      onDiscussPost: readOnly ? null : _handleQuickReplySend,
       // Suppress the mount fade for a settled (completed or failed) assistant so
       // it doesn't re-animate when its widget remounts — either as the live tail
       // on first load, or when it migrates into the history sliver as a
@@ -4322,9 +4334,13 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                           ))
                         OmniTabBar(
                           keyboardProgress: keyboardProgress,
-                          onOpen: (tab) => composerRef
-                              .read(assistantSheetRequestProvider.notifier)
-                              .open(tab: tab),
+                          selected: AssistantSheetTab.chat,
+                          onOpen: (tab) {
+                            if (tab == AssistantSheetTab.chat) return;
+                            composerRef
+                                .read(assistantSheetRequestProvider.notifier)
+                                .open(tab: tab);
+                          },
                         ),
                     ],
                   );

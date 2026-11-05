@@ -309,10 +309,17 @@ void main() {
     tester,
   ) async {
     await mountPage(tester, messages: transcript);
-    await tester.tap(find.byKey(const ValueKey('omni-tab-appearance')));
+    await tester.tap(find.byKey(const ValueKey('omni-tab-more')));
     for (var i = 0; i < 6; i++) {
       await tester.pump(const Duration(milliseconds: 200));
     }
+    await tester.tap(find.byKey(const ValueKey('musey-more-appearance')));
+    for (var i = 0; i < 3; i++) {
+      await tester.pump(const Duration(milliseconds: 200));
+    }
+    check(find.byKey(const ValueKey('assistant-appearance-header')).evaluate())
+        .length
+        .equals(1);
     check(find.byKey(const ValueKey('assistant-sheet-body')).evaluate()).length
         .equals(1);
   });

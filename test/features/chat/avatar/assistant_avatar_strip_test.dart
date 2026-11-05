@@ -340,7 +340,9 @@ void main() {
     await tester.pumpAndSettle();
 
     // The sheet opens on Activity; the state rows live under Appearance.
-    await tester.tap(find.byKey(const ValueKey('omni-tab-appearance')));
+    await tester.tap(find.byKey(const ValueKey('omni-tab-more')));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.byKey(const ValueKey('musey-more-appearance')));
     await tester.pumpAndSettle();
     // Exactly four slots, top to bottom: Idle, Working, Making, Done.
     check(AssistantActivity.values.map((state) => state.name).toList())

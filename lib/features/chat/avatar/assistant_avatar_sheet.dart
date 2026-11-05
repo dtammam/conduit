@@ -8,11 +8,19 @@ import 'package:conduit_core/features/automations/providers/automation_providers
 import 'package:conduit_core/providers/app_providers.dart';
 import 'package:conduit_core/services/settings_service.dart';
 import 'package:conduit_core/utils/debug_logger.dart';
+
+import 'dart:io';
+
 import 'package:flutter/widgets.dart';
+import 'package:video_player/video_player.dart';
+import 'package:conduit_core/features/chat/server_speech/server_speech_providers.dart';
+
+import 'persona_appearance_service.dart';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:material_ui/material_ui.dart'
-    show Material, MaterialPageRoute, Tooltip;
+    show MaterialPageRoute, Scaffold, Tooltip;
 
 import '../widgets/message_bubble_colors.dart';
 import 'assistant_action_log.dart';
@@ -21,6 +29,14 @@ import 'assistant_avatar_accent.dart';
 import 'assistant_avatar_media.dart';
 import 'assistant_pending_approval.dart';
 import 'omni_tab_bar.dart';
+import '../../routines/push_registration.dart';
+import '../musey/musey_feed_providers.dart';
+import '../musey/musey_feed_views.dart';
+
+import 'package:conduit/shared/widgets/adaptive_toolbar_components.dart';
+import 'package:conduit_core/features/chat/omni/omni_chat.dart'
+    show storedOmniChatId;
+
 import '../../routines/routines_tab.dart';
 
 const String _logScope = 'chat/avatar-activity';
@@ -55,11 +71,11 @@ String prettyToolPayload(String text) {
   return text;
 }
 
-/// The page behind the avatar circle and the bottom bar: Activity, Approvals,
-/// Routines and Appearance, each its own full page, as in Muse: a round menu
-/// button, the persona pill and an optional action on top, a large title,
-/// then the content. Moving between the four is the bottom bar only, with the
-/// current one selected.
+/// The pages behind the avatar circle and the bottom bar, as in Muse: Feed,
+/// Ideas, Routines and More (Activity, Approvals, Appearance), each its own
+/// full page: a round menu button, the persona pill and an optional action on
+/// top, a large title, then the content. Moving between them is the bottom
+/// bar only, with the current one selected.
 class AssistantAvatarSheet extends ConsumerStatefulWidget {
   const AssistantAvatarSheet({
     super.key,
@@ -80,7 +96,7 @@ class AssistantAvatarSheet extends ConsumerStatefulWidget {
   /// What the avatar circle shows right now; the model's initial when null.
   final Widget? avatar;
 
-  /// The tab to open on; Approvals while a prompt waits, else Activity.
+  /// The page to open on; Approvals while a prompt waits, else Activity.
   final AssistantSheetTab? initialTab;
 
   /// Limits the activity list to calls of these messages.
@@ -91,7 +107,7 @@ class AssistantAvatarSheet extends ConsumerStatefulWidget {
       _AssistantAvatarSheetState();
 }
 
-/// Opens the assistant page for [tab] over the chat, full screen.
+/// Opens the assistant page over the chat, full screen.
 Future<void> showAssistantPage(
   BuildContext context, {
   required AssistantAvatarSheet Function() builder,
@@ -108,19 +124,25 @@ class _AssistantAvatarSheetState extends ConsumerState<AssistantAvatarSheet> {
   late AssistantSheetTab _tab;
   Set<String>? _filter;
 
+  /// Activity, Approvals or Appearance was opened from the More page, so the
+  /// top-left button goes back there.
+  bool _fromMore = false;
+
   @override
   void initState() {
     super.initState();
     _filter = widget.messageIds;
-    _tab =
+    var tab =
         widget.initialTab ??
         (ref.read(assistantApprovalProvider) != null
             ? AssistantSheetTab.approvals
             : AssistantSheetTab.activity);
+    if (tab == AssistantSheetTab.chat) tab = AssistantSheetTab.activity;
+    _tab = tab;
     if (_tab == AssistantSheetTab.activity) _viewActivity();
   }
 
-  /// The Activity tab is on screen: the failures in it count as seen.
+  /// The Activity page is on screen: the failures in it count as seen.
   void _viewActivity() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -130,10 +152,61 @@ class _AssistantAvatarSheetState extends ConsumerState<AssistantAvatarSheet> {
     });
   }
 
+  /// A bar tap: the chat closes the page, the others switch to their page.
   void _select(AssistantSheetTab tab) {
+    if (tab == AssistantSheetTab.chat) {
+      Navigator.of(context).maybePop();
+      return;
+    }
+    _fromMore = false;
     if (tab == _tab) return;
     setState(() => _tab = tab);
     if (tab == AssistantSheetTab.activity) _viewActivity();
+  }
+
+  void _openFromMore(AssistantSheetTab tab) {
+    setState(() {
+      _fromMore = true;
+      _tab = tab;
+    });
+    if (tab == AssistantSheetTab.activity) _viewActivity();
+  }
+
+  void _back() {
+    if (_fromMore) {
+      setState(() {
+        _fromMore = false;
+        _tab = AssistantSheetTab.more;
+      });
+      return;
+    }
+    Navigator.of(context).maybePop();
+  }
+
+  /// Takes the person to the chat and sends [text] there as a normal message.
+  void _sendToChat(String text) {
+    final omniId = storedOmniChatId();
+    final active = ref.read(activeConversationProvider)?.id;
+    final chatId = omniId ?? active;
+    if (chatId == null) return;
+    final open = ref.read(assistantOpenChatProvider);
+    final reply = ref.read(routineReplyProvider.notifier);
+    Navigator.of(context).maybePop();
+    if (active != chatId) unawaited(open(chatId));
+    reply.request(RoutineReplyRequest(chatId: chatId, text: text));
+  }
+
+  Future<void> _startFeedRun() async {
+    final l10n = AppLocalizations.of(context)!;
+    final started = await ref.read(feedProvider.notifier).startRun();
+    if (!mounted) return;
+    AdaptiveSnackBar.show(
+      context,
+      message: started
+          ? l10n.museyFeedRefreshStarted
+          : l10n.museyFeedRefreshFailed,
+      type: AdaptiveSnackBarType.info,
+    );
   }
 
   Future<void> _confirmClear() async {
@@ -163,7 +236,7 @@ class _AssistantAvatarSheetState extends ConsumerState<AssistantAvatarSheet> {
     final l10n = AppLocalizations.of(context)!;
     final theme = context.conduitTheme;
     // Routines come from the account's scheduled tasks and from the routines
-    // server, so the tab is there when either exists.
+    // server, so the page is there when either exists.
     final routinesAvailable =
         ref.watch(automationsAvailableProvider) ||
         ref.watch(
@@ -178,14 +251,35 @@ class _AssistantAvatarSheetState extends ConsumerState<AssistantAvatarSheet> {
       AssistantSheetTab.approvals => l10n.assistantSheetTabApprovals,
       AssistantSheetTab.routines => l10n.assistantSheetTabRoutines,
       AssistantSheetTab.appearance => l10n.assistantSheetTabAppearance,
+      AssistantSheetTab.feed => l10n.museyTabFeed,
+      AssistantSheetTab.ideas => l10n.museyTabIdeas,
+      AssistantSheetTab.more || AssistantSheetTab.chat => l10n.museyTabMore,
     };
     final hasCalls = ref.watch(
       assistantActionLogProvider.select((log) => log.records.isNotEmpty),
     );
-    return Material(
+    final Widget? action = switch (tab) {
+      // The pages with a real action: clear the log, start a Feed run.
+      AssistantSheetTab.activity => _RoundButton(
+        key: const ValueKey('assistant-activity-clear'),
+        symbol: 'trash',
+        label: l10n.clear,
+        onTap: hasCalls ? _confirmClear : null,
+      ),
+      AssistantSheetTab.feed => _RoundButton(
+        key: const ValueKey('musey-feed-refresh'),
+        symbol: 'arrow.clockwise',
+        label: l10n.museyFeedRefresh,
+        onTap: _startFeedRun,
+      ),
+      _ => null,
+    };
+    final back = _fromMore;
+    // A Scaffold, so snack bars and the keyboard inset work on this page.
+    return Scaffold(
       key: const ValueKey('assistant-sheet-body'),
-      color: theme.surfaceBackground,
-      child: Column(
+      backgroundColor: theme.surfaceBackground,
+      body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           SafeArea(
@@ -200,15 +294,9 @@ class _AssistantAvatarSheetState extends ConsumerState<AssistantAvatarSheet> {
               child: _PageTopRow(
                 modelName: widget.modelName,
                 avatar: widget.avatar,
-                // The only page with a real action: clear the log.
-                action: tab == AssistantSheetTab.activity
-                    ? _RoundButton(
-                        key: const ValueKey('assistant-activity-clear'),
-                        symbol: 'trash',
-                        label: l10n.clear,
-                        onTap: hasCalls ? _confirmClear : null,
-                      )
-                    : null,
+                leadingSymbol: back ? 'chevron.left' : 'line.3.horizontal',
+                onLeading: _back,
+                action: action,
               ),
             ),
           ),
@@ -237,6 +325,10 @@ class _AssistantAvatarSheetState extends ConsumerState<AssistantAvatarSheet> {
                 horizontal: Spacing.screenPadding,
               ),
               child: switch (tab) {
+                AssistantSheetTab.feed => FeedTab(onDiscuss: _sendToChat),
+                AssistantSheetTab.ideas => IdeasTab(onOpen: _sendToChat),
+                AssistantSheetTab.more ||
+                AssistantSheetTab.chat => _MoreTab(onSelect: _openFromMore),
                 AssistantSheetTab.activity => _ActivityTab(
                   filter: _filter,
                   onClearFilter: () => setState(() => _filter = null),
@@ -249,6 +341,8 @@ class _AssistantAvatarSheetState extends ConsumerState<AssistantAvatarSheet> {
                   child: _AppearanceTab(
                     store: widget.store,
                     onChanged: widget.onChanged,
+                    modelName: widget.modelName,
+                    avatar: widget.avatar,
                   ),
                 ),
               },
@@ -261,7 +355,57 @@ class _AssistantAvatarSheetState extends ConsumerState<AssistantAvatarSheet> {
   }
 }
 
-/// A 44 pt round button of the page's top row.
+/// The More page: Activity, Approvals and Appearance as rows.
+class _MoreTab extends ConsumerWidget {
+  const _MoreTab({required this.onSelect});
+
+  final void Function(AssistantSheetTab tab) onSelect;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = context.conduitTheme;
+    final failures = ref.watch(
+      assistantActionLogProvider.select((log) => log.unseenFailures),
+    );
+    final waiting = ref.watch(assistantApprovalProvider) != null;
+    return ListView(
+      key: const ValueKey('musey-more-list'),
+      children: [
+        const MuseyDivider(),
+        MoreRow(
+          key: const ValueKey('musey-more-activity'),
+          symbol: 'list.bullet.rectangle',
+          label: l10n.assistantSheetTabActivity,
+          hint: l10n.museyMoreActivityHint,
+          badgeColor: failures > 0 ? theme.error : null,
+          onTap: () => onSelect(AssistantSheetTab.activity),
+        ),
+        const MuseyDivider(),
+        MoreRow(
+          key: const ValueKey('musey-more-approvals'),
+          symbol: 'checkmark.seal',
+          label: l10n.assistantSheetTabApprovals,
+          hint: l10n.museyMoreApprovalsHint,
+          badgeColor: waiting ? theme.warning : null,
+          onTap: () => onSelect(AssistantSheetTab.approvals),
+        ),
+        const MuseyDivider(),
+        MoreRow(
+          key: const ValueKey('musey-more-appearance'),
+          symbol: 'paintpalette',
+          label: l10n.assistantSheetTabAppearance,
+          hint: l10n.museyMoreAppearanceHint,
+          onTap: () => onSelect(AssistantSheetTab.appearance),
+        ),
+        const MuseyDivider(),
+      ],
+    );
+  }
+}
+
+/// A 44 pt round button of the page's top row, the same control the chat
+/// page's app bar uses.
 class _RoundButton extends StatelessWidget {
   const _RoundButton({
     super.key,
@@ -277,34 +421,16 @@ class _RoundButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = context.conduitTheme;
-    final enabled = onTap != null;
-    return Semantics(
-      button: true,
-      enabled: enabled,
-      label: label,
-      excludeSemantics: true,
-      onTap: onTap,
+    return Opacity(
+      opacity: onTap == null ? 0.4 : 1,
       child: Tooltip(
         message: label,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: onTap,
-          child: Container(
-            width: _roundButtonSize,
-            height: _roundButtonSize,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: theme.surfaceContainer,
-              border: Border.all(color: theme.cardBorder, width: 0.5),
-            ),
-            child: Icon(
-              cupertinoIconForSFSymbol(symbol),
-              size: IconSize.md,
-              color: enabled
-                  ? theme.textPrimary
-                  : theme.textPrimary.withValues(alpha: 0.35),
-            ),
-          ),
+        child: ConduitAdaptiveAppBarIconButton(
+          icon: cupertinoIconForSFSymbol(symbol)!,
+          iosSymbol: symbol,
+          semanticLabel: label,
+          onPressed: onTap,
+          iconColor: theme.textPrimary,
         ),
       ),
     );
@@ -313,17 +439,22 @@ class _RoundButton extends StatelessWidget {
 
 const double _roundButtonSize = 44;
 
-/// The top row: the round menu button (back to the chat), the persona's
-/// avatar and name in a pill, and the page's own action when it has one.
+/// The top row: the round menu button (back to the chat, or to More), the
+/// persona's avatar and name in a pill, and the page's own action when it has
+/// one.
 class _PageTopRow extends StatelessWidget {
   const _PageTopRow({
     required this.modelName,
     required this.avatar,
+    required this.leadingSymbol,
+    required this.onLeading,
     required this.action,
   });
 
   final String? modelName;
   final Widget? avatar;
+  final String leadingSymbol;
+  final VoidCallback onLeading;
   final Widget? action;
 
   @override
@@ -338,11 +469,17 @@ class _PageTopRow extends StatelessWidget {
       height: _roundButtonSize,
       child: Row(
         children: [
-          _RoundButton(
-            key: const ValueKey('assistant-page-menu'),
-            symbol: 'line.3.horizontal',
-            label: l10n.back,
-            onTap: () => Navigator.of(context).maybePop(),
+          SizedBox(
+            width: _roundButtonSize,
+            height: _roundButtonSize,
+            child: KeyedSubtree(
+              key: const ValueKey('assistant-page-menu'),
+              child: _RoundButton(
+                symbol: leadingSymbol,
+                label: l10n.back,
+                onTap: onLeading,
+              ),
+            ),
           ),
           Expanded(
             child: Center(
@@ -883,10 +1020,17 @@ class _ApprovalsTabState extends ConsumerState<_ApprovalsTab> {
 /// The Appearance tab: assigns a clip to each state and, with Message
 /// bubbles on, picks the bubble color.
 class _AppearanceTab extends ConsumerStatefulWidget {
-  const _AppearanceTab({required this.store, this.onChanged});
+  const _AppearanceTab({
+    required this.store,
+    this.onChanged,
+    this.modelName,
+    this.avatar,
+  });
 
   final AssistantAvatarMediaStore store;
   final Future<void> Function()? onChanged;
+  final String? modelName;
+  final Widget? avatar;
 
   @override
   ConsumerState<_AppearanceTab> createState() => _AppearanceTabState();
@@ -903,7 +1047,9 @@ class _AppearanceTabState extends ConsumerState<_AppearanceTab> {
   }
 
   Future<void> _reload() async {
-    final media = await widget.store.load();
+    final media = await widget.store.load(
+      personaId: ref.read(activePersonaAppearanceProvider)?.id,
+    );
     if (!mounted) return;
     setState(() => _media = media);
   }
@@ -952,12 +1098,74 @@ class _AppearanceTabState extends ConsumerState<_AppearanceTab> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final theme = context.conduitTheme;
+    final persona = ref.watch(activePersonaAppearanceProvider);
+    final name = (persona?.name.trim().isNotEmpty ?? false)
+        ? persona!.name.trim()
+        : (widget.modelName?.trim() ?? '');
+    final voice = ref.watch(
+      directVoiceProviderProvider.select((v) => v?.settings.speechVoice),
+    );
+    final initial = name.isEmpty
+        ? ''
+        : String.fromCharCodes(name.runes.take(1)).toUpperCase();
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        for (final state in AssistantActivity.values)
+        // The active persona: a larger avatar, its name and its voice.
+        Padding(
+          key: const ValueKey('assistant-appearance-header'),
+          padding: const EdgeInsets.only(bottom: Spacing.md),
+          child: Column(
+            children: [
+              Container(
+                width: 88,
+                height: 88,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: theme.surfaceContainer,
+                  border: Border.all(color: theme.cardBorder, width: 0.5),
+                ),
+                child: ClipOval(
+                  child:
+                      widget.avatar ??
+                      Center(
+                        child: Text(
+                          initial,
+                          style: AppTypography.titleLargeStyle.copyWith(
+                            color: theme.textPrimary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                ),
+              ),
+              if (name.isNotEmpty) ...[
+                const SizedBox(height: Spacing.sm),
+                Text(
+                  name,
+                  style: AppTypography.bodyLargeStyle.copyWith(
+                    color: theme.textPrimary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+              if (voice != null && voice.trim().isNotEmpty)
+                Text(
+                  l10n.museyAppearanceVoice(voice.trim()),
+                  key: const ValueKey('assistant-appearance-voice'),
+                  style: AppTypography.bodySmallStyle.copyWith(
+                    color: theme.textSecondary,
+                  ),
+                ),
+            ],
+          ),
+        ),
+        for (final state in AssistantActivity.values) ...[
+          const MuseyDivider(),
           _buildRow(context, l10n, theme, state),
+        ],
+        const MuseyDivider(),
         if (ref.watch(
           appSettingsProvider.select((settings) => settings.messageBubbles),
         ))
@@ -977,9 +1185,15 @@ class _AppearanceTabState extends ConsumerState<_AppearanceTab> {
     final busy = _busy != null;
     return Padding(
       key: ValueKey('assistant-avatar-row-${state.name}'),
-      padding: const EdgeInsets.symmetric(vertical: Spacing.xs),
+      padding: const EdgeInsets.symmetric(vertical: Spacing.sm),
       child: Row(
         children: [
+          // A small muted loop of the state's own clip, or a quiet square.
+          _ClipPreview(
+            key: ValueKey('assistant-avatar-preview-${state.name}'),
+            media: _media.ownMedia(state),
+          ),
+          const SizedBox(width: Spacing.md),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1024,6 +1238,165 @@ class _AppearanceTabState extends ConsumerState<_AppearanceTab> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// A 56 pt rounded square showing [media] as a muted, looping clip (or an
+/// image), and a quiet empty square when there is none. It plays only while
+/// it is on screen and the app is active, and with Reduce Motion it shows
+/// the first frame and stays still. It owns its player and lets it go when
+/// the page is left.
+class _ClipPreview extends StatefulWidget {
+  const _ClipPreview({super.key, required this.media});
+
+  final AssistantAvatarMedia? media;
+
+  @override
+  State<_ClipPreview> createState() => _ClipPreviewState();
+}
+
+class _ClipPreviewState extends State<_ClipPreview>
+    with WidgetsBindingObserver {
+  static const double _size = 56;
+
+  VideoPlayerController? _controller;
+  bool _ready = false;
+  bool _failed = false;
+  bool _still = false;
+  bool _active = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _open();
+  }
+
+  @override
+  void didUpdateWidget(_ClipPreview old) {
+    super.didUpdateWidget(old);
+    if (old.media?.id != widget.media?.id) {
+      _close();
+      _open();
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final still = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    if (still != _still) {
+      _still = still;
+      unawaited(_sync());
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _active = state == AppLifecycleState.resumed;
+    unawaited(_sync());
+  }
+
+  void _open() {
+    final media = widget.media;
+    if (media == null || media.kind != AssistantAvatarMediaKind.video) return;
+    try {
+      // Silent, and mixing with other apps' audio, like the avatar's clips.
+      final options = VideoPlayerOptions(mixWithOthers: true);
+      final controller = media.isBundled
+          ? VideoPlayerController.asset(media.path, videoPlayerOptions: options)
+          : VideoPlayerController.file(
+              File(media.path),
+              videoPlayerOptions: options,
+            );
+      _controller = controller;
+      unawaited(() async {
+        try {
+          await controller.initialize();
+          await controller.setLooping(true);
+          await controller.setVolume(0);
+          if (!mounted || _controller != controller) return;
+          setState(() => _ready = true);
+          await _sync();
+        } catch (_) {
+          if (mounted && _controller == controller) {
+            setState(() => _failed = true);
+          }
+        }
+      }());
+    } catch (_) {
+      _failed = true;
+    }
+  }
+
+  Future<void> _sync() async {
+    final controller = _controller;
+    if (controller == null || !_ready || !mounted) return;
+    try {
+      if (_active && !_still) {
+        await controller.play();
+      } else {
+        await controller.pause();
+        if (_still) await controller.seekTo(Duration.zero);
+      }
+    } catch (_) {}
+  }
+
+  void _close() {
+    final controller = _controller;
+    _controller = null;
+    _ready = false;
+    _failed = false;
+    if (controller != null) unawaited(controller.dispose());
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _close();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.conduitTheme;
+    final media = widget.media;
+    Widget content;
+    final controller = _controller;
+    if (media != null &&
+        media.kind == AssistantAvatarMediaKind.image &&
+        !media.isBundled) {
+      content = Image.file(
+        File(media.path),
+        width: _size,
+        height: _size,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => const SizedBox.shrink(),
+      );
+    } else if (controller != null && _ready && !_failed) {
+      final size = controller.value.size;
+      content = FittedBox(
+        fit: BoxFit.cover,
+        clipBehavior: Clip.hardEdge,
+        child: SizedBox(
+          width: size.width <= 0 ? _size : size.width,
+          height: size.height <= 0 ? _size : size.height,
+          child: VideoPlayer(controller),
+        ),
+      );
+    } else {
+      content = const SizedBox.shrink();
+    }
+    return Container(
+      width: _size,
+      height: _size,
+      decoration: BoxDecoration(
+        color: theme.surfaceContainer,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: content,
     );
   }
 }
@@ -1106,7 +1479,27 @@ class _BubbleColorPicker extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: Spacing.sm),
-          Wrap(spacing: Spacing.sm, runSpacing: Spacing.sm, children: options),
+          // Rows of four, each cell an equal share of the width, so eight
+          // swatches read as two even rows and not five and three.
+          Column(
+            key: const ValueKey('bubble-color-grid'),
+            children: [
+              for (var i = 0; i < options.length; i += 4)
+                Padding(
+                  padding: EdgeInsets.only(top: i == 0 ? 0 : Spacing.sm),
+                  child: Row(
+                    children: [
+                      for (var j = i; j < i + 4; j++)
+                        Expanded(
+                          child: j < options.length
+                              ? Center(child: options[j])
+                              : const SizedBox.shrink(),
+                        ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
         ],
       ),
     );
@@ -1177,6 +1570,7 @@ class _BubbleColorOption extends StatelessWidget {
                 label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
                 style: AppTypography.captionStyle.copyWith(
                   color: selected ? theme.textPrimary : theme.textSecondary,
                 ),

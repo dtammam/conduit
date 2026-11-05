@@ -91,6 +91,8 @@ import 'package:conduit_core/features/chat/utils/file_utils.dart';
 import '../avatar/assistant_action_log.dart';
 import 'tool_stamp.dart';
 import '../reactions/quick_reply_reactions.dart';
+import 'link_preview_cards.dart';
+import 'routine_post_actions.dart';
 import '../omni/open_posts.dart';
 import 'chat_branch_actions.dart';
 import 'chat_comparison_widgets.dart';
@@ -116,6 +118,13 @@ class AssistantMessageWidget extends ConsumerStatefulWidget {
   final dynamic message;
   final bool isStreaming;
   final bool showFollowUps;
+
+  /// Whether this reply is a routine or check-in post of the Omni chat; it
+  /// then carries a heart and a Discuss button under its text.
+  final bool isRoutinePost;
+
+  /// Sends the Discuss text of a routine post as a normal message.
+  final void Function(String text)? onDiscussPost;
 
   /// Another user's chat (shared folder): only copy/listen/version browsing.
   final bool readOnly;
@@ -173,6 +182,8 @@ class AssistantMessageWidget extends ConsumerStatefulWidget {
     required this.message,
     this.isStreaming = false,
     this.showFollowUps = true,
+    this.isRoutinePost = false,
+    this.onDiscussPost,
     this.readOnly = false,
     this.animateOnMount = true,
     this.modelName,
@@ -1970,6 +1981,23 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
       final children = <Widget>[];
       // The tool stamp comes from the stored tool calls, a separate widget
       // that neither copy nor read-aloud ever sees.
+      // Link cards for the links in a finished reply, never while it streams.
+      if (!widget.message.isStreaming && _responseCompleted) {
+        final urls = extractPreviewUrls(widget.message.content);
+        if (urls.isNotEmpty) children.add(LinkPreviewCards(urls: urls));
+      }
+      if (widget.isRoutinePost &&
+          widget.onDiscussPost != null &&
+          !widget.message.isStreaming && 
+          _responseCompleted) {
+        children.add(
+          RoutinePostActions(
+            messageId: widget.message.id,
+            content: widget.message.content,
+            onDiscuss: widget.onDiscussPost!,
+          ),
+        );
+      }
       final stamp = _toolStamp;
       if (!stamp.isEmpty) children.add(ToolStamp(data: stamp));
       if (footer != null) {

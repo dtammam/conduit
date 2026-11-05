@@ -12,8 +12,8 @@ import 'assistant_action_log.dart';
 import 'assistant_pending_approval.dart';
 
 /// The glass capsule of icon buttons under the Omni chat's composer (and on the
-/// assistant pages), laid out like Muse's: one tap away, the assistant's
-/// Activity, Approvals, Routines and Appearance pages. The names are only
+/// assistant pages), laid out like Muse's: Chat, Feed, Ideas, Routines and
+/// More. The names are only
 /// semantics labels and tooltips. On a page, [selected] sits on a dark pill.
 /// It is hidden while the keyboard is up.
 class OmniTabBar extends ConsumerWidget {
@@ -67,24 +67,34 @@ class OmniTabBar extends ConsumerWidget {
     final failures = ref.watch(
       assistantActionLogProvider.select((log) => log.unseenFailures),
     );
+    // Chat, Feed, Ideas, Routines, More, as in Muse. The badges of Activity
+    // and Approvals sit on More, where those pages now live.
+    final inMore =
+        selected == AssistantSheetTab.more ||
+        selected == AssistantSheetTab.activity ||
+        selected == AssistantSheetTab.approvals ||
+        selected == AssistantSheetTab.appearance;
     final pills = [
       _TabButton(
-        id: 'activity',
-        selected: selected == AssistantSheetTab.activity,
-        symbol: 'list.bullet.rectangle',
-        label: l10n.assistantSheetTabActivity,
-        badge: failures,
-        badgeColor: theme.error,
-        onTap: () => onOpen(AssistantSheetTab.activity),
+        id: 'chat',
+        selected: selected == AssistantSheetTab.chat,
+        symbol: 'bubble.left',
+        label: l10n.museyTabChat,
+        onTap: () => onOpen(AssistantSheetTab.chat),
       ),
       _TabButton(
-        id: 'approvals',
-        selected: selected == AssistantSheetTab.approvals,
-        symbol: 'checkmark.seal',
-        label: l10n.assistantSheetTabApprovals,
-        badge: pendingApproval ? 1 : 0,
-        badgeColor: theme.warning,
-        onTap: () => onOpen(AssistantSheetTab.approvals),
+        id: 'feed',
+        selected: selected == AssistantSheetTab.feed,
+        symbol: 'newspaper',
+        label: l10n.museyTabFeed,
+        onTap: () => onOpen(AssistantSheetTab.feed),
+      ),
+      _TabButton(
+        id: 'ideas',
+        selected: selected == AssistantSheetTab.ideas,
+        symbol: 'lightbulb',
+        label: l10n.museyTabIdeas,
+        onTap: () => onOpen(AssistantSheetTab.ideas),
       ),
       if (routinesAvailable)
         _TabButton(
@@ -95,11 +105,13 @@ class OmniTabBar extends ConsumerWidget {
           onTap: () => onOpen(AssistantSheetTab.routines),
         ),
       _TabButton(
-        id: 'appearance',
-        selected: selected == AssistantSheetTab.appearance,
-        symbol: 'paintpalette',
-        label: l10n.assistantSheetTabAppearance,
-        onTap: () => onOpen(AssistantSheetTab.appearance),
+        id: 'more',
+        selected: inMore,
+        symbol: 'square.grid.2x2',
+        label: l10n.museyTabMore,
+        badge: failures > 0 ? failures : (pendingApproval ? 1 : 0),
+        badgeColor: failures > 0 ? theme.error : theme.warning,
+        onTap: () => onOpen(AssistantSheetTab.more),
       ),
     ];
     // The capsule is drawn like the composer's shell: native glass where iOS
