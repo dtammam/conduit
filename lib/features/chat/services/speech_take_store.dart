@@ -19,7 +19,12 @@ class SpeechTake {
     required this.bytes,
     required this.messageId,
     required this.voiceKey,
+    this.clipSizes,
   });
+
+  /// Bytes of each sentence's audio in [file], in order, when the take was
+  /// joined from sentence clips (null for a take rendered whole by the relay).
+  final List<int>? clipSizes;
 
   final File file;
   final String extension;
@@ -162,6 +167,7 @@ class SpeechTakeStore {
     required String extension,
     String? chatId,
     String? keyOverride,
+    List<int>? clipSizes,
   }) async {
     final root = await _rootDirectory();
     final key = keyOverride ?? textKey(text);
@@ -191,6 +197,7 @@ class SpeechTakeStore {
         'created': created.toIso8601String(),
         'ext': extension,
         'bytes': bytes,
+        'clips': ?clipSizes,
       }),
       flush: true,
     );
@@ -201,6 +208,7 @@ class SpeechTakeStore {
       bytes: bytes,
       messageId: messageId,
       voiceKey: voiceKey,
+      clipSizes: clipSizes,
     );
   }
 
@@ -354,6 +362,7 @@ class SpeechTakeStore {
           bytes: await file.length(),
           messageId: map['messageId'] as String? ?? '',
           voiceKey: map['voice'] as String? ?? '',
+          clipSizes: (map['clips'] as List?)?.whereType<int>().toList(),
         ),
         textKey: map['textKey'] as String? ?? '',
         stem: stem,
@@ -393,6 +402,7 @@ class SpeechTakeStore {
         extension: loose.take.extension,
         chatId: chatId ?? loose.chatId,
         keyOverride: loose.textKey,
+        clipSizes: loose.take.clipSizes,
       );
       await _deleteStem(loose.dir, loose.stem);
       return saved;

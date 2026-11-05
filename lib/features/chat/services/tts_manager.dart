@@ -271,6 +271,11 @@ class TtsManager {
   /// Keeps the clips of the reply now playing, to save as a take if it plays
   /// to its end (null for device speech and when nothing is kept).
   SpeechTakeRecorder? _takeRecorder;
+
+  /// The sentences of a kept take, played in place of fetching speech: set
+  /// when Listen finds a take for this message, voice and text. Nothing is
+  /// recorded then, so a replay never replaces the take.
+  List<_AudioChunk>? _keptClips;
   SpeechTakeStore _takeStore = SpeechTakeStore.instance;
 
   /// The save the last completed reply started, for tests.
@@ -486,9 +491,19 @@ class TtsManager {
     final shouldUseServer = useServer ?? _shouldUseServer();
 
     // Split text into chunks
-    final chunks = splitTextForSpeech(text);
+    var chunks = splitTextForSpeech(text);
     if (chunks.isEmpty) {
       return null;
+    }
+
+    // A take kept for this message, voice and text is played as it is.
+    List<_AudioChunk>? kept;
+    if (shouldUseServer && take != null) {
+      kept = await _loadKeptClips(take, chunks.length);
+      if (kept != null && kept.length == 1 && chunks.length > 1) {
+        // Rendered whole, with no sentence boundaries: one clip.
+        chunks = [text.trim()];
+      }
     }
 
     // Create new session
@@ -500,7 +515,8 @@ class TtsManager {
       serverSpeech: shouldUseServer ? _serverSpeech : null,
     );
     _activeSession = session;
-    _takeRecorder = shouldUseServer && take != null
+    _keptClips = kept;
+    _takeRecorder = shouldUseServer && take != null && kept == null
         ? _newTakeRecorder(session, take)
         : null;
 
@@ -1284,6 +1300,10 @@ class TtsManager {
     String? voice, {
     int? part,
   }) async {
+    final kept = _keptClips;
+    if (kept != null && part != null && part >= 0 && part < kept.length) {
+      return kept[part];
+    }
     final log = VoiceEventLog.instance;
     if (log.active && part != null) {
       log.add('tts-request', <String, Object?>{
@@ -1391,6 +1411,51 @@ class TtsManager {
       _markStarved();
       final voice = _serverPlaybackVoice ?? _config.serverVoice;
       unawaited(_recoverMissingServerChunk(session, voice, nextIndex));
+    }
+  }
+
+  /// The kept take's audio as one chunk per sentence (cut at the frame
+  /// boundaries saved with it), or as one chunk when it has no boundaries.
+  /// Null when there is no take, or the file is missing or does not match
+  /// what was saved (then speech is generated as usual).
+  Future<List<_AudioChunk>?> _loadKeptClips(
+    SpeechTakeTarget target,
+    int sentenceCount,
+  ) async {
+    try {
+      final key = voiceKey;
+      if (key == null) return null;
+      final found = await _takeStore.find(
+        messageId: target.messageId,
+        voiceKey: key,
+        text: target.text,
+        chatId: target.chatId,
+      );
+      if (found == null) return null;
+      final bytes = await found.file.readAsBytes();
+      if (bytes.isEmpty) return null;
+      final mime = found.mimeType;
+      final sizes = found.clipSizes;
+      if (sizes == null || sizes.length != sentenceCount) {
+        if (sizes != null) return null; // does not match this text's split
+        return [_AudioChunk(bytes: bytes, mimeType: mime)];
+      }
+      if (sizes.fold<int>(0, (a, b) => a + b) != bytes.length) return null;
+      final out = <_AudioChunk>[];
+      var at = 0;
+      for (final size in sizes) {
+        if (size <= 0) return null;
+        out.add(
+          _AudioChunk(
+            bytes: Uint8List.sublistView(bytes, at, at + size),
+            mimeType: mime,
+          ),
+        );
+        at += size;
+      }
+      return out;
+    } catch (_) {
+      return null;
     }
   }
 
@@ -1689,6 +1754,7 @@ class TtsManager {
     _serverFetchingIndices.clear();
     _takeRecorder?.discard();
     _takeRecorder = null;
+    _keptClips = null;
     _cancelServerProgressive();
     unawaited(_stopServerBackgroundLease());
     unawaited(_cleanupServerTempFiles());

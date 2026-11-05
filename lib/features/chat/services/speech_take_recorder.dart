@@ -141,10 +141,11 @@ class SpeechTakeRecorder {
       final outBase = p.join(dir.path, 'joined');
       final paths = [for (final t in ordered) t.file!.path];
       final kinds = [for (final t in ordered) SpeechTakeJoin.kindOf(t.mimeType)];
-      final extension = await Isolate.run(
+      final joined = await Isolate.run(
         () => joinClipFiles(paths, kinds, outBase),
       );
-      if (extension == null) {
+      final extension = joined?.extension;
+      if (joined == null || extension == null) {
         DebugLogger.info(
           'speech-take-unjoinable',
           scope: 'chat/take',
@@ -159,6 +160,7 @@ class SpeechTakeRecorder {
         source: File('$outBase.$extension'),
         extension: extension,
         chatId: chatId,
+        clipSizes: joined.clipSizes,
       );
     } catch (error) {
       _log('speech-take-save-failed', error);
@@ -221,8 +223,8 @@ class _Tee {
 }
 
 /// Joins the clip files at [paths] into `<outBase>.<ext>`; returns the
-/// extension, or null when they cannot be joined. Runs in an isolate.
-String? joinClipFiles(
+/// extension and each clip's byte share (mp3), or null when they cannot be joined. Runs in an isolate.
+({String extension, List<int>? clipSizes})? joinClipFiles(
   List<String> paths,
   List<String?> kinds,
   String outBase,
@@ -234,5 +236,5 @@ String? joinClipFiles(
     joined.bytes,
     flush: true,
   );
-  return joined.extension;
+  return (extension: joined.extension, clipSizes: joined.clipSizes);
 }

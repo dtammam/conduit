@@ -27,29 +27,35 @@ class SpeechTakeJoin {
 
   /// Joins [clips] (in order) given their [kinds] (from [kindOf]); null when
   /// they cannot be joined cleanly.
-  static ({Uint8List bytes, String extension})? join(
+  static ({Uint8List bytes, String extension, List<int>? clipSizes})? join(
     List<Uint8List> clips,
     List<String?> kinds,
   ) {
     if (clips.isEmpty || clips.length != kinds.length) return null;
     final kind = kinds.first;
     if (kind == null || kinds.any((k) => k != kind)) return null;
-    final Uint8List? bytes = kind == 'mp3' ? _joinMp3(clips) : _joinWav(clips);
+    if (kind == 'mp3') {
+      // Each clip's share of the joined bytes, so the take can be played back
+      // one sentence at a time, cut at frame boundaries.
+      final sizes = <int>[];
+      final out = BytesBuilder(copy: false);
+      for (final clip in clips) {
+        final audio = mp3AudioFrames(clip);
+        if (audio == null) return null;
+        sizes.add(audio.length);
+        out.add(audio);
+      }
+      final bytes = out.takeBytes();
+      return bytes.isEmpty
+          ? null
+          : (bytes: bytes, extension: kind, clipSizes: sizes);
+    }
+    final bytes = _joinWav(clips);
     if (bytes == null || bytes.isEmpty) return null;
-    return (bytes: bytes, extension: kind);
+    return (bytes: bytes, extension: kind, clipSizes: null);
   }
 
   // ---------------------------------------------------------------- MP3
-
-  static Uint8List? _joinMp3(List<Uint8List> clips) {
-    final out = BytesBuilder(copy: false);
-    for (final clip in clips) {
-      final audio = mp3AudioFrames(clip);
-      if (audio == null) return null;
-      out.add(audio);
-    }
-    return out.takeBytes();
-  }
 
   /// Only the audio frames of an MP3 body that is one clip, or many files
   /// back to back: no ID3 tag, no metadata frame. Null when the bytes are not

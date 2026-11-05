@@ -21,6 +21,7 @@ Uint8List _audio(int fill, int n) =>
 final class _Player extends NullAudioPlayback {
   final _states = StreamController<AudioPlaybackState>.broadcast();
   int clips = 0;
+  final List<AudioClip> queued = [];
   AudioProcessingState state = AudioProcessingState.idle;
 
   @override
@@ -34,9 +35,18 @@ final class _Player extends NullAudioPlayback {
     List<AudioClip> list, {
     int initialIndex = 0,
     Duration initialPosition = Duration.zero,
-  }) async => clips = list.length;
+  }) async {
+    clips = list.length;
+    queued
+      ..clear()
+      ..addAll(list);
+  }
+
   @override
-  Future<void> addClip(AudioClip clip) async => clips++;
+  Future<void> addClip(AudioClip clip) async {
+    clips++;
+    queued.add(clip);
+  }
 
   void playToEnd() {
     state = AudioProcessingState.completed;
@@ -145,6 +155,7 @@ void main() {
     TtsManager.instance.lastTakeSave = null;
     player
       ..clips = 0
+      ..queued.clear()
       ..state = AudioProcessingState.idle;
     TtsManager.instance.setServerSpeech(speech);
     await TtsManager.instance.debugSetNativeTtsService(_Native());
@@ -199,19 +210,6 @@ void main() {
     await pumpEventQueue();
     check(await find()).isNull();
     check(TtsManager.instance.lastTakeSave).isNull();
-  });
-
-  test('a replay that completes replaces the take', () async {
-    await listen();
-    await finish();
-    final first = (await find())!;
-    final firstBytes = await first.file.readAsBytes();
-
-    player.state = AudioProcessingState.idle;
-    await listen();
-    await finish();
-    final second = (await find())!;
-    check(await second.file.readAsBytes()).not((it) => it.deepEquals(firstBytes));
   });
 
   test('an interrupted replay leaves the earlier take alone', () async {
@@ -301,6 +299,111 @@ void main() {
       player.playToEnd();
       await pumpEventQueue();
       check(await find(id: 'assistant-9')).isNull();
+    });
+  });
+
+  group('Listen on a kept take', () {
+    Future<List<int>> playedBytes() async => [
+      for (final clip in player.queued) ...await File.fromUri(clip.uri).readAsBytes(),
+    ];
+
+    Future<SpeechTake> firstListen() async {
+      await listen();
+      await finish();
+      return (await find())!;
+    }
+
+    void again() {
+      player.state = AudioProcessingState.idle;
+      speech.rendered = 0;
+    }
+
+    test('plays the kept sentences with no generating and no replacement', () async {
+      final take = await firstListen();
+      final keptBytes = await take.file.readAsBytes();
+      final stamp = take.created;
+      again();
+      TtsManager.instance.lastTakeSave = null;
+      await listen();
+      check(speech.rendered).equals(0);
+      check(player.queued.length).equals(2);
+      check(await playedBytes()).deepEquals(keptBytes);
+      await finish();
+      // Played to the end, and still the same take.
+      check(TtsManager.instance.lastTakeSave).isNull();
+      final after = (await find())!;
+      check(await after.file.readAsBytes()).deepEquals(keptBytes);
+      check(after.created).equals(stamp);
+    });
+
+    test('an interrupted replay of a kept take changes nothing', () async {
+      final take = await firstListen();
+      final keptBytes = await take.file.readAsBytes();
+      again();
+      await listen();
+      await TtsManager.instance.stop();
+      check(speech.rendered).equals(0);
+      check(await (await find())!.file.readAsBytes()).deepEquals(keptBytes);
+    });
+
+    test('Try again replaces the take and the next Listen plays the new one', () async {
+      await firstListen();
+      // What the relay render saves: one whole file, no sentence boundaries.
+      final fresh = _audio(200, 6);
+      final src = File('${tmp.path}/fresh.mp3')..writeAsBytesSync(fresh);
+      await store.save(
+        messageId: 'm1',
+        voiceKey: 'direct|m|alloy',
+        text: _text,
+        source: src,
+        extension: 'mp3',
+      );
+      again();
+      await listen();
+      check(speech.rendered).equals(0);
+      check(player.queued.length).equals(1);
+      check(await playedBytes()).deepEquals(fresh);
+      await finish();
+      check(await (await find())!.file.readAsBytes()).deepEquals(fresh);
+    });
+
+    test('another voice generates', () async {
+      await firstListen();
+      again();
+      speech.voice = 'direct|m|nova';
+      await listen();
+      check(speech.rendered).isGreaterThan(0);
+    });
+
+    test('changed text generates', () async {
+      await firstListen();
+      again();
+      await TtsManager.instance.speak(
+        '$_text And one more.',
+        take: SpeechTakeTarget(messageId: 'm1', text: '$_text And one more.'),
+      );
+      await pumpEventQueue();
+      check(speech.rendered).isGreaterThan(0);
+    });
+
+    test('a corrupt file falls back to generating, and is replaced', () async {
+      final take = await firstListen();
+      await take.file.writeAsBytes(
+        (await take.file.readAsBytes()).sublist(0, 100),
+      );
+      again();
+      await listen();
+      check(speech.rendered).isGreaterThan(0);
+      await finish();
+      check((await find())!.bytes).equals(4 * 192);
+    });
+
+    test('a missing file falls back to generating', () async {
+      final take = await firstListen();
+      await take.file.delete();
+      again();
+      await listen();
+      check(speech.rendered).isGreaterThan(0);
     });
   });
 }
