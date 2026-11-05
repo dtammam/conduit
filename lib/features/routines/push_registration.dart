@@ -6,6 +6,8 @@ import 'package:conduit/features/notifications/providers/notification_socket_lis
     show openChatById;
 import 'package:conduit/features/chat/omni/message_jump.dart';
 import 'package:conduit_core/features/chat/omni/omni_chat.dart';
+import 'package:conduit_core/features/chat/voice_mode/voice_event_log.dart';
+import 'package:conduit_core/features/chat/voice_mode/voice_event_sender.dart';
 import 'package:conduit_core/features/chat/omni/routine_reply_marker.dart';
 import 'package:conduit_core/services/settings_service.dart';
 import 'package:conduit_core/sync/sync_engine.dart';
@@ -220,6 +222,13 @@ class RoutineReplyController extends Notifier<RoutineReplyRequest?> {
 /// Nothing asks for permission by itself: [enable] is called when the person
 /// turns notifications on. Registration repeats at every start and whenever
 /// Apple hands out a new token; the server treats it as an upsert.
+/// Where a `notification-tap` event goes: the voice log route on the Voice
+/// provider's host. Null (nothing logged) when there is no Voice provider.
+/// A test overrides it.
+final pushTapSenderProvider = Provider<VoiceEventSender?>(
+  (ref) => voiceEventSenderFor(ref),
+);
+
 final pushRegistrationProvider = NotifierProvider<PushRegistration, PushStatus>(
   PushRegistration.new,
 );
@@ -366,6 +375,8 @@ class PushRegistration extends Notifier<PushStatus> {
         case 'token':
           await sync();
         case 'open':
+          // Logging comes first and can never get in the way of opening.
+          unawaited(_logTap(event));
           await _openChat(event);
         case 'reply':
           await _reply(event);
@@ -377,6 +388,38 @@ class PushRegistration extends Notifier<PushStatus> {
         error: error,
         stackTrace: stackTrace,
       );
+    }
+  }
+
+  /// Tells the relay a push was opened (one `notification-tap` event in the
+  /// voice log): the routine's slug, the message id, how many seconds after
+  /// iOS delivered it the tap came, and whether the app was cold, in the
+  /// background or in the foreground. No text. Any failure is swallowed, so
+  /// it can never touch navigation.
+  Future<void> _logTap(Map<String, Object?> event) async {
+    try {
+      final sender = ref.read(pushTapSenderProvider);
+      if (sender == null) return;
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final delivered = event['delivered_at'];
+      final slug = event['slug'];
+      final state = event['app_state'];
+      final entry = <String, Object?>{
+        't': now,
+        'kind': 'notification-tap',
+        if (slug is String && slug.isNotEmpty) 'slug': slug,
+        'message_id': ?messageIdFromPushEvent(event),
+        if (delivered is num && delivered > 0)
+          'seconds': ((now - delivered.toInt()) / 1000).round(),
+        if (state is String) 'app_state': state,
+      };
+      await sender(<String, Object?>{
+        'device': 'musey',
+        'build': VoiceEventLog.instance.build,
+        'events': [entry],
+      }).timeout(const Duration(seconds: 6));
+    } catch (_) {
+      // Never reaches the person or the navigation.
     }
   }
 

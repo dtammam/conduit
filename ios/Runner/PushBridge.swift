@@ -243,7 +243,22 @@ final class PushBridge: NSObject {
       }
       completion()
     case UNNotificationDefaultActionIdentifier:
-      emit(base.merging(["kind": "open"]) { $1 })
+      // For the app's own tap log: how the app was when the tap came, and
+      // when iOS delivered the push (epoch ms). No text from the push.
+      let state: String
+      if !dartReady {
+        state = "cold"
+      } else if UIApplication.shared.applicationState == .active {
+        state = "foreground"
+      } else {
+        state = "background"
+      }
+      let delivered = Int(response.notification.date.timeIntervalSince1970 * 1000)
+      emit(
+        base.merging([
+          "kind": "open", "app_state": state, "delivered_at": delivered,
+        ]) { $1 }
+      )
       completion()
     default:
       // Done, and a swipe away: nothing to do.

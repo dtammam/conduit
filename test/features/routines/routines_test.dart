@@ -9,6 +9,8 @@ import 'package:conduit/features/routines/routines_providers.dart';
 import 'package:conduit/features/routines/routines_service.dart';
 import 'package:conduit/features/routines/routines_tab.dart';
 import 'package:conduit_core/features/chat/omni/routine_reply_marker.dart';
+import 'package:conduit_core/features/chat/voice_mode/voice_event_log.dart'
+    show VoiceEventSender;
 import 'package:conduit_core/features/automations/models/automation.dart';
 import 'package:conduit_core/ports/secure_key_value_store.dart';
 import 'package:conduit_core/providers/app_providers.dart';
@@ -271,7 +273,10 @@ void main() {
     late _FakePush push;
     late ProviderContainer container;
 
+    VoiceEventSender? tapSender;
+
     Future<void> start({AppSettings? settings, bool withToken = true}) async {
+      tapSender = null;
       adapter = _FakeAdapter((_) => _json({}));
       push = _FakePush();
       final store = InMemorySecureKeyValueStore();
@@ -288,6 +293,10 @@ void main() {
           ),
           secureStorageProvider.overrideWithValue(store),
           pushPlatformProvider.overrideWithValue(push),
+          pushTapSenderProvider.overrideWith(
+            (ref) =>
+                (body) => tapSender!(body),
+          ),
           routinesServiceProvider.overrideWithValue(
             RoutinesService(dio: Dio()..httpClientAdapter = adapter),
           ),
@@ -395,6 +404,113 @@ void main() {
       push.emit({'kind': 'open', 'chat_id': 'omni'});
       await Future<void>.delayed(const Duration(milliseconds: 50));
       check(container.read(routineReplyMarkerProvider)).isNull();
+    });
+
+    test('opening a push logs one notification-tap with no text', () async {
+      await start(
+        settings: const AppSettings(
+          routinesServerUrl: _base,
+          routinesPushEnabled: true,
+        ),
+      );
+      final sent = <Map<String, Object?>>[];
+      tapSender = (body) async {
+        sent.add(body);
+        return true;
+      };
+      await container.read(pushRegistrationProvider.notifier).start();
+      final delivered = DateTime.now().millisecondsSinceEpoch - 90 * 1000;
+      push.emit({
+        'kind': 'open',
+        'chat_id': 'omni',
+        'message_id': 'post-9',
+        'slug': 'journal',
+        'app_state': 'cold',
+        'delivered_at': delivered,
+        'text': 'secret words',
+      });
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      check(sent).length.equals(1);
+      final events = sent.single['events']! as List;
+      check(events).length.equals(1);
+      final e = events.single as Map<String, Object?>;
+      check(e['kind']).equals('notification-tap');
+      check(e['slug']).equals('journal');
+      check(e['message_id']).equals('post-9');
+      check(e['app_state']).equals('cold');
+      check(e['seconds'] as int).isGreaterOrEqual(89);
+      check(e['seconds'] as int).isLessOrEqual(93);
+      check(e.containsKey('text')).isFalse();
+      check(sent.toString()).not((it) => it.contains('secret'));
+      // Navigation still happened.
+      check(container.read(routineReplyMarkerProvider)!.slug).equals('journal');
+    });
+
+    test(
+      'an older push (no time, state or message) still logs the rest',
+      () async {
+        await start(
+          settings: const AppSettings(
+            routinesServerUrl: _base,
+            routinesPushEnabled: true,
+          ),
+        );
+        final sent = <Map<String, Object?>>[];
+        tapSender = (body) async {
+          sent.add(body);
+          return true;
+        };
+        await container.read(pushRegistrationProvider.notifier).start();
+        push.emit({'kind': 'open', 'chat_id': 'omni', 'slug': 'journal'});
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        final e =
+            (sent.single['events']! as List).single as Map<String, Object?>;
+        check(e['slug']).equals('journal');
+        check(e.containsKey('seconds')).isFalse();
+        check(e.containsKey('message_id')).isFalse();
+      },
+    );
+
+    test(
+      'a failing or hanging log never stops the chat from opening',
+      () async {
+        await start(
+          settings: const AppSettings(
+            routinesServerUrl: _base,
+            routinesPushEnabled: true,
+          ),
+        );
+        tapSender = (body) async => throw StateError('relay down');
+        await container.read(pushRegistrationProvider.notifier).start();
+        push.emit({'kind': 'open', 'chat_id': 'omni', 'slug': 'journal'});
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        check(container.read(routineReplyMarkerProvider)!.slug)
+            .equals('journal');
+        tapSender = (body) => Completer<bool>().future;
+        container.read(routineReplyMarkerProvider.notifier).take('omni');
+        push.emit({'kind': 'open', 'chat_id': 'omni', 'slug': 'journal'});
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        check(container.read(routineReplyMarkerProvider)!.slug)
+            .equals('journal');
+      },
+    );
+
+    test('a reply or a token event logs no tap', () async {
+      await start(
+        settings: const AppSettings(
+          routinesServerUrl: _base,
+          routinesPushEnabled: true,
+        ),
+      );
+      var calls = 0;
+      tapSender = (body) async {
+        calls++;
+        return true;
+      };
+      await container.read(pushRegistrationProvider.notifier).start();
+      push.emit({'kind': 'token', 'token': 'abc'});
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      check(calls).equals(0);
     });
 
     test('a tap on a push with a message id asks to jump to it', () async {
