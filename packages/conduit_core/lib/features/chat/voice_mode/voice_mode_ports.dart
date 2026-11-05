@@ -84,7 +84,10 @@ abstract interface class VoiceModeInput {
 
   /// Loudness of the capture held through the assistant's turn (a held
   /// server recorder), one level per short frame, so the call can hear the
-  /// user start talking over the assistant. Silent while nothing is held.
+  /// user start talking over the assistant. Silent while nothing is held and
+  /// nobody listens. It carries on, from the live microphone, while a take
+  /// started on voice onset is recorded (2026-11-05: the call reads it to tell
+  /// the assistant's echo from the user).
   Stream<VoiceCaptureLevel> get heldCaptureLevels;
 
   /// [beginListeningEvents] for a take that starts on voice onset during the

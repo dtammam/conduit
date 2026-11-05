@@ -251,6 +251,35 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
   /// True while the assistant is ducked (not paused) for a provisional check.
   bool _provisionalDucked = false;
 
+  /// 2026-11-05 (+173): ducking is itself the test. Echo falls by about
+  /// 11 dB when the player ducks to [provisionalDuckLevel] (and the echo
+  /// canceller's reference falls with it); the user's voice does not. After
+  /// the ramp, [bargeProbeWindow] of live microphone frames are averaged and
+  /// compared with the frames just before the onset. A fall under
+  /// [bargeProbeSpeechDropDb] is probable speech: the assistant is paused
+  /// (so it can resume) while the take goes on to the transcript. A larger
+  /// fall is echo: the volume is restored at once. Starting values from
+  /// 3 logged events, not tuned: the midpoint between 0 dB (voice) and 11 dB
+  /// (echo) is about 5.5.
+  @visibleForTesting
+  static const Duration bargeProbeSettle = Duration(milliseconds: 150);
+  @visibleForTesting
+  static const Duration bargeProbeWindow = Duration(milliseconds: 350);
+  @visibleForTesting
+  static const double bargeProbeSpeechDropDb = 6;
+  static const int _bargeProbeMinFrames = 6;
+  static const int _bargeProbePreFrames = 8;
+  static const double _bargeProbeFloorDb = -50;
+
+  /// True while the assistant is paused (and ducked) on probable speech.
+  bool _probePaused = false;
+  StreamSubscription<VoiceCaptureLevel>? _probeSub;
+  Timer? _probeTimer;
+  final List<double> _recentHeldDb = <double>[];
+  final List<double> _probeDb = <double>[];
+  DateTime? _probeOnsetAt;
+  double? _probePreDb;
+
   Timer? _provisionalWatchdog;
   DateTime? _provisionalStartedAt;
   DateTime? _lastProvisionalSpeechAt;
@@ -1842,6 +1871,10 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
           state.phase == ChatVoiceModePhase.paused) {
         return;
       }
+      _recentHeldDb.add(level.dbfs);
+      if (_recentHeldDb.length > _bargeProbePreFrames) {
+        _recentHeldDb.removeAt(0);
+      }
       final lookback = detector.add(level);
       if (lookback != null) {
         _onsetInfo = <String, Object?>{
@@ -1890,6 +1923,9 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
           ..._onsetInfo,
           'preview': _clip(_previewBeforeBargeIn),
         });
+        _probePaused = false;
+        _probeOnsetAt = DateTime.now();
+        _probePreDb = _recentHeldDb.isEmpty ? null : _mean(_recentHeldDb);
         _provisionalDucked = await _textToSpeech!.duck(
           provisionalDuckLevel,
           ramp: _duckDownRamp,
@@ -1899,6 +1935,7 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
             'level': provisionalDuckLevel,
             'rampMs': _duckDownRamp.inMilliseconds,
           });
+          _startBargeProbe(token);
         } else {
           await _textToSpeech!.pause();
         }
@@ -1980,6 +2017,8 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
       // Real words: the drain below stops the assistant and sends them.
       _bargeInProvisional = false;
       _provisionalDucked = false;
+      _probePaused = false;
+      _cancelBargeProbe();
       state = state.copyWith(
         phase: ChatVoiceModePhase.listening,
         assistantPreview: '',
@@ -2243,18 +2282,25 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
     if (!_isCurrent(token) || !_bargeInProvisional) return;
     _bargeInProvisional = false;
     _cancelProvisionalWatchdog();
+    _cancelBargeProbe();
     final ducked = _provisionalDucked;
+    final probePaused = _probePaused;
     _provisionalDucked = false;
+    _probePaused = false;
     VoiceEventLog.instance.add('barge-in-resume', <String, Object?>{
       'reason': reason,
       'pausedMs': ?_provisionalPausedMs(),
       'ducked': ducked,
+      'probePaused': probePaused,
     });
     // Ducked speech never stopped, so it comes back at once, before the
     // recorder handoff below (which took about half a second while paused).
     if (ducked) {
       try {
-        await _textToSpeech!.unduck(ramp: _duckUpRamp);
+        // Paused on probable speech: back to full volume before it resumes.
+        await _textToSpeech!.unduck(
+          ramp: probePaused ? Duration.zero : _duckUpRamp,
+        );
       } catch (_) {}
     }
     DebugLogger.info(
@@ -2294,7 +2340,7 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
             : state.assistantPreview,
         intensity: 0,
       );
-      if (!ducked) await _textToSpeech!.resume();
+      if (!ducked || probePaused) await _textToSpeech!.resume();
       if (!_isCurrent(token)) return;
       if (inputOwnsResponseCapture) _watchForServerBargeIn(token, armNow: true);
     } catch (error, stackTrace) {
@@ -2319,6 +2365,92 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
         : DateTime.now().difference(startedAt).inMilliseconds;
   }
 
+  static double _mean(List<double> values) =>
+      values.reduce((a, b) => a + b) / values.length;
+
+  void _cancelBargeProbe() {
+    unawaited(_probeSub?.cancel());
+    _probeSub = null;
+    _probeTimer?.cancel();
+    _probeTimer = null;
+    _probeDb.clear();
+  }
+
+  /// Starts reading the microphone for the duck test. The window opens
+  /// [bargeProbeSettle] from now (the ramp and the output path) and lasts
+  /// [bargeProbeWindow].
+  void _startBargeProbe(int token) {
+    final input = _voiceInput;
+    if (input == null) return;
+    _cancelBargeProbe();
+    final opens = DateTime.now().add(bargeProbeSettle);
+    _probeSub = input.heldCaptureLevels.listen((level) {
+      if (!DateTime.now().isBefore(opens)) _probeDb.add(level.dbfs);
+    });
+    _probeTimer = Timer(bargeProbeSettle + bargeProbeWindow, () {
+      _probeTimer = null;
+      unawaited(_decideBargeProbe(token));
+    });
+  }
+
+  Future<void> _decideBargeProbe(int token) async {
+    if (!_isCurrent(token) || !_bargeInProvisional || !_provisionalDucked) {
+      return;
+    }
+    final frames = List<double>.of(_probeDb);
+    unawaited(_probeSub?.cancel());
+    _probeSub = null;
+    _probeDb.clear();
+    final pre = _probePreDb;
+    final onsetAt = _probeOnsetAt ?? DateTime.now();
+    final data = <String, Object?>{
+      'preDb': ?pre?.round(),
+      'windowMs': bargeProbeWindow.inMilliseconds,
+      'settleMs': bargeProbeSettle.inMilliseconds,
+      'frames': frames.length,
+    };
+    if (pre == null || frames.length < _bargeProbeMinFrames) {
+      // No level to judge by: leave it to the take and the watchdog.
+      VoiceEventLog.instance.add('barge-probe', <String, Object?>{
+        ...data,
+        'decision': 'no-levels',
+      });
+      return;
+    }
+    final post = _mean(frames);
+    final drop = pre - post;
+    data['postDb'] = post.round();
+    data['dropDb'] = drop.round();
+    final speech = drop < bargeProbeSpeechDropDb && post > _bargeProbeFloorDb;
+    if (!speech) {
+      VoiceEventLog.instance.add('barge-probe', <String, Object?>{
+        ...data,
+        'decision': 'echo-fell',
+        'msFromOnset': DateTime.now().difference(onsetAt).inMilliseconds,
+      });
+      await _enqueue(() async {
+        if (!_isCurrent(token) || !_bargeInProvisional) return;
+        await _resumeAfterBargeInEcho(token, '', reason: 'echo-fell');
+      });
+      return;
+    }
+    // Probable speech: stop the audio now, keep the take. A transcript that
+    // turns out to be echo resumes it from this spot.
+    _probePaused = true;
+    try {
+      await _textToSpeech!.pause();
+    } catch (_) {}
+    if (!_isCurrent(token)) return;
+    if (state.phase == ChatVoiceModePhase.speaking) {
+      state = state.copyWith(phase: ChatVoiceModePhase.listening);
+    }
+    VoiceEventLog.instance.add('barge-probe', <String, Object?>{
+      ...data,
+      'decision': 'speech',
+      'msFromOnset': DateTime.now().difference(onsetAt).inMilliseconds,
+    });
+  }
+
   void _cancelProvisionalWatchdog() {
     _provisionalWatchdog?.cancel();
     _provisionalWatchdog = null;
@@ -2337,10 +2469,17 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
       final now = DateTime.now();
       final startedAt = _provisionalStartedAt ?? now;
       final lastSpeech = _lastProvisionalSpeechAt;
-      final talking =
-          lastSpeech != null &&
-          now.difference(lastSpeech) < provisionalBargeInTimeout &&
-          now.difference(startedAt) < _provisionalBargeInHardLimit;
+      // 2026-11-05: ducked speech keeps the meter up (the 17:23:17 take sat 5 s
+      // in a check on its own echo), so only a take that is paused for probable
+      // speech counts as talking; the take's own end (VAD silence, then the
+      // transcript) decides it and only the hard limit cuts it. A take heard
+      // as speech was dropped at 5 s with its words unsent before this.
+      final talking = _probePaused
+          ? now.difference(startedAt) < _provisionalBargeInHardLimit
+          : !_provisionalDucked &&
+                lastSpeech != null &&
+                now.difference(lastSpeech) < provisionalBargeInTimeout &&
+                now.difference(startedAt) < _provisionalBargeInHardLimit;
       if (talking) {
         _armProvisionalWatchdog(token, const Duration(milliseconds: 500));
         return;
@@ -2359,6 +2498,8 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
     DebugLogger.info('barge-in', scope: 'chat/voice_mode');
     _bargeInProvisional = false;
     _provisionalDucked = false;
+    _probePaused = false;
+    _cancelBargeProbe();
     _cancelProvisionalWatchdog();
     final tts = _textToSpeech!;
     await tts.stopStreamingTts();
@@ -2974,6 +3115,9 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
     _assistantSpeechStartedAt = null;
     _bargeInProvisional = false;
     _provisionalDucked = false;
+    _probePaused = false;
+    _cancelBargeProbe();
+    _recentHeldDb.clear();
     _cancelProvisionalWatchdog();
     _provisionalStartedAt = null;
     _lastProvisionalSpeechAt = null;

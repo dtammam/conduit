@@ -1041,6 +1041,7 @@ class VoiceInputService implements VoiceModeInput {
     final recorderSession =
         ServerVadRecorderSession(_serverVadRecorderFactory())
           ..onHeldAudio = _handleHeldAudio
+          ..onForwardedAudio = _handleHeldAudio
           ..heldAudioRetentionBytes = _pcmBytesFor(_heldAudioRetention);
     _heldLevelMeter.reset();
     _vadHandler = vad;

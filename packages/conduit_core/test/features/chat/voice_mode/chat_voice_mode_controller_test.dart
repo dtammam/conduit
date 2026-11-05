@@ -2420,6 +2420,128 @@ void main() {
         await c.call.controller.stop();
       });
 
+      // Feeds one 32 ms frame at a time in real time, [db] for the first
+      // [firstMs] and [thenDb] after, until [totalMs] have gone.
+      Future<void> feed(
+        _FakeVoiceInputService input, {
+        required double db,
+        double? thenDb,
+        int firstMs = 100000,
+        int totalMs = 1500,
+      }) async {
+        final sw = Stopwatch()..start();
+        while (sw.elapsedMilliseconds < totalMs) {
+          input.heldLevels.add(
+            VoiceCaptureLevel(
+              dbfs: sw.elapsedMilliseconds < firstMs ? db : (thenDb ?? db),
+              duration: const Duration(milliseconds: 32),
+            ),
+          );
+          await Future<void>.delayed(const Duration(milliseconds: 32));
+        }
+      }
+
+      test('level that stays up through the duck stops the assistant within '
+          'the window and shows listening', () async {
+        final c = await ducking();
+        final sw = Stopwatch()..start();
+        final fed = feed(c.input, db: -25, totalMs: 1000);
+        await _until(() => c.tts.pauseCalls == 1);
+        final ms = sw.elapsedMilliseconds;
+        check(ms).isLessThan(800);
+        check(c.tts.stopCalls).equals(0);
+        check(c.tts.unduckCalls).equals(0);
+        check(c.call.container.read(chatVoiceModeControllerProvider).phase)
+            .equals(ChatVoiceModePhase.listening);
+        await fed;
+        // Long past the 1.5 s check: the watchdog leaves a heard take alone.
+        check(c.tts.resumeCalls).equals(0);
+        await c.call.controller.stop();
+      });
+
+      test('level that falls with the duck restores with no pause', () async {
+        final c = await ducking();
+        final sw = Stopwatch()..start();
+        final fed = feed(c.input, db: -25, thenDb: -38, firstMs: 100);
+        await _until(() => c.tts.unduckCalls == 1);
+        check(sw.elapsedMilliseconds).isLessThan(1200);
+        check(c.tts.pauseCalls).equals(0);
+        check(c.tts.resumeCalls).equals(0);
+        check(c.tts.stopCalls).equals(0);
+        await fed;
+        await c.call.controller.stop();
+      });
+
+      test('stopped on probable speech then judged echo resumes with the '
+          'words intact', () async {
+        final c = await ducking();
+        final preview = c.call.container
+            .read(chatVoiceModeControllerProvider)
+            .assistantPreview;
+        await feed(c.input, db: -25, totalMs: 800);
+        check(c.tts.pauseCalls).equals(1);
+        await c.input.completeCurrent(
+          preview.split(RegExp(r'\s+')).take(3).join(' '),
+        );
+        await _until(() => c.tts.resumeCalls == 1);
+        check(c.tts.unduckCalls).equals(1);
+        check(c.tts.stopCalls).equals(0);
+        check(c.call.stopGenerationCalls()).equals(0);
+        final state = c.call.container.read(chatVoiceModeControllerProvider);
+        check(state.phase).equals(ChatVoiceModePhase.speaking);
+        check(state.assistantPreview).startsWith(preview.trim());
+        check(userTurns(c.call.container)).deepEquals(<String>[
+          'tell me a long story',
+        ]);
+        await c.call.controller.stop();
+      });
+
+      test('stopped on probable speech then confirmed stays stopped',
+          () async {
+        final c = await ducking();
+        await feed(c.input, db: -25, totalMs: 800);
+        check(c.tts.pauseCalls).equals(1);
+        await c.input.completeCurrent('actually, stop there');
+        await _until(() => userTurns(c.call.container).length == 2);
+        check(c.tts.stopCalls).equals(1);
+        check(c.tts.resumeCalls).equals(0);
+        check(c.call.stopGenerationCalls()).equals(1);
+        await c.call.controller.stop();
+      });
+
+      test('a heard take is not dropped by the watchdog while it is still '
+          'being recorded (the 17:23:17 turn)', () async {
+        final c = await ducking();
+        await feed(c.input, db: -25, totalMs: 800);
+        // Quiet intensity for longer than the timeout, take not yet ended.
+        await Future<void>.delayed(
+          ChatVoiceModeController.provisionalBargeInTimeout +
+              const Duration(milliseconds: 1200),
+        );
+        check(c.tts.resumeCalls).equals(0);
+        await c.input.completeCurrent('so real quick, just a second');
+        await _until(() => userTurns(c.call.container).length == 2);
+        check(userTurns(c.call.container).last)
+            .equals('so real quick, just a second');
+        await c.call.controller.stop();
+      });
+
+      test('loud ducked echo cannot hold the check past its timeout',
+          () async {
+        final c = await ducking();
+        final sw = Stopwatch()..start();
+        while (c.tts.unduckCalls == 0 && sw.elapsedMilliseconds < 4000) {
+          c.input.emitIntensity(6);
+          await Future<void>.delayed(const Duration(milliseconds: 100));
+        }
+        check(c.tts.unduckCalls).equals(1);
+        check(sw.elapsedMilliseconds).isLessThan(
+          ChatVoiceModeController.provisionalBargeInTimeout.inMilliseconds +
+              600,
+        );
+        await c.call.controller.stop();
+      });
+
       test('a confirmed interruption stops the assistant as before', () async {
         final c = await ducking();
         await c.input.completeCurrent('actually, stop there');

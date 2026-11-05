@@ -30,6 +30,10 @@ class ServerVadRecorderSession {
   /// barge-in). Null discards held audio unheard.
   void Function(Uint8List bytes)? onHeldAudio;
 
+  /// Called with each live microphone chunk that goes on to the VAD (not the
+  /// replayed lookback), so a caller can read the level while a take runs.
+  void Function(Uint8List bytes)? onForwardedAudio;
+
   /// How many bytes of the most recent held audio are kept, so a recording
   /// resumed on voice onset can start with the beginning of the speech.
   int heldAudioRetentionBytes = 0;
@@ -74,6 +78,7 @@ class ServerVadRecorderSession {
               activeController != null &&
               !activeController.isClosed) {
             activeController.add(bytes);
+            onForwardedAudio?.call(bytes);
           } else if (_holdingForResponse) {
             _retainHeldAudio(bytes);
             onHeldAudio?.call(bytes);
