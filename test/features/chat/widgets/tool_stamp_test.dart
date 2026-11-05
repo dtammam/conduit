@@ -2,7 +2,14 @@ import 'dart:convert';
 
 import 'package:conduit/features/chat/widgets/tool_stamp.dart';
 import 'package:conduit/features/chat/avatar/assistant_action_log.dart';
+import 'package:conduit/features/chat/musey/musey_feed_views.dart'
+    show MuseyImage;
+import 'package:conduit/features/chat/widgets/web_sources.dart';
+import 'package:conduit/l10n/app_localizations.dart';
+import 'package:conduit/l10n/conduit_localizations.dart';
 import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart' as mui;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 String _call(String name, String result, {String id = 'c'}) =>
@@ -296,14 +303,14 @@ void summaryTests() {
     });
   });
 
-  group('web source pills', () {
+  group('web sources', () {
     AssistantActionRecord web(
       String name,
       String result, {
       String args = '',
       bool failed = false,
     }) => AssistantActionRecord(
-      id: '$name${result.hashCode}',
+      id: '$name${result.hashCode}${args.hashCode}',
       chatId: '',
       messageId: '',
       toolName: name,
@@ -318,24 +325,37 @@ void summaryTests() {
 
     const search =
         '[{"title":"DDR Community","link":"https://www.ddrcommunity.com/a?x=1",'
-        '"snippet":"s"},{"title":"Dupe","link":"https://www.ddrcommunity.com/a?x=1","snippet":"s"},'
+        '"snippet":"Rhythm game news"},{"title":"Dupe","link":"https://www.ddrcommunity.com/a?x=1","snippet":"s"},'
         '{"title":"Odd","link":"javascript:alert(1)","snippet":"s"},'
         '{"title":"File","link":"file:///etc/passwd","snippet":"s"},'
-        '{"title":"Other","link":"http://example.org/p","snippet":"s"}]';
+        '{"title":"Other","link":"http://example.org/p","snippet":"Other snippet"}]';
+    const q1 = '{"query":"ddr machines near me"}';
 
-    test('search_web gives title and link, deduped, http and https only', () {
-      final s = webSourcesFromRecords([web('search_web', search)]);
+    test('search_web gives title, link, snippet and the call query', () {
+      final s = webSourcesFromRecords([web('search_web', search, args: q1)]);
       expect(s.map((e) => e.url), [
         'https://www.ddrcommunity.com/a?x=1',
         'http://example.org/p',
       ]);
       expect(s.first.title, 'DDR Community');
+      expect(s.first.snippet, 'Rhythm game news');
+      expect(s.first.query, 'ddr machines near me');
       expect(s.first.domain, 'ddrcommunity.com');
+      expect(s.first.opened, isFalse);
     });
 
-    test('pages opened with fetch_url come first; failures add nothing', () {
+    test('a URL keeps the first query that returned it', () {
       final s = webSourcesFromRecords([
-        web('search_web', search),
+        web('search_web', search, args: q1),
+        web('search_web', search, args: '{"query":"second"}'),
+      ]);
+      expect(s.length, 2);
+      expect(s.first.query, 'ddr machines near me');
+    });
+
+    test('pages opened with fetch_url come first and are marked', () {
+      final s = webSourcesFromRecords([
+        web('search_web', search, args: q1),
         web('fetch_url', '{"url":"https://news.site/story","content":"x"}'),
         web('fetch_url', '', args: '{"url":"https://args.site/p"}'),
         web(
@@ -350,16 +370,33 @@ void summaryTests() {
         'ddrcommunity.com',
         'example.org',
       ]);
+      expect(s.take(2).every((e) => e.opened), isTrue);
+      expect(s.skip(2).any((e) => e.opened), isFalse);
     });
 
-    test('capped at six', () {
+    test(
+      'a page both found and opened keeps its query and is marked opened',
+      () {
+        final s = webSourcesFromRecords([
+          web('search_web', search, args: q1),
+          web('fetch_url', '', args: '{"url":"http://example.org/p"}'),
+        ]);
+        expect(s.first.url, 'http://example.org/p');
+        expect(s.first.opened, isTrue);
+        expect(s.first.query, 'ddr machines near me');
+        expect(s.first.snippet, 'Other snippet');
+        expect(s.length, 2);
+      },
+    );
+
+    test('no cap on the list', () {
       final many = [
         for (var i = 0; i < 12; i++)
           {'title': 't$i', 'link': 'https://s$i.com/'},
       ];
       expect(
         webSourcesFromRecords([web('search_web', jsonEncode(many))]).length,
-        kWebSourceLimit,
+        12,
       );
     });
 
@@ -404,55 +441,191 @@ void summaryTests() {
         },
         {'type': 'function_call_output', 'call_id': 'a', 'output': search},
       ]);
-      expect(webSourcesFromRecords(records).length, 2);
+      final s = webSourcesFromRecords(records);
+      expect(s.length, 2);
+      expect(s.first.query, 'ddr');
       expect(ToolStampData.fromRecords(records).sources.length, 2);
     });
+  });
 
-    testWidgets('pills show the domain, open the exact URL, label with title', (
-      tester,
-    ) async {
-      final opened = <String>[];
-      final data = ToolStampData.fromRecords([web('search_web', search)]);
+  group('web sources control and sheet', () {
+    List<WebSource> five() => [
+      const WebSource(
+        url: 'https://a.com/1',
+        title: 'Alpha page',
+        snippet: 'Alpha snippet',
+        query: 'alpha query',
+        opened: true,
+      ),
+      const WebSource(url: 'https://b.com/1', title: 'Beta', query: 'q2'),
+      const WebSource(url: 'https://c.com/1', title: 'Gamma'),
+      const WebSource(url: 'https://d.com/1', title: 'Delta'),
+      const WebSource(url: 'https://e.com/1', title: 'Epsilon'),
+      const WebSource(url: 'https://f.com/1', title: 'Zeta'),
+    ];
+
+    Future<void> mount(
+      WidgetTester tester,
+      Widget child, {
+      double width = 320,
+    }) async {
+      tester.view.physicalSize = Size(width, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
       await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: WebSourcePills(sources: data.sources, onOpen: opened.add),
+        ProviderScope(
+          child: mui.MaterialApp(
+            localizationsDelegates: conduitLocalizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: Scaffold(
+              body: Align(alignment: Alignment.topLeft, child: child),
+            ),
           ),
         ),
       );
-      expect(find.text('ddrcommunity.com'), findsWidgets);
-      expect(find.text('example.org'), findsOneWidget);
-      await tester.tap(find.text('example.org'));
-      expect(opened, ['http://example.org/p']);
-      expect(
-        find.bySemanticsLabel('DDR Community, ddrcommunity.com'),
-        findsOneWidget,
-      );
-    });
+    }
 
-    testWidgets('a stamp with sources shows pills in a short row', (
+    testWidgets('one short line: Sources, four icons, +N; no scroll', (
       tester,
     ) async {
-      final data = ToolStampData.fromRecords([web('search_web', search)]);
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(body: ToolStamp(data: data)),
-        ),
-      );
-      expect(find.byKey(const ValueKey('web-source-pills')), findsOneWidget);
+      await mount(tester, WebSourcesControl(sources: five()));
+      final control = find.byKey(const ValueKey('web-sources-control'));
+      expect(find.text('Sources'), findsOneWidget);
+      expect(find.byType(SourceFavicon), findsNWidgets(kSourceIconLimit));
+      expect(find.text('+2'), findsOneWidget);
+      expect(find.byType(ListView), findsNothing);
+      expect(find.byType(SingleChildScrollView), findsNothing);
+      final size = tester.getSize(control);
+      expect(size.height, 22);
+      expect(size.width, lessThan(200));
+    });
+
+    testWidgets('few sources: no +N; none: nothing', (tester) async {
+      await mount(tester, WebSourcesControl(sources: five().take(2).toList()));
+      expect(find.byType(SourceFavicon), findsNWidgets(2));
+      expect(find.byKey(const ValueKey('web-sources-more')), findsNothing);
+      await mount(tester, const WebSourcesControl(sources: []));
+      expect(find.byKey(const ValueKey('web-sources-control')), findsNothing);
+    });
+
+    testWidgets('tap opens a sheet listing every source, opened first', (
+      tester,
+    ) async {
+      await mount(tester, WebSourcesControl(sources: five()));
+      await tester.tap(find.byKey(const ValueKey('web-sources-control')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('web-sources-title')), findsOneWidget);
+      for (final t in [
+        'Alpha page',
+        'Beta',
+        'Gamma',
+        'Delta',
+        'Epsilon',
+        'Zeta',
+      ]) {
+        expect(find.text(t), findsOneWidget);
+      }
+      expect(find.text('a.com'), findsOneWidget);
       expect(
-        tester.getSize(find.byKey(const ValueKey('web-source-pills'))).height,
-        22,
+        find.byKey(const ValueKey('web-source-opened-https://a.com/1')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('web-source-opened-https://b.com/1')),
+        findsNothing,
+      );
+      expect(
+        tester.getTopLeft(find.text('Alpha page')).dy,
+        lessThan(tester.getTopLeft(find.text('Beta')).dy),
       );
     });
 
-    testWidgets('no web step, no pills', (tester) async {
-      final data = ToolStampData.fromRecords([_rec('calendar-mcp_event_list')]);
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(body: ToolStamp(data: data)),
-        ),
+    testWidgets(
+      'a row tap expands it with query, snippet and Open page; second tap collapses',
+      (tester) async {
+        final opened = <String>[];
+        await mount(
+          tester,
+          WebSourcesControl(sources: five(), onOpen: opened.add),
+        );
+        await tester.tap(find.byKey(const ValueKey('web-sources-control')));
+        await tester.pumpAndSettle();
+        final row = find.byKey(
+          const ValueKey('web-source-row-https://a.com/1'),
+        );
+        expect(find.text('Searched: alpha query'), findsNothing);
+        await tester.tap(row);
+        await tester.pumpAndSettle();
+        // A row tap never jumps to the browser.
+        expect(opened, isEmpty);
+        expect(find.text('Searched: alpha query'), findsOneWidget);
+        expect(find.text('Alpha snippet'), findsOneWidget);
+        expect(find.text('Open page'), findsOneWidget);
+        await tester.tap(find.text('Open page'));
+        expect(opened, ['https://a.com/1']);
+        await tester.tap(row);
+        await tester.pumpAndSettle();
+        expect(find.text('Searched: alpha query'), findsNothing);
+        expect(find.text('Open page'), findsNothing);
+      },
+    );
+
+    testWidgets('a row with no query or snippet still offers Open page', (
+      tester,
+    ) async {
+      final opened = <String>[];
+      await mount(
+        tester,
+        WebSourcesControl(sources: five(), onOpen: opened.add),
       );
+      await tester.tap(find.byKey(const ValueKey('web-sources-control')));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('web-source-row-https://c.com/1')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Searched:'), findsNothing);
+      await tester.tap(find.text('Open page'));
+      expect(opened, ['https://c.com/1']);
+    });
+
+    testWidgets('favicons come from the relay path, with a letter fallback', (
+      tester,
+    ) async {
+      await mount(tester, const SourceFavicon(domain: 'ddrcommunity.com'));
+      final img = tester.widget<MuseyImage>(
+        find.byKey(const ValueKey('source-icon-ddrcommunity.com')),
+      );
+      expect(img.src, '/musey/favicon?domain=ddrcommunity.com');
+      expect(img.src, isNot(contains('google')));
+      await tester.pump();
+      // No relay in the test: the letter shows, no broken image, no throw.
+      expect(find.text('D'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await mount(tester, const SourceFavicon(domain: ''));
+      expect(find.text('?'), findsOneWidget);
+    });
+
+    testWidgets('the stamp carries the control, not scrolling pills', (
+      tester,
+    ) async {
+      final data = ToolStampData(const [], const [], five());
+      expect(data.sources.length, 6);
+      final records = [
+        AssistantActionRecord(
+          id: 'x',
+          chatId: '',
+          messageId: '',
+          toolName: 'search_web',
+          arguments: '{"query":"x"}',
+          result: '[{"title":"T","link":"https://t.com/","snippet":"s"}]',
+          status: AssistantActionStatus.succeeded,
+          startedAt: DateTime.fromMillisecondsSinceEpoch(0),
+          finishedAt: DateTime.fromMillisecondsSinceEpoch(0),
+        ),
+      ];
+      await mount(tester, ToolStamp(data: ToolStampData.fromRecords(records)));
+      expect(find.byKey(const ValueKey('web-sources-control')), findsOneWidget);
       expect(find.byKey(const ValueKey('web-source-pills')), findsNothing);
     });
   });

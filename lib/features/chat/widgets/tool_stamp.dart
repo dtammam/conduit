@@ -3,8 +3,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 
 import '../../../shared/theme/theme_extensions.dart';
-import '../../../shared/utils/external_link_launcher.dart';
 import '../avatar/assistant_action_log.dart';
+import 'web_sources.dart';
 
 /// Calls that are plumbing, not actions worth proving.
 const Set<String> kToolStampHiddenNames = {
@@ -350,31 +350,6 @@ List<ToolSummarySegment> buildToolSummary(
   ];
 }
 
-/// A page the reply's web tools found or opened. It comes only from a tool
-/// result, never from text the model wrote.
-class WebSource {
-  const WebSource({required this.url, required this.title});
-
-  final String url;
-  final String title;
-
-  /// The short site name: host without a leading "www.".
-  String get domain {
-    final host = Uri.tryParse(url)?.host ?? '';
-    return host.startsWith('www.') ? host.substring(4) : host;
-  }
-
-  @override
-  bool operator ==(Object other) =>
-      other is WebSource && other.url == url && other.title == title;
-
-  @override
-  int get hashCode => Object.hash(url, title);
-}
-
-/// Most source pills under one reply.
-const int kWebSourceLimit = 6;
-
 /// http and https URLs with a host only; anything else is not shown.
 String? _webUrl(Object? raw) {
   if (raw is! String) return null;
@@ -408,7 +383,16 @@ void _collectSources(Object? node, List<WebSource> out, int depth) {
   } else if (node is Map) {
     final url = _webUrl(node['link'] ?? node['url'] ?? node['source']);
     if (url != null) {
-      out.add(WebSource(url: url, title: (node['title'] ?? '').toString()));
+      final snippet = (node['snippet'] ?? node['description'] ?? '')
+          .toString()
+          .trim();
+      out.add(
+        WebSource(
+          url: url,
+          title: (node['title'] ?? '').toString(),
+          snippet: snippet.isEmpty ? null : snippet,
+        ),
+      );
     }
     final text = node['text'];
     if (text is String) _parseSourceText(text, out, depth + 1);
@@ -445,13 +429,31 @@ void _parseSourceText(String text, List<WebSource> out, int depth) {
   }
 }
 
+String? _searchQuery(String arguments) {
+  try {
+    final args = jsonDecode(arguments);
+    if (args is! Map) return null;
+    for (final key in const ['query', 'q', 'search_query']) {
+      final v = args[key];
+      if (v is String && v.trim().isNotEmpty) return v.trim();
+    }
+    final many = args['queries'];
+    if (many is List && many.isNotEmpty && many.first is String) {
+      return (many.first as String).trim();
+    }
+  } catch (_) {}
+  return null;
+}
+
 /// The pages behind a reply's web steps, read from the tool results of
-/// `search_web` (title and link) and `fetch_url` (the page opened). Pages
-/// opened come first, then search hits; each URL once; at most
-/// [kWebSourceLimit]. Failed calls add nothing.
+/// `search_web` (title, link, snippet; the query is the call's argument) and
+/// `fetch_url` (the page opened). Pages opened come first, then search hits;
+/// each URL once, keeping the first query that returned it; no cap (the
+/// control shows a few icons, the sheet lists them all). Failed calls add
+/// nothing.
 List<WebSource> webSourcesFromRecords(Iterable<AssistantActionRecord> records) {
-  final opened = <WebSource>[];
-  final found = <WebSource>[];
+  final opened = <String, WebSource>{};
+  final found = <String, WebSource>{};
   for (final record in records) {
     if (record.failed || _resultSaysFailed(record.result)) continue;
     final name = record.toolName.trim();
@@ -470,16 +472,36 @@ List<WebSource> webSourcesFromRecords(Iterable<AssistantActionRecord> records) {
           if (url != null) list.add(WebSource(url: url, title: ''));
         } catch (_) {}
       }
-      if (list.isNotEmpty) opened.add(list.first);
+      if (list.isNotEmpty) opened.putIfAbsent(list.first.url, () => list.first);
     } else if (base == 'search_web') {
-      _parseSourceText(record.result, found, 0);
+      final list = <WebSource>[];
+      _parseSourceText(record.result, list, 0);
+      final query = _searchQuery(record.arguments);
+      for (final hit in list) {
+        found.putIfAbsent(
+          hit.url,
+          () => WebSource(
+            url: hit.url,
+            title: hit.title,
+            snippet: hit.snippet,
+            query: query,
+          ),
+        );
+      }
     }
   }
-  final seen = <String>{};
   return [
-    for (final s in [...opened, ...found])
-      if (seen.add(s.url)) s,
-  ].take(kWebSourceLimit).toList();
+    for (final o in opened.values)
+      WebSource(
+        url: o.url,
+        title: o.title.isNotEmpty ? o.title : (found[o.url]?.title ?? ''),
+        snippet: found[o.url]?.snippet,
+        query: found[o.url]?.query,
+        opened: true,
+      ),
+    for (final f in found.values)
+      if (!opened.containsKey(f.url)) f,
+  ];
 }
 
 /// Everything the stamp shows for one reply, from its stored tool calls.
@@ -650,85 +672,8 @@ class _ToolStampState extends State<ToolStamp> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         stamp,
-        WebSourcePills(sources: data.sources),
+        WebSourcesControl(sources: data.sources),
       ],
-    );
-  }
-}
-
-/// Very small tappable pills under the web step, one per source: the site's
-/// short domain, the whole URL opened in the system browser on tap. They
-/// scroll sideways, so the bubble does not grow.
-class WebSourcePills extends StatelessWidget {
-  const WebSourcePills({super.key, required this.sources, this.onOpen});
-
-  final List<WebSource> sources;
-
-  /// Opens [url]; a test replaces it. Defaults to the system browser.
-  final void Function(String url)? onOpen;
-
-  @override
-  Widget build(BuildContext context) {
-    final shown = [
-      for (final s in sources)
-        if (s.domain.isNotEmpty) s,
-    ];
-    if (shown.isEmpty) return const SizedBox.shrink();
-    final theme = context.conduitTheme;
-    return Padding(
-      padding: const EdgeInsets.only(top: 4),
-      child: SizedBox(
-        height: 22,
-        child: ListView.separated(
-          key: const ValueKey<String>('web-source-pills'),
-          scrollDirection: Axis.horizontal,
-          itemCount: shown.length,
-          separatorBuilder: (_, _) => const SizedBox(width: 4),
-          itemBuilder: (context, i) {
-            final source = shown[i];
-            return Semantics(
-              button: true,
-              link: true,
-              label: source.title.isEmpty
-                  ? source.domain
-                  : '${source.title}, ${source.domain}',
-              excludeSemantics: true,
-              child: GestureDetector(
-                key: ValueKey<String>('web-source-${source.url}'),
-                behavior: HitTestBehavior.opaque,
-                onTap: () {
-                  try {
-                    final open = onOpen;
-                    if (open != null) {
-                      open(source.url);
-                    } else {
-                      launchExternalLink(source.url, scope: 'chat/web-source');
-                    }
-                  } catch (_) {}
-                },
-                child: Container(
-                  alignment: Alignment.center,
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  decoration: BoxDecoration(
-                    color: theme.surfaceContainer,
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: theme.cardBorder, width: 0.5),
-                  ),
-                  child: Text(
-                    source.domain,
-                    maxLines: 1,
-                    style: TextStyle(
-                      fontSize: 11,
-                      height: 1.1,
-                      color: theme.textSecondary,
-                    ),
-                  ),
-                ),
-              ),
-            );
-          },
-        ),
-      ),
     );
   }
 }
