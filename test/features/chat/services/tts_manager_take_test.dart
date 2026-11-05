@@ -24,6 +24,9 @@ final class _Player extends NullAudioPlayback {
   final List<AudioClip> queued = [];
   AudioProcessingState state = AudioProcessingState.idle;
 
+  final indices = StreamController<int?>.broadcast();
+  @override
+  Stream<int?> get currentIndexChanges => indices.stream;
   @override
   Stream<AudioPlaybackState> get stateChanges => _states.stream;
   @override
@@ -404,6 +407,47 @@ void main() {
       again();
       await listen();
       check(speech.rendered).isGreaterThan(0);
+    });
+
+    test('a take cut into units plays one clip per unit and names sentences', () async {
+      const three =
+          'Curious engineers optimize audio boundaries for smoother conversations every day. '
+          'Another sentence follows to verify chunk merging behavior in long replies. '
+          'A third sentence closes the reply with a few more words to be safe.';
+      final sentences = TtsManager.instance.splitTextForSpeech(three);
+      check(sentences.length).equals(3);
+      final unitA = _audio(10, 3);
+      final unitB = _audio(50, 2);
+      final src = File('${tmp.path}/units.mp3')
+        ..writeAsBytesSync([...unitA, ...unitB]);
+      await store.save(
+        messageId: 'm9',
+        voiceKey: 'direct|m|alloy',
+        text: three,
+        source: src,
+        extension: 'mp3',
+        clipSizes: [unitA.length, unitB.length],
+        unitStarts: [0, 2],
+      );
+      final events = <TtsEvent>[];
+      final sub = TtsManager.instance.events.listen(events.add);
+      speech.rendered = 0;
+      await TtsManager.instance.speak(
+        three,
+        take: SpeechTakeTarget(messageId: 'm9', text: three),
+      );
+      await pumpEventQueue();
+      check(speech.rendered).equals(0);
+      check(player.queued.length).equals(2);
+      check(await playedBytes()).deepEquals([...unitA, ...unitB]);
+      player.indices.add(0);
+      player.indices.add(1);
+      await pumpEventQueue();
+      await sub.cancel();
+      // Unit 1 starts at sentence 2: the highlight is told a sentence.
+      check(
+        events.whereType<TtsChunkStarted>().map((e) => e.chunkIndex).toList(),
+      ).deepEquals([0, 2]);
     });
   });
 }

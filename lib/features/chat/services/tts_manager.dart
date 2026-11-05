@@ -276,6 +276,10 @@ class TtsManager {
   /// when Listen finds a take for this message, voice and text. Nothing is
   /// recorded then, so a replay never replaces the take.
   List<_AudioChunk>? _keptClips;
+
+  /// For a kept take cut into units of several sentences: the sentence each
+  /// unit starts at, so the highlight names a sentence, not a unit.
+  List<int>? _keptUnitStarts;
   SpeechTakeStore _takeStore = SpeechTakeStore.instance;
 
   /// The save the last completed reply started, for tests.
@@ -340,6 +344,9 @@ class TtsManager {
       return null;
     }
   }
+
+  /// Whether a voice call owns the speaker now.
+  bool get voiceCallActive => _voiceCallActive;
 
   /// Whether any TTS is available.
   bool get isAvailable => _deviceEngineAvailable || serverAvailable;
@@ -459,7 +466,14 @@ class TtsManager {
           'part': index,
           'gap-ms': ?gap,
         });
-        _emitEvent(TtsChunkStarted(index));
+        final starts = _keptUnitStarts;
+        _emitEvent(
+          TtsChunkStarted(
+            starts != null && index >= 0 && index < starts.length
+                ? starts[index]
+                : index,
+          ),
+        );
       });
       await _player.setSpeed(_serverPlaybackRate);
       _playerConfigured = true;
@@ -498,10 +512,23 @@ class TtsManager {
 
     // A take kept for this message, voice and text is played as it is.
     List<_AudioChunk>? kept;
+    List<int>? keptStarts;
     if (shouldUseServer && take != null) {
-      kept = await _loadKeptClips(take, chunks.length);
-      if (kept != null && kept.length == 1 && chunks.length > 1) {
-        // Rendered whole, with no sentence boundaries: one clip.
+      final loaded = await _loadKeptClips(take, chunks.length);
+      kept = loaded?.clips;
+      keptStarts = loaded?.starts;
+      if (kept != null && keptStarts != null) {
+        // Units of several sentences, cut at silences: spoken as one chunk each.
+        final units = <String>[];
+        for (var u = 0; u < keptStarts.length; u++) {
+          final end = u + 1 < keptStarts.length
+              ? keptStarts[u + 1]
+              : chunks.length;
+          units.add(chunks.sublist(keptStarts[u], end).join(' '));
+        }
+        chunks = units;
+      } else if (kept != null && kept.length == 1 && chunks.length > 1) {
+        // Rendered whole, with no boundaries at all: one clip.
         chunks = [text.trim()];
       }
     }
@@ -516,6 +543,7 @@ class TtsManager {
     );
     _activeSession = session;
     _keptClips = kept;
+    _keptUnitStarts = keptStarts;
     _takeRecorder = shouldUseServer && take != null && kept == null
         ? _newTakeRecorder(session, take)
         : null;
@@ -1418,7 +1446,7 @@ class TtsManager {
   /// boundaries saved with it), or as one chunk when it has no boundaries.
   /// Null when there is no take, or the file is missing or does not match
   /// what was saved (then speech is generated as usual).
-  Future<List<_AudioChunk>?> _loadKeptClips(
+  Future<({List<_AudioChunk> clips, List<int>? starts})?> _loadKeptClips(
     SpeechTakeTarget target,
     int sentenceCount,
   ) async {
@@ -1436,9 +1464,23 @@ class TtsManager {
       if (bytes.isEmpty) return null;
       final mime = found.mimeType;
       final sizes = found.clipSizes;
-      if (sizes == null || sizes.length != sentenceCount) {
-        if (sizes != null) return null; // does not match this text's split
-        return [_AudioChunk(bytes: bytes, mimeType: mime)];
+      final starts = found.unitStarts;
+      if (sizes == null) {
+        return (
+          clips: [_AudioChunk(bytes: bytes, mimeType: mime)],
+          starts: null,
+        );
+      }
+      if (starts != null) {
+        // Units: the starts must be a rising run of sentences of this text.
+        if (starts.length != sizes.length || starts.first != 0) return null;
+        for (var u = 1; u < starts.length; u++) {
+          if (starts[u] <= starts[u - 1] || starts[u] >= sentenceCount) {
+            return null;
+          }
+        }
+      } else if (sizes.length != sentenceCount) {
+        return null; // does not match this text's split
       }
       if (sizes.fold<int>(0, (a, b) => a + b) != bytes.length) return null;
       final out = <_AudioChunk>[];
@@ -1453,7 +1495,7 @@ class TtsManager {
         );
         at += size;
       }
-      return out;
+      return (clips: out, starts: starts);
     } catch (_) {
       return null;
     }
@@ -1755,6 +1797,7 @@ class TtsManager {
     _takeRecorder?.discard();
     _takeRecorder = null;
     _keptClips = null;
+    _keptUnitStarts = null;
     _cancelServerProgressive();
     unawaited(_stopServerBackgroundLease());
     unawaited(_cleanupServerTempFiles());

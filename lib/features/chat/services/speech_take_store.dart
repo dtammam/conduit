@@ -20,11 +20,16 @@ class SpeechTake {
     required this.messageId,
     required this.voiceKey,
     this.clipSizes,
+    this.unitStarts,
   });
 
   /// Bytes of each sentence's audio in [file], in order, when the take was
   /// joined from sentence clips (null for a take rendered whole by the relay).
   final List<int>? clipSizes;
+
+  /// For a take cut into units larger than a sentence: the sentence each
+  /// unit starts at (same length as [clipSizes]).
+  final List<int>? unitStarts;
 
   final File file;
   final String extension;
@@ -168,6 +173,7 @@ class SpeechTakeStore {
     String? chatId,
     String? keyOverride,
     List<int>? clipSizes,
+    List<int>? unitStarts,
   }) async {
     final root = await _rootDirectory();
     final key = keyOverride ?? textKey(text);
@@ -198,6 +204,7 @@ class SpeechTakeStore {
         'ext': extension,
         'bytes': bytes,
         'clips': ?clipSizes,
+        'starts': ?unitStarts,
       }),
       flush: true,
     );
@@ -209,6 +216,7 @@ class SpeechTakeStore {
       messageId: messageId,
       voiceKey: voiceKey,
       clipSizes: clipSizes,
+      unitStarts: unitStarts,
     );
   }
 
@@ -254,27 +262,50 @@ class SpeechTakeStore {
 
   /// Removes takes past [maxAge], then the oldest past [maxBytes], and any
   /// recording a crash left behind. Runs in another isolate.
-  Future<void> sweep({Duration? age, int? cap}) async {
+  Future<({int count, int bytes, int removed})?> sweep({
+    Duration? age,
+    int? cap,
+  }) async {
     try {
       final root = await _rootDirectory();
       final path = root.path;
       final nowMs = _now().millisecondsSinceEpoch;
       final ageMs = (age ?? maxAge).inMilliseconds;
       final capBytes = cap ?? maxBytes;
-      await Isolate.run(() => sweepSync(path, nowMs, ageMs, capBytes));
+      final summary = await Isolate.run(
+        () => sweepSync(path, nowMs, ageMs, capBytes),
+      );
+      // Logged so growth can be watched (Dean: revisit the limits later).
+      DebugLogger.info(
+        'speech-take-sweep',
+        scope: 'chat/take',
+        data: {
+          'takes': summary.count,
+          'bytes': summary.bytes,
+          'mb': (summary.bytes / (1024 * 1024)).toStringAsFixed(1),
+          'removed': summary.removed,
+        },
+      );
+      return summary;
     } catch (error) {
       DebugLogger.warning(
         'speech-take-sweep-failed',
         scope: 'chat/take',
         data: {'error': error.toString()},
       );
+      return null;
     }
   }
 
   /// The sweep itself, on plain synchronous file calls. Public for tests.
-  static void sweepSync(String root, int nowMs, int maxAgeMs, int capBytes) {
+  static ({int count, int bytes, int removed}) sweepSync(
+    String root,
+    int nowMs,
+    int maxAgeMs,
+    int capBytes,
+  ) {
     final dir = Directory(root);
-    if (!dir.existsSync()) return;
+    if (!dir.existsSync()) return (count: 0, bytes: 0, removed: 0);
     final work = Directory(p.join(root, _work));
     if (work.existsSync()) work.deleteSync(recursive: true);
     final takes = <({File file, File? meta, int created, int bytes})>[];
@@ -316,9 +347,11 @@ class SpeechTakeStore {
     }
 
     var kept = <({File file, File? meta, int created, int bytes})>[];
+    var removed = 0;
     for (final t in takes) {
       if (nowMs - t.created > maxAgeMs) {
         drop(t);
+        removed++;
       } else {
         kept.add(t);
       }
@@ -330,6 +363,7 @@ class SpeechTakeStore {
       for (final t in kept) {
         if (total > capBytes) {
           drop(t);
+          removed++;
           total -= t.bytes;
         } else {
           left.add(t);
@@ -340,6 +374,8 @@ class SpeechTakeStore {
     for (final folder in dir.listSync().whereType<Directory>()) {
       if (folder.listSync().isEmpty) folder.deleteSync();
     }
+    final left = kept.length;
+    return (count: left, bytes: total, removed: removed);
   }
 
   // ---------------------------------------------------------------- files
@@ -363,6 +399,7 @@ class SpeechTakeStore {
           messageId: map['messageId'] as String? ?? '',
           voiceKey: map['voice'] as String? ?? '',
           clipSizes: (map['clips'] as List?)?.whereType<int>().toList(),
+          unitStarts: (map['starts'] as List?)?.whereType<int>().toList(),
         ),
         textKey: map['textKey'] as String? ?? '',
         stem: stem,
@@ -403,6 +440,7 @@ class SpeechTakeStore {
         chatId: chatId ?? loose.chatId,
         keyOverride: loose.textKey,
         clipSizes: loose.take.clipSizes,
+        unitStarts: loose.take.unitStarts,
       );
       await _deleteStem(loose.dir, loose.stem);
       return saved;

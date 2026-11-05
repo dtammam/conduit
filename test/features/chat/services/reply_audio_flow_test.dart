@@ -12,6 +12,7 @@ void main() {
   late ReplyAudioFlow flow;
   var relayCalls = 0;
   var renderNumber = 0;
+  Uint8List Function(int n) download = (n) => Uint8List.fromList([n, 9, 9]);
 
   const request = ReplyAudioRequest(
     messageId: 'm1',
@@ -24,19 +25,21 @@ void main() {
     tmp = await Directory.systemTemp.createTemp('reply_flow_');
     relayCalls = 0;
     renderNumber = 0;
+    download = (n) => Uint8List.fromList([n, 9, 9]);
     store = SpeechTakeStore(
       supportDirectory: () async => Directory('${tmp.path}/support'),
       excludeFromBackup: (_) async {},
     );
     flow = ReplyAudioFlow(
       store: store,
+      splitSentences: (t) => t.split(RegExp(r'(?<=[.!?])\s+')),
       exporter: ReplyMp3Export(
         startRelayExport: (text) async {
           relayCalls++;
           return const Mp3ExportTicket(url: 'https://relay.invalid/x');
         },
         // Every render is a different take, as Breeze's are.
-        download: (url) async => Uint8List.fromList([++renderNumber, 9, 9]),
+        download: (url) async => download(++renderNumber),
         render: (text) async => throw StateError('no fallback render'),
         tempDirectory: () async => Directory('${tmp.path}/cache'),
       ),
@@ -160,5 +163,75 @@ void main() {
       renderVoiceKey: 'direct|m|alloy',
     );
     expect(await flow.savedTake(edited), isNull);
+  });
+
+  Uint8List mp3WithGap() {
+    Uint8List f(bool quiet) => quiet
+        ? (Uint8List(96)..setAll(0, [0xff, 0xf3, 0x44, 0xc4]))
+        : (Uint8List(192)..setAll(0, [0xff, 0xf3, 0x84, 0xc4]));
+    final b = BytesBuilder();
+    for (var i = 0; i < 40; i++) {
+      b.add(f(false));
+    }
+    for (var i = 0; i < 8; i++) {
+      b.add(f(true));
+    }
+    for (var i = 0; i < 40; i++) {
+      b.add(f(false));
+    }
+    return b.takeBytes();
+  }
+
+  test('a rendered take is cut at its silence so Listen can follow it', () async {
+    download = (n) => mp3WithGap();
+    final take = await flow.render(request);
+    expect(take.clipSizes, isNotNull);
+    expect(take.unitStarts, [0, 1]);
+    expect(take.clipSizes!.fold<int>(0, (a, b) => a + b), take.bytes);
+    final again = await flow.savedTake(request);
+    expect(again!.unitStarts, [0, 1]);
+  });
+
+  test('a background render Listen took over keeps nothing', () async {
+    var wanted = true;
+    await expectLater(
+      flow.render(request, stillWanted: () {
+        final now = wanted;
+        wanted = false; // pressed Listen while the relay was rendering
+        return now && false;
+      }),
+      throwsA(isA<ReplyAudioDropped>()),
+    );
+    expect(await flow.savedTake(request), isNull);
+    expect(Directory('${tmp.path}/cache').existsSync() ? Directory('${tmp.path}/cache').listSync(recursive: true).whereType<File>() : [], isEmpty);
+  });
+
+  test('a background render never replaces a take that appeared meanwhile', () async {
+    await keepHeardTake();
+    await expectLater(
+      flow.render(request, onlyIfMissing: true),
+      throwsA(isA<ReplyAudioDropped>()),
+    );
+    final kept = await flow.savedTake(request);
+    expect(await kept!.file.readAsBytes(), [42, 42, 42, 42]);
+  });
+
+  test('Share uses a pre-generated take with no extra relay call', () async {
+    // The background render: one relay call.
+    await flow.render(request, onlyIfMissing: true);
+    expect(relayCalls, 1);
+    var previews = 0;
+    final chosen = await flow.choose(
+      request,
+      render: () => throw StateError('must not render'),
+      showPreview: (t, a) async {
+        previews++;
+        return t;
+      },
+    );
+    expect(relayCalls, 1);
+    expect(previews, 0);
+    final staged = await flow.stage(chosen!, request);
+    expect(staged.file.existsSync(), isTrue);
   });
 }

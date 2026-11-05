@@ -39,6 +39,7 @@ final class _FailingStore extends SpeechTakeStore {
     String? chatId,
     String? keyOverride,
     List<int>? clipSizes,
+    List<int>? unitStarts,
   }) => throw const FileSystemException('disk full');
 }
 

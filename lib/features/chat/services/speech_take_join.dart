@@ -131,6 +131,97 @@ class SpeechTakeJoin {
     return true;
   }
 
+
+  /// Cuts one whole mp3 (the relay's export of a reply) at its silent gaps
+  /// into playable units, and says which sentence each unit starts at.
+  ///
+  /// The export joins its chunks with a gap of digital silence, which the
+  /// encoder writes as the smallest frames in the file; a run of those is a
+  /// place to cut that no word crosses and no decoder needs earlier frames
+  /// for. Each gap is matched to the sentence whose share of the text best
+  /// fits its share of the audio, so the highlight follows the voice to
+  /// within a sentence or so. The audio is cut only at the silences, never at
+  /// the estimate. Null when the file has no usable gap (play it whole).
+  static ({List<int> sizes, List<int> starts})? silenceUnits(
+    Uint8List mp3,
+    List<String> sentences, {
+    int minRunFrames = 6,
+  }) {
+    if (sentences.length < 2) return null;
+    // Frame walk: offsets and lengths, after an ID3 tag.
+    final offsets = <int>[];
+    final lengths = <int>[];
+    var at = 0;
+    final tag = _id3Length(mp3, 0);
+    if (tag != null) at = tag;
+    while (at + 4 <= mp3.length) {
+      final length = mp3FrameLength(mp3, at);
+      if (length == null || at + length > mp3.length) break;
+      offsets.add(at);
+      lengths.add(length);
+      at += length;
+    }
+    final frames = lengths.length;
+    if (frames < minRunFrames * 3) return null;
+    final sorted = [...lengths]..sort();
+    final smallest = sorted.first;
+    final median = sorted[frames ~/ 2];
+    if (smallest >= median * 0.8) return null;
+    // Runs of the smallest frames, away from the two ends.
+    final cuts = <({int frame, int byte})>[];
+    var i = 0;
+    while (i < frames) {
+      if (lengths[i] != smallest) {
+        i++;
+        continue;
+      }
+      var j = i;
+      while (j < frames && lengths[j] == smallest) {
+        j++;
+      }
+      if (j - i >= minRunFrames && i > 0 && j < frames) {
+        final mid = i + (j - i) ~/ 2;
+        cuts.add((frame: mid, byte: offsets[mid]));
+      }
+      i = j;
+    }
+    if (cuts.isEmpty) return null;
+    var total = 0;
+    final cum = <int>[0];
+    for (final sentence in sentences) {
+      total += sentence.trim().length + 1;
+      cum.add(total);
+    }
+    final bounds = <({int byte, int start})>[];
+    var previous = 0;
+    for (final cut in cuts) {
+      final target = cut.frame / frames;
+      var best = -1;
+      var bestDistance = 2.0;
+      for (var k = previous + 1; k < sentences.length; k++) {
+        final distance = (cum[k] / total - target).abs();
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          best = k;
+        }
+      }
+      if (best < 0) continue;
+      bounds.add((byte: cut.byte, start: best));
+      previous = best;
+    }
+    if (bounds.isEmpty) return null;
+    final sizes = <int>[];
+    final starts = <int>[0];
+    var from = 0;
+    for (final b in bounds) {
+      sizes.add(b.byte - from);
+      starts.add(b.start);
+      from = b.byte;
+    }
+    sizes.add(mp3.length - from);
+    return (sizes: sizes, starts: starts);
+  }
+
   // ---------------------------------------------------------------- WAV
 
   static Uint8List? _joinWav(List<Uint8List> clips) {

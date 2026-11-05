@@ -150,4 +150,61 @@ void main() {
     expect(SpeechTakeJoin.kindOf('audio/mpeg'), 'mp3');
     expect(SpeechTakeJoin.kindOf('audio/x-wav'), 'wav');
   });
+
+  group('silence units', () {
+    Uint8List audio() => _frame(7);
+    Uint8List quiet() => Uint8List(96)..setAll(0, [0xff, 0xf3, 0x44, 0xc4]);
+
+    Uint8List body(List<(bool, int)> runs) {
+      final b = BytesBuilder();
+      for (final (isQuiet, n) in runs) {
+        for (var i = 0; i < n; i++) {
+          b.add(isQuiet ? quiet() : audio());
+        }
+      }
+      return b.takeBytes();
+    }
+
+    test('cuts at the middle of each silent gap and names the sentences', () {
+      final mp3 = body([(false, 40), (true, 8), (false, 40), (true, 8), (false, 40)]);
+      final units = SpeechTakeJoin.silenceUnits(
+        mp3,
+        ['First sentence here.', 'Second sentence here.', 'Third sentence here.'],
+      )!;
+      expect(units.starts, [0, 1, 2]);
+      expect(units.sizes.fold<int>(0, (a, b) => a + b), mp3.length);
+      // Every cut is a frame boundary inside a silent run.
+      var at = 0;
+      for (final size in units.sizes.take(2)) {
+        at += size;
+        expect(mp3FrameLength(mp3, at), isNotNull);
+        expect(mp3FrameLength(mp3, at), 96, reason: 'cut sits in the silence');
+      }
+      // Each unit decodes as whole frames.
+      for (final size in units.sizes) {
+        expect(size > 0, isTrue);
+      }
+    });
+
+    test('a gap is matched to the sentence boundary nearest its share of time', () {
+      // One long first sentence, two short ones: the gap near 2/3 of the audio.
+      final mp3 = body([(false, 60), (true, 8), (false, 30)]);
+      final units = SpeechTakeJoin.silenceUnits(mp3, [
+        'A very long first sentence that goes on and on for a while here.',
+        'Short one.',
+        'Short two.',
+      ])!;
+      expect(units.starts.first, 0);
+      expect(units.starts.length, 2);
+      expect(units.starts[1], anyOf(1, 2));
+    });
+
+    test('no gap, one sentence, or ends-only silence means no units', () {
+      expect(SpeechTakeJoin.silenceUnits(body([(false, 60)]), ['A.', 'B.']), isNull);
+      expect(SpeechTakeJoin.silenceUnits(body([(false, 60), (true, 9)]), ['A.', 'B.']), isNull);
+      expect(SpeechTakeJoin.silenceUnits(body([(false, 60), (true, 9), (false, 60)]), ['Only one.']), isNull);
+      // A short pause (under six frames) is not a cut.
+      expect(SpeechTakeJoin.silenceUnits(body([(false, 60), (true, 3), (false, 60)]), ['A.', 'B.']), isNull);
+    });
+  });
 }
