@@ -16,6 +16,7 @@
 library;
 
 import 'package:conduit_core/voice/voice_route.dart';
+
 import 'dart:async';
 import 'dart:io' show Platform;
 
@@ -128,6 +129,15 @@ abstract interface class VoiceModeSpeech {
   Future<void> pause();
   Future<void> resume();
   Future<void> stop();
+
+  /// Turns the speech down to [level] (0 to 1 of its normal volume) over
+  /// [ramp] and keeps it playing, so a barge-in check does not cut the
+  /// assistant off mid-sentence. Returns false when this speech path cannot
+  /// duck (the caller then pauses); true when it did.
+  Future<bool> duck(double level, {Duration ramp = Duration.zero});
+
+  /// Brings the speech back to full volume over [ramp] after [duck].
+  Future<void> unduck({Duration ramp = Duration.zero});
 
   /// How [feedStreamingText] splits text into spoken chunks, so the caller
   /// can show the chunk being spoken.
@@ -382,6 +392,11 @@ class SilentVoiceModeSpeech implements VoiceModeSpeech {
   Future<void> resume() async {}
   @override
   Future<void> stop() async {}
+  @override
+  Future<bool> duck(double level, {Duration ramp = Duration.zero}) async =>
+      false;
+  @override
+  Future<void> unduck({Duration ramp = Duration.zero}) async {}
   @override
   List<String> splitTextForSpeech(String text) =>
       text.trim().isEmpty ? const <String>[] : <String>[text.trim()];

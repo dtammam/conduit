@@ -88,6 +88,7 @@ void main() {
                   '${args['isLast'] == true ? ' last' : ''}',
             'finishItem' => 'finish ${args!['item']}',
             'seek' => 'seek ${args!['item']}',
+            'setGain' => 'gain ${args!['gain']} ${args['rampMs']}',
             _ => call.method,
           });
           return true;
@@ -158,6 +159,19 @@ void main() {
       ]);
     },
   );
+
+  test('ducking ramps the engine gain and never pauses it', () async {
+    final engine = EngineSpeechPlayback();
+    await engine.setClips(const []);
+    calls.clear();
+    check(
+      await engine.setDuck(0.28, ramp: const Duration(milliseconds: 80)),
+    ).isTrue();
+    check(
+      await engine.setDuck(1, ramp: const Duration(milliseconds: 150)),
+    ).isTrue();
+    check(calls).deepEquals(['gain 0.28 80', 'gain 1.0 150']);
+  });
 
   test('a stream scheduled event is accepted', () async {
     final engine = EngineSpeechPlayback();

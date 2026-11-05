@@ -16,7 +16,8 @@ import 'just_audio_playback.dart';
 /// [EngineSpeechPlayback], one continuous waveform; any other queue, such as
 /// a message read aloud as whole clips, stays on [JustAudioPlayback]. The
 /// choice is made when a queue is set and holds until the next one.
-class HybridSpeechPlayback implements AudioPlaybackPort, AudioItemEndReporting {
+class HybridSpeechPlayback
+    implements AudioPlaybackPort, AudioItemEndReporting, AudioDucking {
   HybridSpeechPlayback({AudioPlaybackPort? files, EngineSpeechPlayback? engine})
     : _files = files ?? JustAudioPlayback(),
       _engine = engine ?? EngineSpeechPlayback() {
@@ -135,6 +136,13 @@ class HybridSpeechPlayback implements AudioPlaybackPort, AudioItemEndReporting {
 
   @override
   Future<void> clearClips() => _active.clearClips();
+
+  @override
+  Future<bool> setDuck(double gain, {Duration ramp = Duration.zero}) =>
+      identical(_active, _engine)
+      ? _engine.setDuck(gain, ramp: ramp)
+      : Future<bool>.value(false);
+
   @override
   Future<void> play() {
     _playing = true;
@@ -182,7 +190,8 @@ class HybridSpeechPlayback implements AudioPlaybackPort, AudioItemEndReporting {
 /// decodes each, drops the encoder's lead-in and flush samples, and plays
 /// them as one waveform, so the half-second joins are seamless. A whole clip
 /// (a file, or a body that cannot be cut) plays as it is.
-class EngineSpeechPlayback implements AudioPlaybackPort, AudioItemEndReporting {
+class EngineSpeechPlayback
+    implements AudioPlaybackPort, AudioItemEndReporting, AudioDucking {
   EngineSpeechPlayback({MethodChannel? channel})
     : _channel = channel ?? const MethodChannel(channelName) {
     _channel.setMethodCallHandler(_onCall);
@@ -411,6 +420,22 @@ class EngineSpeechPlayback implements AudioPlaybackPort, AudioItemEndReporting {
       builder.add(bytes);
     }
     return builder.takeBytes();
+  }
+
+  /// Ramps the engine's output gain without pausing it. A failed engine
+  /// reports false (the caller pauses, which the failed engine ignores).
+  @override
+  Future<bool> setDuck(double gain, {Duration ramp = Duration.zero}) async {
+    if (_failed) return false;
+    final level = gain.clamp(0.0, 1.0);
+    await _call('setGain', {'gain': level, 'rampMs': ramp.inMilliseconds});
+    if (_failed) return false;
+    VoiceEventLog.instance.add('barge-in-duck', <String, Object?>{
+      'level': level,
+      'rampMs': ramp.inMilliseconds,
+      'item': _currentIndex,
+    });
+    return true;
   }
 
   @override

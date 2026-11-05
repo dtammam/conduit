@@ -722,6 +722,33 @@ class TtsManager {
     }
   }
 
+  /// Turns server-speech playback down to [level] without pausing it.
+  /// False when the active speech cannot be ducked (device speech, or a
+  /// player without volume control): the caller pauses instead.
+  Future<bool> duck(double level, {Duration ramp = Duration.zero}) async {
+    final session = _activeSession;
+    final Object player = _player;
+    if (session == null || !session.useServerTts || player is! AudioDucking) {
+      return false;
+    }
+    try {
+      return await player.setDuck(level, ramp: ramp);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Brings playback back to full volume after [duck].
+  Future<void> unduck({Duration ramp = Duration.zero}) async {
+    final Object player = _player;
+    if (player is! AudioDucking) return;
+    try {
+      await player.setDuck(1.0, ramp: ramp);
+    } catch (e) {
+      _emitEvent(TtsError(e.toString()));
+    }
+  }
+
   /// Stops the current playback.
   Future<void> stop() async {
     final session = _activeSession;

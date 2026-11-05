@@ -123,6 +123,7 @@ final class SpeechEngineQueue {
     try queue.sync {
       generation += 1
       try Self.objc { self.player.stop() }
+      setGainNow(1)
       items.removeAll()
       streams.removeAll()
       streamItems.removeAll()
@@ -318,11 +319,57 @@ final class SpeechEngineQueue {
       wantsPlayback = false
       generation += 1
       try Self.objc { self.player.stop() }
+      // a stop while ducked (a confirmed barge-in) must not leave the next
+      // reply quiet
+      setGainNow(1)
       outstanding = 0
       scheduledInItem = 0
       lastStartedItem = nil
       pendingStarts.removeAll()
       resetEndTracking()
+    }
+  }
+
+  // MARK: - Ducking (2026-11-05)
+
+  private var gainTimer: DispatchSourceTimer?
+
+  /// Sets the player's volume at once and drops any ramp. On [queue].
+  private func setGainNow(_ gain: Float) {
+    gainTimer?.cancel()
+    gainTimer = nil
+    player.volume = max(0, min(1, gain))
+  }
+
+  /// Ramps the player's volume to [gain] over [ramp] seconds, in 10 ms steps
+  /// on [queue], without pausing: a barge-in check turns the assistant down
+  /// and keeps it playing. A zero ramp sets it at once.
+  func setGain(_ gain: Float, ramp: TimeInterval) {
+    queue.sync {
+      let target = max(0, min(1, gain))
+      gainTimer?.cancel()
+      gainTimer = nil
+      let start = player.volume
+      guard ramp > 0.01, abs(target - start) > 0.001 else {
+        player.volume = target
+        return
+      }
+      let steps = max(1, Int((ramp / 0.01).rounded()))
+      var step = 0
+      let timer = DispatchSource.makeTimerSource(queue: queue)
+      timer.schedule(deadline: .now() + 0.01, repeating: 0.01)
+      timer.setEventHandler { [weak self] in
+        guard let self else { return }
+        step += 1
+        let t = Float(min(step, steps)) / Float(steps)
+        self.player.volume = start + (target - start) * t
+        if step >= steps {
+          self.gainTimer?.cancel()
+          self.gainTimer = nil
+        }
+      }
+      gainTimer = timer
+      timer.resume()
     }
   }
 

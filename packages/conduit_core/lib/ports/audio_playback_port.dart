@@ -85,6 +85,15 @@ abstract interface class AudioItemEndReporting {
   int? get lastStartGapMs;
 }
 
+/// A player that can turn its output down and up without pausing, so a
+/// barge-in check keeps the assistant audible (and its place) while the
+/// microphone decides whether the sound it hears is the user.
+abstract interface class AudioDucking {
+  /// Ramps the output to [gain] (0 to 1) over [ramp]. Returns false when the
+  /// queue now playing cannot be ducked.
+  Future<bool> setDuck(double gain, {Duration ramp = Duration.zero});
+}
+
 /// Accepts a queue and never plays it.
 ///
 /// The right behaviour for a host with no audio output -- the daemon -- and

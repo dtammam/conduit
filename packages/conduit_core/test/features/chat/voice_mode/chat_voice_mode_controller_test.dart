@@ -2231,6 +2231,100 @@ void main() {
       });
     }
 
+    group('with a speech player that can duck', () {
+      Future<
+        ({
+          _FakeVoiceInputService input,
+          _FakeTextToSpeechService tts,
+          ({
+            ProviderContainer container,
+            ChatVoiceModeController controller,
+            int Function() stopGenerationCalls,
+          })
+          call,
+        })
+      >
+      ducking() async {
+        final input = serverInput();
+        final tts = _FakeTextToSpeechService()
+          ..holdCompletion = true
+          ..duckSupported = true;
+        final call = setUpCall(input, tts, settings: serverBargeIn);
+        await call.controller.start(startNewConversation: false);
+        await input.completeCurrent('tell me a long story');
+        await _until(
+          () =>
+              call.container.read(chatVoiceModeControllerProvider).phase ==
+                  ChatVoiceModePhase.speaking &&
+              call.container
+                  .read(chatVoiceModeControllerProvider)
+                  .assistantPreview
+                  .isNotEmpty,
+        );
+        await input.emitLevels(-60, 20);
+        await input.emitLevels(-25, 10);
+        await _until(() => input.beginCalls == 2);
+        return (input: input, tts: tts, call: call);
+      }
+
+      test('a provisional barge-in ducks the assistant and never pauses it',
+          () async {
+        final c = await ducking();
+        check(c.tts.pauseCalls).equals(0);
+        check(c.tts.duckLevels).deepEquals(<double>[
+          ChatVoiceModeController.provisionalDuckLevel,
+        ]);
+        check(c.tts.unduckCalls).equals(0);
+        check(c.tts.stopCalls).equals(0);
+        await c.call.controller.stop();
+      });
+
+      for (final heard in <String?>[null, '']) {
+        test('a dropped take restores the volume without pause or resume '
+            '(${heard == null ? 'echo' : 'empty'})', () async {
+          final c = await ducking();
+          final preview = c.call.container
+              .read(chatVoiceModeControllerProvider)
+              .assistantPreview;
+          await c.input.completeCurrent(
+            heard ?? preview.split(RegExp(r'\s+')).take(3).join(' '),
+          );
+          await _until(() => c.tts.unduckCalls == 1);
+          await _until(() => c.input.heldLevels.hasListener);
+          check(c.tts.pauseCalls).equals(0);
+          check(c.tts.resumeCalls).equals(0);
+          check(c.tts.stopCalls).equals(0);
+          check(c.call.stopGenerationCalls()).equals(0);
+          await c.call.controller.stop();
+        });
+      }
+
+      test('a take that never ends restores the volume by itself', () async {
+        final c = await ducking();
+        await Future<void>.delayed(
+          ChatVoiceModeController.provisionalBargeInTimeout +
+              const Duration(milliseconds: 400),
+        );
+        check(c.tts.unduckCalls).equals(1);
+        check(c.tts.pauseCalls).equals(0);
+        check(c.tts.resumeCalls).equals(0);
+        check(c.tts.stopCalls).equals(0);
+        await c.call.controller.stop();
+      });
+
+      test('a confirmed interruption stops the assistant as before', () async {
+        final c = await ducking();
+        await c.input.completeCurrent('actually, stop there');
+        await _until(() => userTurns(c.call.container).length == 2);
+        check(c.tts.stopStreamingCalls).equals(1);
+        check(c.tts.stopCalls).equals(1);
+        check(c.tts.pauseCalls).equals(0);
+        check(c.tts.unduckCalls).equals(0);
+        check(c.call.stopGenerationCalls()).equals(1);
+        await c.call.controller.stop();
+      });
+    });
+
     test('a provisional barge-in whose take never ends resumes playback '
         'by itself', () async {
       final input = serverInput();
@@ -3948,6 +4042,9 @@ class _FakeTextToSpeechService implements VoiceModeSpeech {
   void emit(TtsEvent event) => _events.add(event);
   int pauseCalls = 0;
   int resumeCalls = 0;
+  bool duckSupported = false;
+  final duckLevels = <double>[];
+  int unduckCalls = 0;
   int stopStreamingCalls = 0;
   int stopCalls = 0;
   bool throwOnStopStreaming = false;
@@ -4020,6 +4117,18 @@ class _FakeTextToSpeechService implements VoiceModeSpeech {
     if (throwOnStopStreaming) {
       throw StateError('stop streaming TTS failed');
     }
+  }
+
+  @override
+  Future<bool> duck(double level, {Duration ramp = Duration.zero}) async {
+    if (!duckSupported) return false;
+    duckLevels.add(level);
+    return true;
+  }
+
+  @override
+  Future<void> unduck({Duration ramp = Duration.zero}) async {
+    unduckCalls += 1;
   }
 
   @override

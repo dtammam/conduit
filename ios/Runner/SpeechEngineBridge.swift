@@ -331,7 +331,7 @@ final class SpeechEngineBridge: ConduitBridge {
 
   private func handle(_ method: String, _ args: [String: Any]) throws -> Any? {
     switch method {
-    case "pause", "stop", "diagnostics", "log", "dispose": break
+    case "pause", "stop", "diagnostics", "log", "dispose", "setGain": break
     default: cancelRelease()
     }
     if method == "reset", let old = speech, old.inputUsed, !callActive(old) {
@@ -377,6 +377,11 @@ final class SpeechEngineBridge: ConduitBridge {
     case "seek":
       guard let item = args["item"] as? Int else { return false }
       try speech.seek(toItem: item)
+    case "setGain":
+      speech.setGain(
+        Float(args["gain"] as? Double ?? 1),
+        ramp: Double(args["rampMs"] as? Int ?? 0) / 1000
+      )
     case "setRate":
       lastRate = Float(args["rate"] as? Double ?? 1)
       speech.setRate(lastRate)

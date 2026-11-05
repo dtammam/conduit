@@ -216,6 +216,14 @@ class TextToSpeechService implements VoiceModeSpeech {
     await TtsManager.instance.resume();
   }
 
+  @override
+  Future<bool> duck(double level, {Duration ramp = Duration.zero}) =>
+      TtsManager.instance.duck(level, ramp: ramp);
+
+  @override
+  Future<void> unduck({Duration ramp = Duration.zero}) =>
+      TtsManager.instance.unduck(ramp: ramp);
+
   /// Stops the current playback.
   @override
   Future<void> stop() async {

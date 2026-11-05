@@ -220,6 +220,18 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
   /// talking while the assistant is paused.
   static const int _provisionalSpeechIntensity = 3;
 
+  /// 2026-11-05: a provisional barge-in used to pause the assistant, so every
+  /// echo-triggered check left 2.0 to 2.6 s of silence mid-sentence. The
+  /// assistant now keeps playing at this fraction of its volume while the
+  /// take decides, and a confirmed interruption stops it as before.
+  @visibleForTesting
+  static const double provisionalDuckLevel = 0.28;
+  static const Duration _duckDownRamp = Duration(milliseconds: 80);
+  static const Duration _duckUpRamp = Duration(milliseconds: 150);
+
+  /// True while the assistant is ducked (not paused) for a provisional check.
+  bool _provisionalDucked = false;
+
   Timer? _provisionalWatchdog;
   DateTime? _provisionalStartedAt;
   DateTime? _lastProvisionalSpeechAt;
@@ -1762,7 +1774,18 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
           'lookbackMs': lookback.inMilliseconds,
           'preview': _clip(_previewBeforeBargeIn),
         });
-        await _textToSpeech!.pause();
+        _provisionalDucked = await _textToSpeech!.duck(
+          provisionalDuckLevel,
+          ramp: _duckDownRamp,
+        );
+        if (_provisionalDucked) {
+          VoiceEventLog.instance.add('barge-in-duck', <String, Object?>{
+            'level': provisionalDuckLevel,
+            'rampMs': _duckDownRamp.inMilliseconds,
+          });
+        } else {
+          await _textToSpeech!.pause();
+        }
         _armProvisionalWatchdog(token, provisionalBargeInTimeout);
         if (!_isCurrent(token)) return;
         _pendingFinalTranscripts.clear();
@@ -1836,6 +1859,7 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
       }
       // Real words: the drain below stops the assistant and sends them.
       _bargeInProvisional = false;
+      _provisionalDucked = false;
     } else if (_awaitingAssistant && transcript == _ignoredEchoTranscript) {
       // The same take reported a second time (final event and end of take).
       return;
@@ -2090,10 +2114,20 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
     if (!_isCurrent(token) || !_bargeInProvisional) return;
     _bargeInProvisional = false;
     _cancelProvisionalWatchdog();
+    final ducked = _provisionalDucked;
+    _provisionalDucked = false;
     VoiceEventLog.instance.add('barge-in-resume', <String, Object?>{
       'reason': reason,
       'pausedMs': ?_provisionalPausedMs(),
+      'ducked': ducked,
     });
+    // Ducked speech never stopped, so it comes back at once, before the
+    // recorder handoff below (which took about half a second while paused).
+    if (ducked) {
+      try {
+        await _textToSpeech!.unduck(ramp: _duckUpRamp);
+      } catch (_) {}
+    }
     DebugLogger.info(
       'barge-in-echo-ignored',
       scope: 'chat/voice_mode',
@@ -2131,7 +2165,7 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
             : state.assistantPreview,
         intensity: 0,
       );
-      await _textToSpeech!.resume();
+      if (!ducked) await _textToSpeech!.resume();
       if (!_isCurrent(token)) return;
       if (inputOwnsResponseCapture) _watchForServerBargeIn(token, armNow: true);
     } catch (error, stackTrace) {
@@ -2195,6 +2229,7 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
 
     DebugLogger.info('barge-in', scope: 'chat/voice_mode');
     _bargeInProvisional = false;
+    _provisionalDucked = false;
     _cancelProvisionalWatchdog();
     final tts = _textToSpeech!;
     await tts.stopStreamingTts();
