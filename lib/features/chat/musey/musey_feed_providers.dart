@@ -203,48 +203,105 @@ class FeedController extends Notifier<FeedState> {
 
 enum TopicOutcome { saved, same, full, busy, failed }
 
-/// The emoji the relay picked for the turn now running, shown beside the
-/// working state at the top of the chat. Only the newest request counts: a
-/// late answer for an older message is dropped. Null shows nothing.
-final turnReactionProvider = NotifierProvider<TurnReactionController, String?>(
-  TurnReactionController.new,
-);
+/// Where the guess for the turn now running stands.
+enum TurnPhase {
+  /// No turn asked (a reply nobody sent from here): show the plain word.
+  none,
 
-class TurnReactionController extends Notifier<String?> {
+  /// Asked, no answer yet and still inside the wait: hold a quiet placeholder.
+  pending,
+
+  /// Answered inside the wait: [TurnReaction.status] and [emoji] may show.
+  ready,
+
+  /// The wait ran out: the plain word shows and a late answer is dropped, so
+  /// the line never changes twice.
+  gaveUp,
+}
+
+/// How long the working line holds its placeholder for the relay's guess.
+/// The relay's median is about 140 ms and p90 about 200 ms on the Mac (2026-11-05),
+/// so 600 ms covers the network on top and still feels immediate.
+const Duration kTurnReactionWait = Duration(milliseconds: 600);
+
+@immutable
+class TurnReaction {
+  const TurnReaction({this.phase = TurnPhase.none, this.status, this.emoji});
+  final TurnPhase phase;
+  final String? status;
+  final String? emoji;
+}
+
+/// A status is 1 to 3 plain words, so the working line stays short. The relay
+/// already checks this; the app does not trust a server that may be older.
+String? cleanTurnStatus(String? raw) {
+  final t = raw?.trim();
+  if (t == null || t.isEmpty || t.length > 32) return null;
+  if (!RegExp(r"^[A-Za-z]+(?: [A-Za-z']+){0,2}$").hasMatch(t)) return null;
+  return t;
+}
+
+/// The status words (and optional emoji) the relay picked for the turn now
+/// running, shown in place of the working word at the top of the chat. Only
+/// the newest request counts: a late answer for an older message is dropped.
+final turnReactionProvider =
+    NotifierProvider<TurnReactionController, TurnReaction>(
+      TurnReactionController.new,
+    );
+
+class TurnReactionController extends Notifier<TurnReaction> {
   int _turn = 0;
+  Timer? _limit;
 
   @override
-  String? build() => null;
+  TurnReaction build() {
+    ref.onDispose(() => _limit?.cancel());
+    return const TurnReaction();
+  }
 
-  /// Starts a turn for [text]: clears the last emoji and asks the relay once.
+  /// Starts a turn for [text]: clears the last guess and asks the relay once.
   /// Never throws and never waits for the caller.
   void request(String text) {
     final turn = ++_turn;
-    state = null;
+    _limit?.cancel();
+    state = const TurnReaction(phase: TurnPhase.pending);
+    _limit = Timer(kTurnReactionWait, () {
+      if (turn == _turn && state.phase == TurnPhase.pending) {
+        state = const TurnReaction(phase: TurnPhase.gaveUp);
+      }
+    });
     unawaited(_ask(turn, text));
   }
 
   /// A send that never went out ends its turn with nothing shown.
   void cancel() {
     _turn++;
-    state = null;
+    _limit?.cancel();
+    state = const TurnReaction();
   }
 
   Future<void> _ask(int turn, String text) async {
-    String? emoji;
+    TurnHint? hint;
     try {
-      emoji = await ref
+      hint = await ref
           .read(museyFeedApiProvider)
           ?.react(text)
           .timeout(const Duration(seconds: 6));
     } catch (_) {
-      emoji = null;
+      hint = null;
     }
     if (!ref.mounted || turn != _turn) return;
-    final e = emoji?.trim();
+    // Past the wait the line already says the plain word: no second change.
+    if (state.phase != TurnPhase.pending) return;
+    _limit?.cancel();
+    final e = hint?.emoji?.trim();
     // A single emoji is short; anything long is not one.
-    if (e == null || e.isEmpty || e.length > 16) return;
-    state = e;
+    final emoji = (e == null || e.isEmpty || e.length > 16) ? null : e;
+    state = TurnReaction(
+      phase: TurnPhase.ready,
+      status: cleanTurnStatus(hint?.status),
+      emoji: emoji,
+    );
   }
 }
 

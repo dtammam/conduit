@@ -22,7 +22,8 @@ import 'assistant_avatar_accent.dart';
 import 'assistant_avatar_media.dart';
 import 'assistant_avatar_sheet.dart';
 import 'assistant_pending_approval.dart';
-import '../musey/musey_feed_providers.dart' show turnReactionProvider;
+import '../musey/musey_feed_providers.dart'
+    show TurnPhase, TurnReaction, turnReactionProvider;
 import 'persona_appearance_service.dart';
 
 const String _logScope = 'chat/avatar';
@@ -570,11 +571,27 @@ class _AssistantAvatarStripState extends ConsumerState<AssistantAvatarStrip>
     final busy = activity != AssistantActivity.idle;
     // The emoji only shows while the assistant is working or making; it is
     // cleared by the next send, so an old one never reaches a new turn.
-    final reaction =
+    final turn =
         (activity == AssistantActivity.working ||
             activity == AssistantActivity.making)
         ? ref.watch(turnReactionProvider)
+        : const TurnReaction();
+    final reaction = turn.phase == TurnPhase.ready ? turn.emoji : null;
+    // Real progress from the stream (a named tool step) always beats the
+    // guess. Otherwise, while "Working" would show, the relay's 1 to 3 words
+    // stand in for it; until they arrive a quiet bar holds the line, and the
+    // plain word comes only if the wait runs out or the relay has no status.
+    final guessed =
+        activity == AssistantActivity.working &&
+            snapshot.detail == null &&
+            turn.phase == TurnPhase.ready
+        ? turn.status
         : null;
+    final holding =
+        activity == AssistantActivity.working &&
+        snapshot.detail == null &&
+        turn.phase == TurnPhase.pending;
+    final shownLine = guessed ?? stateLine;
     final pillTap = busy ? widget.onActivityPressed : widget.onNamePressed;
     // Idle and tappable, the name is the model picker. No chevron marks it,
     // so the hint says it for VoiceOver.
@@ -667,13 +684,9 @@ class _AssistantAvatarStripState extends ConsumerState<AssistantAvatarStrip>
                                           mainAxisSize: MainAxisSize.min,
                                           children: [
                                             Flexible(
-                                              child: Text(
-                                                stateLine,
-                                                key: const ValueKey(
-                                                  'assistant-avatar-pill-state',
-                                                ),
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
+                                              child: _StateLine(
+                                                text: shownLine,
+                                                holding: holding,
                                                 style: AppTypography
                                                     .captionStyle
                                                     .copyWith(
@@ -747,6 +760,61 @@ class _AssistantAvatarStripState extends ConsumerState<AssistantAvatarStrip>
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// The line under the name. While [holding] a quiet bar of caption height
+/// stands in, then the words crossfade in place: the row's height never
+/// changes and the name above stays put.
+class _StateLine extends StatelessWidget {
+  const _StateLine({
+    required this.text,
+    required this.holding,
+    required this.style,
+  });
+
+  final String text;
+  final bool holding;
+  final TextStyle style;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOut,
+      alignment: Alignment.center,
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 220),
+        layoutBuilder: (current, previous) => Stack(
+          alignment: Alignment.center,
+          children: [...previous, ?current],
+        ),
+        child: holding
+            ? SizedBox(
+                key: const ValueKey('assistant-avatar-pill-holding'),
+                width: 56,
+                // A blank line of the same style gives the exact line height.
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Text('\u00A0', maxLines: 1, style: style),
+                    ConduitLoading.skeleton(
+                      width: 56,
+                      height: 8,
+                      borderRadius: BorderRadius.circular(AppBorderRadius.sm),
+                    ),
+                  ],
+                ),
+              )
+            : Text(
+                text,
+                key: const ValueKey('assistant-avatar-pill-state'),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: style,
+              ),
       ),
     );
   }

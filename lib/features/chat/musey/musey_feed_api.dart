@@ -233,6 +233,15 @@ class LinkPreview {
   }
 }
 
+/// What the relay guessed for the message just sent: 1 to 3 words for the
+/// working line and an optional emoji. Either may be null.
+@immutable
+class TurnHint {
+  const TurnHint({this.status, this.emoji});
+  final String? status;
+  final String? emoji;
+}
+
 /// The relay's feed, ideas, icon and link-preview routes. Every method fails
 /// soft: null or false, never a throw. A fake of this stands in for the relay
 /// in tests.
@@ -242,9 +251,9 @@ abstract class MuseyFeedApi {
   Future<TopicsResult> setFeedTopics(List<String> topics);
   Future<DismissResult> dismissFeedItem(String id);
 
-  /// The emoji that fits [text], or null for none, an error or a missing
-  /// route.
-  Future<String?> react(String text);
+  /// The status words and emoji that fit [text], or null for an error or a
+  /// missing route. An older relay answers an emoji and no status.
+  Future<TurnHint?> react(String text);
 
   /// True when the relay started a run.
   Future<bool> refreshFeed();
@@ -345,11 +354,12 @@ class DioMuseyFeedApi implements MuseyFeedApi {
   }
 
   @override
-  Future<String?> react(String text) async {
+  Future<TurnHint?> react(String text) async {
     final r = await _call('POST', '/musey/react', data: {'text': text});
     if (!_ok(r)) return null;
     final d = r!.data;
-    return d is Map ? _str(d['emoji']) : null;
+    if (d is! Map) return null;
+    return TurnHint(status: _str(d['status']), emoji: _str(d['emoji']));
   }
 
   @override

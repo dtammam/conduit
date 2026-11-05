@@ -19,12 +19,12 @@ import 'package:material_ui/material_ui.dart';
 /// Only `react` is used; every other call is a test bug.
 class _ReactApi implements MuseyFeedApi {
   final List<String> texts = [];
-  final List<Completer<String?>> gates = [];
+  final List<Completer<TurnHint?>> gates = [];
 
   @override
-  Future<String?> react(String text) {
+  Future<TurnHint?> react(String text) {
     texts.add(text);
-    final gate = Completer<String?>();
+    final gate = Completer<TurnHint?>();
     gates.add(gate);
     return gate.future;
   }
@@ -117,7 +117,7 @@ void main() {
       find.byKey(const ValueKey('assistant-avatar-pill-name')),
     );
 
-    api.gates.single.complete('🎮');
+    api.gates.single.complete(const TurnHint(emoji: '🎮'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
     check(emoji.evaluate()).length.equals(1);
@@ -163,29 +163,147 @@ void main() {
       notifier.request('one');
       api.gates[0].complete(null);
       await tester.pump();
-      check(container.read(turnReactionProvider)).isNull();
+      check(container.read(turnReactionProvider).emoji).isNull();
 
       notifier.request('two');
       api.gates[1].completeError(StateError('boom'));
       await tester.pump();
-      check(container.read(turnReactionProvider)).isNull();
+      check(container.read(turnReactionProvider).emoji).isNull();
 
       // A slow answer for message three arrives after message four started.
       notifier.request('three');
       notifier.request('four');
-      api.gates[2].complete('🎮');
+      api.gates[2].complete(const TurnHint(emoji: '🎮'));
       await tester.pump();
-      check(container.read(turnReactionProvider)).isNull();
+      check(container.read(turnReactionProvider).emoji).isNull();
       check(emoji.evaluate()).isEmpty();
-      api.gates[3].complete('🎮');
+      api.gates[3].complete(const TurnHint(emoji: '🎮'));
       await tester.pump(const Duration(milliseconds: 400));
-      check(container.read(turnReactionProvider)).equals('🎮');
+      check(container.read(turnReactionProvider).emoji).equals('🎮');
 
       // A send that never went out clears it.
       notifier.cancel();
-      check(container.read(turnReactionProvider)).isNull();
+      check(container.read(turnReactionProvider).emoji).isNull();
     },
   );
+
+  Future<void> startTurn(WidgetTester tester) async {
+    await mount(tester);
+    messages.replace([_user(), _reply()]);
+    container.read(turnReactionProvider.notifier).request('what is on friday');
+    await tester.pump();
+  }
+
+  final holding = find.byKey(const ValueKey('assistant-avatar-pill-holding'));
+  final nameKey = find.byKey(const ValueKey('assistant-avatar-pill-name'));
+
+  testWidgets('the status replaces Working with a quiet hold, nothing shifts', (
+    tester,
+  ) async {
+    await startTurn(tester);
+    // Waiting: the bar holds the line, the word Working never flashes.
+    check(holding.evaluate()).length.equals(1);
+    check(find.text('Working').evaluate()).isEmpty();
+    final pillBefore = tester.getSize(pill);
+    final nameBefore = tester.getCenter(nameKey);
+
+    api.gates.single.complete(
+      const TurnHint(status: 'Checking Friday', emoji: '📅'),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    check(holding.evaluate()).isEmpty();
+    check(tester.widget<Text>(stateLine).data).equals('Checking Friday');
+    check(find.text('Working').evaluate()).isEmpty();
+    // The name does not move sideways or up and down; the pill keeps its height.
+    check(tester.getCenter(nameKey).dx).isCloseTo(nameBefore.dx, 0.5);
+    check(tester.getCenter(nameKey).dy).isCloseTo(nameBefore.dy, 0.5);
+    check(tester.getSize(pill).height).equals(pillBefore.height);
+    // The emoji comes after the sentence, on the same line.
+    final text = tester.getRect(stateLine);
+    final e = tester.getRect(find.text('📅'));
+    check(e.left).isGreaterOrEqual(text.right - 0.5);
+    check((e.center.dy - text.center.dy).abs()).isLessThan(4);
+  });
+
+  testWidgets(
+    'no status inside the wait falls back to Working, late answer dropped',
+    (tester) async {
+      await startTurn(tester);
+      await tester.pump(kTurnReactionWait + const Duration(milliseconds: 50));
+      await tester.pump(const Duration(milliseconds: 400));
+      check(holding.evaluate()).isEmpty();
+      check(tester.widget<Text>(stateLine).data).equals('Working');
+      api.gates.single.complete(
+        const TurnHint(status: 'Checking Friday', emoji: '📅'),
+      );
+      await tester.pump(const Duration(milliseconds: 400));
+      check(tester.widget<Text>(stateLine).data).equals('Working');
+      check(find.text('📅').evaluate()).isEmpty();
+    },
+  );
+
+  testWidgets('a failed route falls back to Working at once', (tester) async {
+    await startTurn(tester);
+    api.gates.single.completeError(StateError('down'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    check(tester.widget<Text>(stateLine).data).equals('Working');
+  });
+
+  testWidgets('an old relay (emoji, no status) shows Working then the emoji', (
+    tester,
+  ) async {
+    await startTurn(tester);
+    api.gates.single.complete(const TurnHint(emoji: '🎮'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    check(tester.widget<Text>(stateLine).data).equals('Working');
+    check(find.text('🎮').evaluate()).length.equals(1);
+  });
+
+  testWidgets('a status the app cannot trust is ignored', (tester) async {
+    await startTurn(tester);
+    api.gates.single.complete(
+      const TurnHint(status: 'Checking your whole calendar for Friday'),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    check(tester.widget<Text>(stateLine).data).equals('Working');
+  });
+
+  testWidgets('a reply nobody asked a guess for shows Working, no hold', (
+    tester,
+  ) async {
+    await mount(tester);
+    messages.replace([_user(), _reply()]);
+    await tester.pump();
+    check(holding.evaluate()).isEmpty();
+    check(tester.widget<Text>(stateLine).data).equals('Working');
+  });
+
+  testWidgets('real tool progress beats the guess', (tester) async {
+    await mount(tester);
+    messages.replace([
+      _user(),
+      _reply(
+        content:
+            '<details type="tool_calls" done="false" id="c1" '
+            'name="web_search" arguments="{}">\n'
+            '<summary>Executing...</summary>\n</details>\n',
+      ),
+    ]);
+    container.read(turnReactionProvider.notifier).request('news');
+    await tester.pump();
+    final line = tester.widget<Text>(stateLine).data;
+    check(line).isNotNull();
+    check(line!).not((it) => it.equals('Working'));
+    api.gates.single.complete(const TurnHint(status: 'Reading news'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    check(tester.widget<Text>(stateLine).data).equals(line);
+    check(holding.evaluate()).isEmpty();
+  });
 
   testWidgets('a long name and a long step keep the pill inside its width', (
     tester,
@@ -206,7 +324,7 @@ void main() {
     container.read(turnReactionProvider.notifier).request('x');
     await tester.pump();
     final plain = tester.getSize(pill);
-    api.gates.single.complete('🎮');
+    api.gates.single.complete(const TurnHint(emoji: '🎮'));
     await tester.pump(const Duration(milliseconds: 400));
     check(tester.takeException()).isNull();
     check(emoji.evaluate()).length.equals(1);
