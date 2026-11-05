@@ -1414,6 +1414,47 @@
       }
     }
   },
+  "replyAudioPreview": "Preview audio",
+  "@replyAudioPreview": {
+    "description": "Action that opens the saved audio of a reply to play it, try a new take, or share it"
+  },
+  "replyAudioTitle": "Reply audio",
+  "@replyAudioTitle": {
+    "description": "Title of the small sheet that previews a reply's audio before it is shared"
+  },
+  "replyAudioPlay": "Play",
+  "@replyAudioPlay": {
+    "description": "Plays the previewed reply audio"
+  },
+  "replyAudioPause": "Pause",
+  "@replyAudioPause": {
+    "description": "Pauses the previewed reply audio"
+  },
+  "replyAudioTryAgain": "Try again",
+  "@replyAudioTryAgain": {
+    "description": "Renders the reply's audio again, as a new take that replaces the one shown"
+  },
+  "replyAudioMakingNew": "Making a new take…",
+  "@replyAudioMakingNew": {
+    "description": "Shown on the audio preview while a new take of the reply is rendered"
+  },
+  "replyAudioShare": "Share",
+  "@replyAudioShare": {
+    "description": "Shares the previewed reply audio"
+  },
+  "replyAudioSave": "Save",
+  "@replyAudioSave": {
+    "description": "Saves the previewed reply audio to Files"
+  },
+  "replyAudioTryAgainFailed": "Couldn't make a new take: {error}",
+  "@replyAudioTryAgainFailed": {
+    "description": "Shown on the audio preview when a new take could not be rendered",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "usageInfo": "Info",
   "@usageInfo": {
     "description": "Action to show usage/performance statistics for a response"

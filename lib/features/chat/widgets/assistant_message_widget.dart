@@ -32,7 +32,10 @@ import 'enhanced_attachment.dart';
 import 'package:conduit/shared/widgets/chat_action_button.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../services/reply_audio_flow.dart';
 import '../services/reply_mp3_export.dart';
+import '../services/speech_take_store.dart';
+import 'reply_audio_preview_sheet.dart';
 import '../avatar/assistant_activity.dart';
 import '../avatar/assistant_avatar_media.dart';
 import '../avatar/persona_appearance_service.dart';
@@ -67,7 +70,7 @@ import 'package:conduit_core/features/chat/providers/chat_providers.dart'
         streamingContentProvider,
         chatMessagesProvider;
 import 'package:conduit_core/providers/app_providers.dart'
-    show activeConversationProvider;
+    show activeConversationProvider, conversationScopedId;
 
 import '../../../shared/utils/external_link_launcher.dart';
 
@@ -896,11 +899,18 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
     _shareProgress = null;
   }
 
-  /// Renders the whole reply in the current voice and opens the share sheet
-  /// with an .m4a file (AirDrop, Messages, Discord, Files).
+  /// Shares, saves or makes a video of the reply's audio.
+  ///
+  /// The take Dean heard (kept when a read-aloud or a voice reply played to
+  /// its end) is used at once, with no relay call: one tap to the share
+  /// sheet. With no take, the relay renders one and a small sheet shows it
+  /// first, so he can play it, Try again, and share exactly what he picked.
+  /// [preview] opens that sheet even when a take is kept (the Preview audio
+  /// action), which is where Try again lives for a heard take.
   Future<void> _handleShareMp3({
     bool saveToFiles = false,
     bool asVideo = false,
+    bool preview = false,
   }) async {
     if (_isExportingMp3) return;
     final l10n = AppLocalizations.of(context)!;
@@ -909,12 +919,7 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
         ? box.localToGlobal(Offset.zero) & box.size
         : null;
     setState(() => _isExportingMp3 = true);
-    // The pill stays until the share sheet opens or an error shows.
     _endShareProgress();
-    _shareProgress = ShareProgress.show(
-      context,
-      asVideo ? l10n.shareAsVideoPreparing : l10n.shareAsMp3Preparing,
-    );
     try {
       final speechText = await _buildTtsPlainTextOnDemand(_displayedContent);
       if (!mounted) return;
@@ -940,26 +945,81 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
           return TtsManager.instance.synthesizeChunk(text);
         },
       );
-      final exported = await exporter.export(
-        speechText,
-        onEstimate: (ticket) {
-          if (!mounted) return;
-          final eta = ReplyMp3Export.etaWords(ticket.renderSeconds);
-          if (eta.isEmpty) return;
-          _shareProgress?.update(
-            asVideo
-                ? l10n.shareAsVideoPreparingEta(
-                    ReplyMp3Export.etaWords((ticket.renderSeconds ?? 0) + 5),
-                  )
-                : l10n.shareAsMp3PreparingEta(eta),
+      final flow = ReplyAudioFlow(exporter: exporter);
+      final conversation = ref.read(activeConversationProvider);
+      final heardKey = TtsManager.instance.voiceKey;
+      final renderKey =
+          voice != null && voice.settings.canSynthesize
+          ? 'direct|${voice.settings.speechModel ?? ''}|'
+                '${voice.settings.speechVoice ?? ''}'
+          : (heardKey ?? 'default');
+      final request = ReplyAudioRequest(
+        messageId: _messageId,
+        text: speechText,
+        chatId: conversation == null ? null : conversationScopedId(conversation),
+        lookupVoiceKeys: [?heardKey, renderKey],
+        renderVoiceKey: renderKey,
+      );
+
+      Future<SpeechTake> render({bool showPill = true}) async {
+        if (showPill) {
+          _shareProgress = ShareProgress.show(
+            context,
+            asVideo ? l10n.shareAsVideoPreparing : l10n.shareAsMp3Preparing,
+          );
+        }
+        try {
+          return await flow.render(
+            request,
+            onEstimate: (ticket) {
+              if (!mounted) return;
+              final eta = ReplyMp3Export.etaWords(ticket.renderSeconds);
+              if (eta.isEmpty) return;
+              _shareProgress?.update(
+                asVideo
+                    ? l10n.shareAsVideoPreparingEta(
+                        ReplyMp3Export.etaWords(
+                          (ticket.renderSeconds ?? 0) + 5,
+                        ),
+                      )
+                    : l10n.shareAsMp3PreparingEta(eta),
+              );
+            },
+          );
+        } finally {
+          _endShareProgress();
+        }
+      }
+
+      final take = await flow.choose(
+        request,
+        preview: preview,
+        render: render,
+        renderForTryAgain: () => render(showPill: false),
+        showPreview: (take, tryAgain) {
+          // Read-aloud on the same speaker would talk over the preview.
+          unawaited(ref.read(textToSpeechControllerProvider.notifier).stop());
+          return showReplyAudioPreview(
+            context,
+            take: take,
+            onTryAgain: tryAgain,
+            actionLabel: saveToFiles
+                ? l10n.replyAudioSave
+                : l10n.replyAudioShare,
           );
         },
       );
+      if (take == null || !mounted) return;
+      final staged = await flow.stage(take, request);
       if (!mounted) return;
       if (asVideo) {
+        _shareProgress = ShareProgress.show(
+          context,
+          l10n.shareAsVideoPreparing,
+        );
         final clip = await _personaClipForVideo();
         final video = await ReplyMp3Export.makeVideo(
-          exported.file,
+          staged.file,
           clipPath: clip?.kind == AssistantAvatarMediaKind.video
               ? clip?.path
               : null,
@@ -976,19 +1036,19 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
           origin: origin,
         );
       } else if (saveToFiles) {
-        final audio = await ReplyMp3Export.toM4a(exported.file);
+        final audio = await ReplyMp3Export.toM4a(staged.file);
         _endShareProgress();
         await ReplyMp3Export.saveToFiles(audio);
       } else {
         // An .m4a shared as a plain file: Discord attaches it, an MP3 not.
-        final audio = await ReplyMp3Export.toM4a(exported.file);
+        final audio = await ReplyMp3Export.toM4a(staged.file);
         if (!mounted) return;
         _endShareProgress();
         await ReplyMp3Export.shareFile(
           audio,
           mimeType: audio.path.endsWith('.m4a')
               ? 'audio/mp4'
-              : exported.mimeType,
+              : staged.mimeType,
           origin: origin,
         );
       }
@@ -3068,6 +3128,19 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
               ? () => unawaited(_handleShareMp3())
               : null,
           sfSymbol: 'square.and.arrow.up',
+        ),
+      if (shouldShowTtsButton)
+        _AssistantFooterAction(
+          id: 'audio-preview',
+          icon: Platform.isIOS ? CupertinoIcons.play_circle : Icons.play_circle,
+          label: l10n.replyAudioPreview,
+          onTap:
+              _responseCompleted &&
+                  !_isExportingMp3 &&
+                  !contentActionsBlockedByStreaming
+              ? () => unawaited(_handleShareMp3(preview: true))
+              : null,
+          sfSymbol: 'play.circle',
         ),
       if (shouldShowTtsButton && Platform.isIOS)
         _AssistantFooterAction(

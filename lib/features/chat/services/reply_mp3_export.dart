@@ -182,6 +182,28 @@ class ReplyMp3Export {
     return (file: file, mimeType: mimeType);
   }
 
+  /// Copies a saved take into the share folder under a name from the reply's
+  /// first words, ready for the share sheet. The take itself stays where it
+  /// is; this copy is swept after a day like any other shared file.
+  Future<({File file, String mimeType})> stage(
+    File take,
+    String text,
+    String mimeType,
+  ) async {
+    final dir = await _tempDirectory();
+    final shared = Directory('${dir.path}/shared-audio');
+    await sweep(shared);
+    final folder = Directory(
+      '${shared.path}/${DateTime.now().millisecondsSinceEpoch}',
+    );
+    await folder.create(recursive: true);
+    final file = File(
+      '${folder.path}/${fileNameFor(text, extensionFor(mimeType))}',
+    );
+    await take.copy(file.path);
+    return (file: file, mimeType: mimeType);
+  }
+
   /// Removes shared files older than a day: a file must outlive the share
   /// sheet (an extension may read it after the sheet closes), so nothing is
   /// deleted right after sharing.
