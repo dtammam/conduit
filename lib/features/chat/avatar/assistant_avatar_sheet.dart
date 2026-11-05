@@ -19,8 +19,7 @@ import 'persona_appearance_service.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:material_ui/material_ui.dart'
-    show Scaffold, Tooltip;
+import 'package:material_ui/material_ui.dart' show Scaffold, Tooltip;
 
 import '../widgets/message_bubble_colors.dart';
 import 'assistant_action_log.dart';
@@ -314,16 +313,45 @@ class _AssistantAvatarSheetState extends ConsumerState<AssistantAvatarSheet> {
               Spacing.screenPadding,
               Spacing.sm,
             ),
-            child: Text(
-              title,
-              key: const ValueKey('assistant-page-title'),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTypography.titleLargeStyle.copyWith(
-                color: theme.textPrimary,
-                fontSize: 28,
-                fontWeight: FontWeight.w500,
-              ),
+            // The interests button rides at the right of the title line
+            // without making it taller, so the title keeps its place on
+            // every tab.
+            child: Stack(
+              children: [
+                Padding(
+                  padding: EdgeInsets.only(
+                    right: tab == AssistantSheetTab.feed ? _roundButtonSize : 0,
+                  ),
+                  child: Text(
+                    title,
+                    key: const ValueKey('assistant-page-title'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.titleLargeStyle.copyWith(
+                      color: theme.textPrimary,
+                      fontSize: 28,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                if (tab == AssistantSheetTab.feed)
+                  Positioned.fill(
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: SizedBox(
+                        width: _roundButtonSize,
+                        height: _roundButtonSize,
+                        child: _RoundButton(
+                          key: const ValueKey('musey-feed-interests'),
+                          symbol: 'slider.horizontal.3',
+                          label: l10n.museyFeedInterests,
+                          onTap: () =>
+                              unawaited(showFeedInterestsSheet(context)),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
           Expanded(

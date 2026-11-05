@@ -6,6 +6,7 @@ import 'package:conduit/shared/theme/theme_extensions.dart';
 import 'package:conduit/shared/utils/external_link_launcher.dart';
 import 'package:conduit/shared/widgets/conduit_loading.dart';
 import 'package:conduit/shared/widgets/platform_ui/platform_ui.dart';
+import 'package:conduit/shared/widgets/themed_sheets.dart';
 import 'package:flutter/services.dart' show TextInputAction;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -156,20 +157,38 @@ class MuseyIcon extends StatelessWidget {
 }
 
 class _Empty extends StatelessWidget {
-  const _Empty();
+  const _Empty({this.onChooseInterests});
+
+  /// Set when the Feed has no interests yet: a way into the sheet.
+  final VoidCallback? onChooseInterests;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: Spacing.xxl),
-      child: Text(
-        l10n.museyNothingHere,
-        key: const ValueKey('musey-empty'),
-        textAlign: TextAlign.center,
-        style: AppTypography.bodyMediumStyle.copyWith(
-          color: context.conduitTheme.textSecondary,
-        ),
+      child: Column(
+        children: [
+          Text(
+            l10n.museyNothingHere,
+            key: const ValueKey('musey-empty'),
+            textAlign: TextAlign.center,
+            style: AppTypography.bodyMediumStyle.copyWith(
+              color: context.conduitTheme.textSecondary,
+            ),
+          ),
+          if (onChooseInterests != null) ...[
+            const SizedBox(height: Spacing.md),
+            AdaptiveButton(
+              key: const ValueKey('musey-feed-choose-interests'),
+              onPressed: onChooseInterests,
+              label: l10n.museyFeedSetInterests,
+              style: AdaptiveButtonStyle.tinted,
+              size: AdaptiveButtonSize.small,
+              useNative: false,
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -183,7 +202,8 @@ class _Divider extends StatelessWidget {
       Container(height: 0.5, color: context.conduitTheme.dividerColor);
 }
 
-/// The Feed page content: the interests box, then the items.
+/// The Feed page content: the items, newest first. The interests live in a
+/// sheet behind a header button ([showFeedInterestsSheet]).
 class FeedTab extends ConsumerStatefulWidget {
   const FeedTab({super.key, required this.onDiscuss});
 
@@ -226,11 +246,16 @@ class _FeedTabState extends ConsumerState<FeedTab> {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.only(bottom: Spacing.xl),
         children: [
-          Padding(
-            padding: const EdgeInsets.only(bottom: Spacing.md),
-            child: _Interests(state: state),
-          ),
-          if (state.loaded && state.items.isEmpty) const _Empty(),
+          if (state.loaded && state.items.isEmpty)
+            _Empty(
+              onChooseInterests: state.topics == null
+                  ? (state.prompt.isEmpty
+                        ? () => unawaited(showFeedInterestsSheet(context))
+                        : null)
+                  : (state.topics!.isEmpty
+                        ? () => unawaited(showFeedInterestsSheet(context))
+                        : null),
+            ),
           for (final item in state.items) ...[
             const _Divider(),
             Dismissible(
@@ -244,6 +269,68 @@ class _FeedTabState extends ConsumerState<FeedTab> {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+/// Opens the interests sheet: the same chips and field as before, in a bottom
+/// sheet so the Feed starts with stories. Each change saves at once; when the
+/// sheet closes after a change, the Feed reloads.
+Future<void> showFeedInterestsSheet(BuildContext context) async {
+  final container = ProviderScope.containerOf(context);
+  final before = container.read(feedProvider).topics?.join('\u0000');
+  await ThemedSheets.showCustom<void>(
+    context: context,
+    isScrollControlled: true,
+    builder: (_) => const FeedInterestsSheet(),
+  );
+  final after = container.read(feedProvider).topics?.join('\u0000');
+  if (before != after) unawaited(container.read(feedProvider.notifier).load());
+}
+
+class FeedInterestsSheet extends ConsumerWidget {
+  const FeedInterestsSheet({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
+    final state = ref.watch(feedProvider);
+    final inset = MediaQuery.viewInsetsOf(context).bottom;
+    return Padding(
+      padding: EdgeInsets.only(bottom: inset),
+      child: ConduitModalSheetSurface(
+        child: SafeArea(
+          top: false,
+          child: SheetScrollBody(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(
+                Spacing.screenPadding,
+                Spacing.xs,
+                Spacing.screenPadding,
+                Spacing.md,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: Spacing.sm),
+                    child: Text(
+                      l10n.museyFeedPromptTitle,
+                      key: const ValueKey('musey-feed-sheet-title'),
+                      style: AppTypography.titleMediumStyle.copyWith(
+                        color: context.conduitTheme.textPrimary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  _Interests(state: state),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -270,17 +357,15 @@ class _InterestsState extends ConsumerState<_Interests> {
     super.dispose();
   }
 
-  void _say(String message) {
-    AdaptiveSnackBar.show(
-      context,
-      message: message,
-      type: AdaptiveSnackBarType.info,
-    );
-  }
+  String? _error;
+
+  // Inline, under the field: a snack bar would sit behind the sheet's barrier.
+  void _say(String message) => setState(() => _error = message);
 
   Future<void> _add() async {
     final l10n = AppLocalizations.of(context)!;
     final text = _controller.text;
+    setState(() => _error = null);
     final outcome = await ref.read(feedProvider.notifier).addTopic(text);
     if (!mounted) return;
     switch (outcome) {
@@ -300,6 +385,7 @@ class _InterestsState extends ConsumerState<_Interests> {
 
   Future<void> _remove(String topic) async {
     final l10n = AppLocalizations.of(context)!;
+    setState(() => _error = null);
     final outcome = await ref.read(feedProvider.notifier).removeTopic(topic);
     if (!mounted) return;
     if (outcome == TopicOutcome.failed) _say(l10n.museyFeedPromptFailed);
@@ -442,6 +528,17 @@ class _InterestsState extends ConsumerState<_Interests> {
                   useNative: false,
                 ),
               ],
+            ),
+          if (_error != null)
+            Padding(
+              padding: const EdgeInsets.only(top: Spacing.sm),
+              child: Text(
+                _error!,
+                key: const ValueKey('musey-feed-topics-error'),
+                style: AppTypography.bodySmallStyle.copyWith(
+                  color: theme.error,
+                ),
+              ),
             ),
         ],
       ),

@@ -91,10 +91,11 @@ class _FakeApi implements MuseyFeedApi {
   }
 
   @override
-  Future<String?> react(String text) async {
+  Future<TurnHint?> react(String text) async {
     calls.add('react:$text');
     final gate = reactGate;
-    return gate != null ? await gate.future : reactAnswer;
+    final e = gate != null ? await gate.future : reactAnswer;
+    return e == null ? null : TurnHint(emoji: e);
   }
 
   @override
@@ -362,15 +363,22 @@ void main() {
             .widget<Text>(find.byKey(const ValueKey('assistant-page-title')))
             .data,
       ).equals('Feed');
-      // The prompt box is a rounded box with a 16 pt margin, under the title.
-      final box = tester.getRect(
-        find.byKey(const ValueKey('musey-feed-prompt')),
+      // No interests box on the page: stories start right under the title.
+      check(find.byKey(const ValueKey('musey-feed-prompt')).evaluate())
+          .isEmpty();
+      check(find.byKey(const ValueKey('musey-feed-topics')).evaluate())
+          .isEmpty();
+      check(
+        tester.getRect(find.byKey(const ValueKey('musey-feed-item-a'))).top -
+            tester
+                .getRect(find.byKey(const ValueKey('assistant-page-title')))
+                .bottom,
+      ).isLessThan(80);
+      // The interests button sits in the header beside refresh.
+      final interestsBtn = tester.getRect(
+        find.byKey(const ValueKey('musey-feed-interests')),
       );
-      check(box.left).equals(16);
-      check(box.right).equals(393 - 16);
-      check(box.top).isGreaterThan(title.dy);
-      check(find.text('video games and game launches').evaluate()).length
-          .equals(1);
+      check(interestsBtn.top).isLessThan(title.dy + 1);
       // Items: the icon column at the 16 pt margin, bold title, source link.
       final first = find.byKey(const ValueKey('musey-feed-item-a'));
       check(tester.getRect(first).left).equals(16);
@@ -496,6 +504,11 @@ void main() {
       check(find.text('Source: example.com').evaluate()).length.equals(1);
     });
 
+    Future<void> openInterests(WidgetTester tester) async {
+      await tester.tap(find.byKey(const ValueKey('musey-feed-interests')));
+      await tester.pumpAndSettle();
+    }
+
     testWidgets('an older relay without topics shows the prompt read only', (
       tester,
     ) async {
@@ -504,7 +517,9 @@ void main() {
       await mountPage(tester, container, tab: AssistantSheetTab.feed);
       await tester.pump(const Duration(milliseconds: 100));
       check(find.byKey(const ValueKey('musey-feed-prompt')).evaluate())
-          .length
+          .isEmpty();
+      await openInterests(tester);
+      check(find.byKey(const ValueKey('musey-feed-prompt')).evaluate()).length
           .equals(1);
       check(find.text('old').evaluate()).length.equals(1);
       check(find.byKey(const ValueKey('musey-feed-topic-field')).evaluate())
@@ -520,6 +535,9 @@ void main() {
       final container = makeContainer(api: api);
       await mountPage(tester, container, tab: AssistantSheetTab.feed);
       await tester.pump(const Duration(milliseconds: 100));
+      check(find.byKey(const ValueKey('musey-feed-topic-AI tools')).evaluate())
+          .isEmpty();
+      await openInterests(tester);
       check(find.byKey(const ValueKey('musey-feed-topic-AI tools')).evaluate())
           .length
           .equals(1);
@@ -548,9 +566,7 @@ void main() {
     testWidgets('the relay list is the truth, a failure keeps the old list', (
       tester,
     ) async {
-      final api = _FakeApi(
-        feed: const FeedData(enabled: true, topics: ['A']),
-      );
+      final api = _FakeApi(feed: const FeedData(enabled: true, topics: ['A']));
       final container = makeContainer(api: api);
       await mountPage(tester, container, tab: AssistantSheetTab.feed);
       await tester.pump(const Duration(milliseconds: 100));
@@ -574,9 +590,7 @@ void main() {
     testWidgets('no duplicate request while one is out, repeats are ignored', (
       tester,
     ) async {
-      final api = _FakeApi(
-        feed: const FeedData(enabled: true, topics: ['A']),
-      );
+      final api = _FakeApi(feed: const FeedData(enabled: true, topics: ['A']));
       api.topicsGate = Completer<void>();
       final container = makeContainer(api: api);
       await mountPage(tester, container, tab: AssistantSheetTab.feed);
@@ -604,16 +618,99 @@ void main() {
       final container = makeContainer(api: api);
       await mountPage(tester, container, tab: AssistantSheetTab.feed);
       await tester.pump(const Duration(milliseconds: 100));
+      await openInterests(tester);
       check(find.byKey(const ValueKey('musey-feed-topic-field')).evaluate())
           .isEmpty();
       check(find.byKey(const ValueKey('musey-feed-topics-full')).evaluate())
           .length
           .equals(1);
-      final outcome = await container
-          .read(feedProvider.notifier)
-          .addTopic('g');
+      final outcome = await container.read(feedProvider.notifier).addTopic('g');
       check(outcome).equals(TopicOutcome.full);
       check(api.calls.where((c) => c.startsWith('topics:'))).isEmpty();
+    });
+
+    testWidgets('a failed save says so inside the sheet and keeps the list', (
+      tester,
+    ) async {
+      final api = _FakeApi(feed: const FeedData(enabled: true, topics: ['A']));
+      final container = makeContainer(api: api);
+      await mountPage(tester, container, tab: AssistantSheetTab.feed);
+      await tester.pump(const Duration(milliseconds: 100));
+      await openInterests(tester);
+      api.topicsAnswer = const TopicsResult.failed('at most 6 interests');
+      await tester.enterText(
+        find.descendant(
+          of: find.byKey(const ValueKey('musey-feed-topic-field')),
+          matching: find.byType(EditableText),
+        ),
+        'B',
+      );
+      await tester.tap(find.byKey(const ValueKey('musey-feed-topic-add')));
+      await tester.pump(const Duration(milliseconds: 50));
+      check(find.byKey(const ValueKey('musey-feed-topics-error')).evaluate())
+          .length
+          .equals(1);
+      check(container.read(feedProvider).topics).isNotNull().deepEquals(['A']);
+    });
+
+    testWidgets('closing the sheet after a change reloads the feed', (
+      tester,
+    ) async {
+      final api = _FakeApi(feed: const FeedData(enabled: true, topics: ['A']));
+      final container = makeContainer(api: api);
+      await mountPage(tester, container, tab: AssistantSheetTab.feed);
+      await tester.pump(const Duration(milliseconds: 100));
+      final loadsBefore = api.calls.where((c) => c == 'feed').length;
+      await openInterests(tester);
+      await tester.enterText(
+        find.descendant(
+          of: find.byKey(const ValueKey('musey-feed-topic-field')),
+          matching: find.byType(EditableText),
+        ),
+        'B',
+      );
+      await tester.tap(find.byKey(const ValueKey('musey-feed-topic-add')));
+      await tester.pump(const Duration(milliseconds: 50));
+      // Close by tapping the barrier.
+      await tester.tapAt(const Offset(200, 20));
+      await tester.pumpAndSettle();
+      check(find.byKey(const ValueKey('musey-feed-sheet-title')).evaluate())
+          .isEmpty();
+      check(api.calls.where((c) => c == 'feed').length)
+          .isGreaterThan(loadsBefore);
+    });
+
+    testWidgets('an empty feed with no interests offers the sheet', (
+      tester,
+    ) async {
+      final api = _FakeApi(
+        feed: const FeedData(enabled: true, topics: <String>[]),
+      );
+      final container = makeContainer(api: api);
+      await mountPage(tester, container, tab: AssistantSheetTab.feed);
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.tap(
+        find.byKey(const ValueKey('musey-feed-choose-interests')),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      check(find.byKey(const ValueKey('musey-feed-sheet-title')).evaluate())
+          .length
+          .equals(1);
+    });
+
+    testWidgets('an empty feed with interests set offers no extra button', (
+      tester,
+    ) async {
+      final api = _FakeApi(feed: const FeedData(enabled: true, topics: ['A']));
+      final container = makeContainer(api: api);
+      await mountPage(tester, container, tab: AssistantSheetTab.feed);
+      await tester.pump(const Duration(milliseconds: 100));
+      check(find.byKey(const ValueKey('musey-empty')).evaluate()).length
+          .equals(1);
+      check(
+        find.byKey(const ValueKey('musey-feed-choose-interests')).evaluate(),
+      ).isEmpty();
     });
 
     testWidgets('swiping a card left removes it and tells the relay', (
@@ -688,9 +785,8 @@ void main() {
     });
 
     testWidgets('a 404 on dismiss counts as gone', (tester) async {
-      final api = _FakeApi(
-        feed: FeedData(enabled: true, items: [_item('a')]),
-      )..dismissAnswer = DismissResult.gone;
+      final api = _FakeApi(feed: FeedData(enabled: true, items: [_item('a')]))
+        ..dismissAnswer = DismissResult.gone;
       final container = makeContainer(api: api);
       await mountPage(tester, container, tab: AssistantSheetTab.feed);
       await tester.pump(const Duration(milliseconds: 100));

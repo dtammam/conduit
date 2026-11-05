@@ -12,6 +12,7 @@ const double kCupertinoNativeControlSymbolExtent = 20;
 
 /// Flutter icon fallback for the SF Symbols used by Conduit's adaptive UI.
 IconData? cupertinoIconForSFSymbol(String symbol) => switch (symbol) {
+  'slider.horizontal.3' => CupertinoIcons.slider_horizontal_3,
   'bubble.left' => CupertinoIcons.chat_bubble,
   'bubble.left.fill' => CupertinoIcons.chat_bubble_fill,
   'doc.text' => CupertinoIcons.doc_text,
