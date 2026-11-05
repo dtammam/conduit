@@ -482,8 +482,10 @@ class _MessageMenuState extends State<_MessageMenu> {
                   onTap();
                 }
               },
+        // 60 wide: Reply, Copy, Listen, Share as audio, Share as video and
+        // More fit a 393 pt phone without scrolling the row.
         child: SizedBox(
-          width: 64,
+          width: 60,
           height: 58,
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,

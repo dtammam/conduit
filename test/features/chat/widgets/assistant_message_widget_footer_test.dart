@@ -492,9 +492,9 @@ void main() {
     expect(menuAction('reply'), findsNothing);
     expect(menuAction('copy'), findsOneWidget);
     expect(menuAction('tts'), findsOneWidget);
-    expect(menuAction('share'), findsOneWidget);
+    expect(menuAction('share'), findsNothing);
     expect(menuAction('more'), findsOneWidget);
-    // Regenerate, info and delete wait behind More.
+    // Share, regenerate, info and delete wait behind More.
     expect(menuAction('regenerate'), findsNothing);
     await tester.tap(menuAction('more'));
     await tester.pumpAndSettle();

@@ -1,3 +1,4 @@
+import 'package:conduit/features/chat/widgets/message_action_menu.dart';
 import 'package:checks/checks.dart';
 import 'package:conduit/features/chat/providers/text_to_speech_provider.dart';
 import 'package:conduit/features/chat/widgets/assistant_message_widget.dart';
@@ -112,9 +113,11 @@ void main() {
       find.byKey(const ValueKey('message-menu-actions')),
     );
     check(reactions.bottom).isLessOrEqual(actions.top);
-    for (final id in ['copy', 'tts', 'share', 'more']) {
+    for (final id in ['copy', 'tts', 'more']) {
       check(menuAction(id).evaluate()).length.equals(1);
     }
+    // Plain Share waits behind More.
+    check(menuAction('share').evaluate()).isEmpty();
     // No Reply without a handler, and nothing else on the first row.
     check(menuAction('reply').evaluate()).isEmpty();
     check(menuAction('regenerate').evaluate()).isEmpty();
@@ -131,7 +134,7 @@ void main() {
     await tester.pumpAndSettle();
     await openMessageMenu(tester);
 
-    const order = ['reply', 'copy', 'tts', 'share', 'share-mp3', 'more'];
+    const order = ['reply', 'copy', 'tts', 'share-mp3', 'more'];
     for (final id in order) {
       check(menuAction(id).evaluate()).length.equals(1);
     }
@@ -153,6 +156,73 @@ void main() {
     await tester.tap(last);
     await tester.pumpAndSettle();
     check(menuAction('delete').evaluate()).length.equals(1);
+  });
+
+  testWidgets('More is on screen in the row at 393 px and Share is inside it', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(393, 852);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      _app([_row(_assistant('a1', 'Hello there'), onReply: (_, _) {})]),
+    );
+    await tester.pumpAndSettle();
+    await openMessageMenu(tester);
+
+    // No scrolling: More is fully inside the screen as the menu opens.
+    final more = tester.getRect(menuAction('more'));
+    check(more.left).isGreaterOrEqual(0);
+    check(more.right).isLessOrEqual(393);
+    check(menuAction('share').evaluate()).isEmpty();
+
+    await tester.tap(menuAction('more'));
+    await tester.pumpAndSettle();
+    check(menuAction('share').evaluate()).length.equals(1);
+  });
+
+  testWidgets('six row actions plus More still fit a 393 px phone unscrolled', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(393, 852);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    MessageMenuAction a(String id) => MessageMenuAction(
+      id: id,
+      icon: Icons.circle,
+      label: 'Label $id',
+      onTap: () {},
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: conduitLocalizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: Center(
+            child: MessageMenuLongPress(
+              enabled: true,
+              buildMenu: () => MessageMenuSpec(
+                actions: [
+                  a('reply'),
+                  a('copy'),
+                  a('tts'),
+                  a('share-mp3'),
+                  a('share-video'),
+                ],
+                more: [a('share')],
+                moreIcon: Icons.more_horiz,
+              ),
+              child: const SizedBox(width: 200, height: 100, child: Text('hi')),
+            ),
+          ),
+        ),
+      ),
+    );
+    await openMessageMenu(tester);
+    final more = tester.getRect(menuAction('more'));
+    check(more.left).isGreaterOrEqual(0);
+    check(more.right).isLessOrEqual(393 - 8);
+    check(menuAction('share-video').evaluate()).length.equals(1);
   });
 
   testWidgets('no action bar under the reply', (tester) async {

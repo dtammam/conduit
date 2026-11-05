@@ -1791,8 +1791,8 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
   /// The actions the last build offered, in the order of the old action bar.
   List<_AssistantFooterAction> _menuActions = const <_AssistantFooterAction>[];
 
-  /// Row one: the reactions. Row two: Reply, Copy, Listen, Share and More,
-  /// where More holds the rest (regenerate, merge, info, branch, delete).
+  /// Row one: the reactions. Row two: Reply, Copy, Listen, Share as audio/video and More,
+  /// where More holds Share, regenerate, merge, info, branch and delete.
   /// Everything acts on this message only.
   MessageMenuSpec _buildMenuSpec() {
     final l10n = AppLocalizations.of(context)!;
@@ -1827,15 +1827,6 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
         ),
       ?fromFooter('copy'),
       ?fromFooter('tts'),
-      if (text.trim().isNotEmpty)
-        MessageMenuAction(
-          id: 'share',
-          icon: Platform.isIOS ? CupertinoIcons.share : Icons.share_outlined,
-          label: l10n.messageShare,
-          onTap: () => unawaited(
-            SharePlus.instance.share(ShareParams(text: text.trim())),
-          ),
-        ),
       ?fromFooter('share-mp3'),
       ?fromFooter('share-video'),
     ];
@@ -1843,6 +1834,17 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
     return MessageMenuSpec(
       actions: primary,
       more: [
+        // Plain Share lives under More so More itself is on screen without
+        // scrolling the row (Dean, 2026-11-05).
+        if (text.trim().isNotEmpty)
+          MessageMenuAction(
+            id: 'share',
+            icon: Platform.isIOS ? CupertinoIcons.share : Icons.share_outlined,
+            label: l10n.messageShare,
+            onTap: () => unawaited(
+              SharePlus.instance.share(ShareParams(text: text.trim())),
+            ),
+          ),
         for (final action in _menuActions)
           if (!inPrimary.contains(action.id)) ?fromFooter(action.id),
       ],
@@ -1988,7 +1990,7 @@ class _AssistantMessageWidgetState extends ConsumerState<AssistantMessageWidget>
       }
       if (widget.isRoutinePost &&
           widget.onDiscussPost != null &&
-          !widget.message.isStreaming && 
+          !widget.message.isStreaming &&
           _responseCompleted) {
         children.add(
           RoutinePostActions(
