@@ -219,11 +219,39 @@ void main() {
     check(tester.getCenter(nameKey).dx).isCloseTo(nameBefore.dx, 0.5);
     check(tester.getCenter(nameKey).dy).isCloseTo(nameBefore.dy, 0.5);
     check(tester.getSize(pill).height).equals(pillBefore.height);
-    // The emoji comes after the sentence, on the same line.
+    // The emoji sits to the left of the sentence, on the same line.
     final text = tester.getRect(stateLine);
     final e = tester.getRect(find.text('📅'));
-    check(e.left).isGreaterOrEqual(text.right - 0.5);
+    check(e.right).isLessThan(text.left + 0.5);
     check((e.center.dy - text.center.dy).abs()).isLessThan(4);
+  });
+
+  testWidgets('status and emoji arrive in the same frame, one crossfade', (
+    tester,
+  ) async {
+    await startTurn(tester);
+    api.gates.single.complete(
+      const TurnHint(status: 'Checking Friday', emoji: '📅'),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 60));
+    check(find.text('Checking Friday').evaluate()).isNotEmpty();
+    check(find.text('📅').evaluate()).isNotEmpty();
+    await tester.pump(const Duration(milliseconds: 400));
+    check(find.text('Checking Friday').evaluate()).length.equals(1);
+    check(find.text('📅').evaluate()).length.equals(1);
+  });
+
+  testWidgets('a status with no emoji stays centered under the name', (
+    tester,
+  ) async {
+    await startTurn(tester);
+    api.gates.single.complete(const TurnHint(status: 'Checking Friday'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    check(find.text('📅').evaluate()).isEmpty();
+    check(tester.getCenter(stateLine).dx)
+        .isCloseTo(tester.getCenter(nameKey).dx, 1.0);
   });
 
   testWidgets(
@@ -251,16 +279,19 @@ void main() {
     check(tester.widget<Text>(stateLine).data).equals('Working');
   });
 
-  testWidgets('an old relay (emoji, no status) shows Working then the emoji', (
-    tester,
-  ) async {
-    await startTurn(tester);
-    api.gates.single.complete(const TurnHint(emoji: '🎮'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 400));
-    check(tester.widget<Text>(stateLine).data).equals('Working');
-    check(find.text('🎮').evaluate()).length.equals(1);
-  });
+  testWidgets(
+    'an old relay (emoji, no status) shows the emoji left of Working',
+    (tester) async {
+      await startTurn(tester);
+      api.gates.single.complete(const TurnHint(emoji: '🎮'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      check(tester.widget<Text>(stateLine).data).equals('Working');
+      check(find.text('🎮').evaluate()).length.equals(1);
+      check(tester.getRect(find.text('🎮')).right)
+          .isLessThan(tester.getRect(stateLine).left + 0.5);
+    },
+  );
 
   testWidgets('a status the app cannot trust is ignored', (tester) async {
     await startTurn(tester);

@@ -680,30 +680,19 @@ class _AssistantAvatarStripState extends ConsumerState<AssistantAvatarStrip>
                                             ),
                                       ),
                                       if (busy)
-                                        Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Flexible(
-                                              child: _StateLine(
-                                                text: shownLine,
-                                                holding: holding,
-                                                style: AppTypography
-                                                    .captionStyle
-                                                    .copyWith(
-                                                      color:
-                                                          theme.textSecondary,
-                                                    ),
+                                        _StateLine(
+                                          text: shownLine,
+                                          holding: holding,
+                                          emoji: reaction,
+                                          emojiLabel: reaction == null
+                                              ? null
+                                              : l10n.museyReactionLabel(
+                                                  reaction,
+                                                ),
+                                          style: AppTypography.captionStyle
+                                              .copyWith(
+                                                color: theme.textSecondary,
                                               ),
-                                            ),
-                                            _TurnEmoji(
-                                              emoji: reaction,
-                                              label: reaction == null
-                                                  ? null
-                                                  : l10n.museyReactionLabel(
-                                                      reaction,
-                                                    ),
-                                            ),
-                                          ],
                                         ),
                                     ],
                                   ),
@@ -766,18 +755,24 @@ class _AssistantAvatarStripState extends ConsumerState<AssistantAvatarStrip>
 }
 
 /// The line under the name. While [holding] a quiet bar of caption height
-/// stands in, then the words crossfade in place: the row's height never
-/// changes and the name above stays put.
+/// stands in. Then the emoji (when there is one) and the words arrive
+/// together in one crossfade, the emoji to the left of the sentence: the
+/// row's height never changes, the name above stays put, and a line with no
+/// emoji stays centered as it was.
 class _StateLine extends StatelessWidget {
   const _StateLine({
     required this.text,
     required this.holding,
     required this.style,
+    this.emoji,
+    this.emojiLabel,
   });
 
   final String text;
   final bool holding;
   final TextStyle style;
+  final String? emoji;
+  final String? emojiLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -808,53 +803,33 @@ class _StateLine extends StatelessWidget {
                   ],
                 ),
               )
-            : Text(
-                text,
-                key: const ValueKey('assistant-avatar-pill-state'),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: style,
-              ),
-      ),
-    );
-  }
-}
-
-/// The emoji the relay picked for the turn, fading and scaling in beside the
-/// state word. It takes no room until it arrives and is one line high like
-/// the caption, so the pill's height and the name never move.
-class _TurnEmoji extends StatelessWidget {
-  const _TurnEmoji({required this.emoji, required this.label});
-
-  final String? emoji;
-  final String? label;
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedSize(
-      duration: const Duration(milliseconds: 200),
-      curve: Curves.easeOut,
-      alignment: Alignment.centerLeft,
-      child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 220),
-        transitionBuilder: (child, animation) => FadeTransition(
-          opacity: animation,
-          child: ScaleTransition(scale: animation, child: child),
-        ),
-        child: emoji == null
-            ? const SizedBox.shrink(key: ValueKey('assistant-avatar-no-emoji'))
-            : Padding(
-                key: ValueKey('assistant-avatar-emoji-$emoji'),
-                padding: const EdgeInsets.only(left: Spacing.xs),
-                child: Semantics(
-                  label: label,
-                  excludeSemantics: true,
-                  child: Text(
-                    emoji!,
-                    maxLines: 1,
-                    style: AppTypography.captionStyle.copyWith(height: 1.0),
+            : Row(
+                key: ValueKey('assistant-avatar-line-$emoji'),
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (emoji != null)
+                    Padding(
+                      padding: const EdgeInsets.only(right: Spacing.xs),
+                      child: Semantics(
+                        label: emojiLabel,
+                        excludeSemantics: true,
+                        child: Text(
+                          emoji!,
+                          maxLines: 1,
+                          style: style.copyWith(height: 1.0),
+                        ),
+                      ),
+                    ),
+                  Flexible(
+                    child: Text(
+                      text,
+                      key: const ValueKey('assistant-avatar-pill-state'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: style,
+                    ),
                   ),
-                ),
+                ],
               ),
       ),
     );
