@@ -102,6 +102,8 @@ IconData _iconFor(String? sfSymbol) {
 // thing' -> check off a routine goes inside. Then 'Undo the last thing' is
 // fine." So the top level is exactly four rows. Only navigation changed: the
 // forms, picks and chat messages are the same as before.
+// "Control the house" (home_control) lives inside "Do a thing", first in its
+// list; it is not a fifth row (Dean: "I think I want it under a thing").
 // Rule for a new action: an id not in [museyGroupById] lands under "Do a
 // thing", so nothing the relay adds can vanish. To place it elsewhere, add one
 // entry to [museyGroupById] and update the "each id has its home" test in
@@ -130,7 +132,11 @@ const Map<String, MuseyGroup> museyGroupById = {
 
 MuseyGroup museyGroupOf(String id) => museyGroupById[id] ?? MuseyGroup.doThing;
 
-/// The catalog split into the four groups, each in the relay's order.
+/// The house entry opens "Do a thing" (Dean: "I think I want it under a thing").
+const String museyHomeId = 'home_control';
+
+/// The catalog split into the four groups, each in the relay's order, except
+/// that "Control the house" is first under "Do a thing".
 Map<MuseyGroup, List<MuseyAction>> groupMuseyActions(
   List<MuseyAction> actions,
 ) {
@@ -138,6 +144,9 @@ Map<MuseyGroup, List<MuseyAction>> groupMuseyActions(
   for (final a in actions) {
     out[museyGroupOf(a.id)]!.add(a);
   }
+  final doList = out[MuseyGroup.doThing]!;
+  final i = doList.indexWhere((a) => a.id == museyHomeId);
+  if (i > 0) doList.insert(0, doList.removeAt(i));
   return out;
 }
 
@@ -870,9 +879,50 @@ class _MuseyActionFormState extends ConsumerState<MuseyActionForm> {
     );
   }
 
+  /// A choice whose options carry headings (the house menu): shown inline
+  /// under their headings, an offline one greyed and not tappable.
+  Widget _buildGroupedChoice(MuseyField f, ConduitThemeExtension theme) {
+    String? last;
+    return Column(
+      key: ValueKey<String>('musey-grouped-${f.key}'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final o in f.options) ...[
+          if (o.group != null && o.group != last)
+            Padding(
+              padding: const EdgeInsets.only(
+                top: Spacing.sm,
+                bottom: Spacing.xs,
+              ),
+              child: Text(
+                (last = o.group)!,
+                key: ValueKey<String>('musey-heading-${o.group}'),
+                style: AppTypography.labelSmallStyle.copyWith(
+                  color: theme.textSecondary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          _OptionRow(
+            key: ValueKey<String>('musey-option-${f.key}-${o.value}'),
+            label: o.label,
+            hint: o.hint,
+            selected: _choices[f.key] == o.value,
+            onTap: _sending || o.disabled ? null : () => _pickChoice(f, o),
+          ),
+          const SizedBox(height: Spacing.xs),
+        ],
+        _fieldError(f, theme),
+      ],
+    );
+  }
+
   Widget _buildField(MuseyField f, ConduitThemeExtension theme) {
     switch (f.type) {
       case MuseyFieldType.choice:
+        if (f.options.any((o) => o.group != null)) {
+          return _buildGroupedChoice(f, theme);
+        }
         if (f.options.length > museyLongChoice) {
           final current = f.options
               .where((o) => o.value == _choices[f.key])
@@ -1064,9 +1114,11 @@ class _OptionRow extends StatelessWidget {
     required this.label,
     required this.selected,
     required this.onTap,
+    this.hint,
   });
 
   final String label;
+  final String? hint;
   final bool selected;
   final VoidCallback? onTap;
 
@@ -1092,10 +1144,19 @@ class _OptionRow extends StatelessWidget {
               child: Text(
                 label,
                 style: AppTypography.bodyLargeStyle.copyWith(
-                  color: theme.textPrimary,
+                  color: onTap == null
+                      ? theme.textSecondary
+                      : theme.textPrimary,
                 ),
               ),
             ),
+            if (hint != null)
+              Text(
+                hint!,
+                style: AppTypography.labelSmallStyle.copyWith(
+                  color: theme.textSecondary,
+                ),
+              ),
             if (selected)
               Icon(
                 CupertinoIcons.checkmark_alt,

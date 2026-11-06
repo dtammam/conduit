@@ -348,6 +348,146 @@ void main() {
       expect(sent, ['msg']);
     });
 
+    // "Control the house" lives inside Do a thing, first in its list (Dean:
+    // "I think I want it under a thing"); there is no fifth top row.
+    List<Map<String, Object?>> houseCatalog() => [
+      ...catalog(ids),
+      {
+        'id': 'home_control',
+        'label': 'Control the house',
+        'icon': 'house',
+        'fields': [
+          {
+            'key': 'pick',
+            'label': 'What to do',
+            'type': 'choice',
+            'required': true,
+            'options': [
+              {
+                'value': 'scene|scene.arcade',
+                'label': 'Arcade on',
+                'group': 'Scenes',
+              },
+              {
+                'value': 'plug|switch.pinball|on',
+                'label': 'Pinball on',
+                'group': 'Downstairs',
+                'hint': 'off now',
+              },
+              {
+                'value': 'plug|switch.rolife_house|off',
+                'label': 'Rolife House',
+                'group': 'Study',
+                'hint': 'offline',
+                'disabled': true,
+              },
+              {
+                'value': 'group|lights|on',
+                'label': 'All the lights on',
+                'group': 'Groups',
+              },
+            ],
+          },
+        ],
+      },
+    ];
+
+    testWidgets('the house entry is first under Do a thing, four rows stay', (
+      tester,
+    ) async {
+      final api = FakeApi();
+      api.onFetch = () async => parseMuseyActions({'actions': houseCatalog()});
+      await open(tester, api);
+      expect(find.byKey(const ValueKey('musey-group-house')), findsNothing);
+      expect(find.text('Control the house'), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('musey-group-do')));
+      await tester.pumpAndSettle();
+      final home = tester.getTopLeft(find.byKey(act('home_control'))).dy;
+      expect(
+        home,
+        lessThan(tester.getTopLeft(find.byKey(act('chore_log'))).dy),
+      );
+      expect(find.text('Control the house'), findsOneWidget);
+      expect(
+        [
+          for (final a in groupMuseyActions(
+            parseMuseyActions({'actions': houseCatalog()}),
+          )[MuseyGroup.doThing]!)
+            a.id,
+        ].first,
+        'home_control',
+      );
+      expect(museyGroupOf('home_control'), MuseyGroup.doThing);
+    });
+
+    testWidgets('the house list shows headings, hints, and sends a pick', (
+      tester,
+    ) async {
+      final api = FakeApi(composeText: 'Turn on Pinball');
+      api.onFetch = () async => parseMuseyActions({'actions': houseCatalog()});
+      final sent = <String>[];
+      await open(
+        tester,
+        api,
+        send: (t) async {
+          sent.add(t);
+          return true;
+        },
+      );
+      await tester.tap(find.byKey(const ValueKey('musey-group-do')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(act('home_control')));
+      await tester.pumpAndSettle();
+      for (final h in ['Scenes', 'Downstairs', 'Study', 'Groups']) {
+        expect(
+          find.byKey(ValueKey('musey-heading-$h')),
+          findsOneWidget,
+          reason: h,
+        );
+      }
+      expect(find.text('off now'), findsOneWidget);
+      expect(find.text('offline'), findsOneWidget);
+      // an offline plug is not tappable
+      await tester.tap(find.text('Rolife House'));
+      await tester.pumpAndSettle();
+      expect(api.composeCalls, isEmpty);
+      // one tap on a row composes through the relay and sends
+      await tester.tap(find.text('Pinball on'));
+      await tester.pumpAndSettle();
+      expect(api.composeCalls.single.$1, 'home_control');
+      expect(api.composeCalls.single.$2, {'pick': 'plug|switch.pinball|on'});
+      expect(sent, ['Turn on Pinball']);
+    });
+
+    testWidgets('the house row says why when the home is unreachable', (
+      tester,
+    ) async {
+      final api = FakeApi();
+      api.onFetch = () async => parseMuseyActions({
+        'actions': [
+          {
+            'id': 'home_control',
+            'label': 'Control the house',
+            'icon': 'house',
+            'fields': [
+              {
+                'key': 'pick',
+                'label': 'What to do',
+                'type': 'choice',
+                'required': true,
+                'options': [],
+                'note': "Can't reach your home right now",
+              },
+            ],
+          },
+        ],
+      });
+      await open(tester, api);
+      await tester.tap(find.byKey(const ValueKey('musey-group-do')));
+      await tester.pumpAndSettle();
+      expect(find.text("Can't reach your home right now"), findsOneWidget);
+    });
+
     testWidgets('a group with several actions shows a list', (tester) async {
       await open(tester, apiFor(['routine_done', 'routine_start', 'undo']));
       // simulate a second check-off action via a new id is not possible by

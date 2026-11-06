@@ -11,10 +11,25 @@ const Duration _requestTimeout = Duration(seconds: 8);
 /// One option of a choice field (`{"value","label"}`).
 @immutable
 class MuseyOption {
-  const MuseyOption({required this.value, required this.label});
+  const MuseyOption({
+    required this.value,
+    required this.label,
+    this.group,
+    this.hint,
+    this.disabled = false,
+  });
 
   final String value;
   final String label;
+
+  /// A heading this option sits under (the house menu: Scenes, an area, Groups).
+  final String? group;
+
+  /// A short note at the end of the row ("on now", "offline").
+  final String? hint;
+
+  /// Shown but not tappable (an offline plug).
+  final bool disabled;
 }
 
 enum MuseyFieldType { choice, text, number, date, time }
@@ -120,7 +135,17 @@ List<MuseyOption> _parseOptions(Object? raw) {
     final value = o['value'];
     final label = o['label'];
     if (value is! String || value.isEmpty) continue;
-    out.add(MuseyOption(value: value, label: label is String ? label : value));
+    final group = o['group'];
+    final hint = o['hint'];
+    out.add(
+      MuseyOption(
+        value: value,
+        label: label is String ? label : value,
+        group: group is String && group.isNotEmpty ? group : null,
+        hint: hint is String && hint.isNotEmpty ? hint : null,
+        disabled: o['disabled'] == true,
+      ),
+    );
   }
   return out;
 }
