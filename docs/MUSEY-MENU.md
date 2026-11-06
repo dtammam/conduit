@@ -24,3 +24,11 @@ The app groups by catalog id (`museyGroupById` in `lib/features/chat/musey/musey
 - Do nothing and it lands under Do a thing. It cannot vanish.
 - To put it elsewhere, add one entry to `museyGroupById`, then update the "each id has its home" test in `test/features/chat/musey/musey_test.dart`.
 - Adding a fifth top row is a decision for Dean, not a default.
+
+## Home widget taps
+
+Dean: "can we make any part of the widget just open raw Musey without anything else. Right now it's either clipboard, audio, picture, camera, or action."
+
+- M logo in the pill (76x56 tap area), and the widget's empty background: `conduit://open?homeWidget=true`. Opens the app as it was: no Omni switch, no menu, no voice, no composer action. Cold start is the normal launch (`MuseyWidgetAction.open`, handled by an early return in `home_widget_service.dart`).
+- "Ask Musey" text area: `actions`, Omni with the wrench menu.
+- Four buttons: camera, photos, mic (voice), clipboard, each in Omni.

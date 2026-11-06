@@ -27,6 +27,18 @@ void main() {
       );
     });
 
+    test('the M and the background link only open the app', () {
+      final action =
+          museyWidgetActionOf(Uri.parse('conduit://open?homeWidget=true'));
+      expect(action, MuseyWidgetAction.open);
+      expect(museyWidgetActionUsesOmni(action), isFalse);
+      for (final other in MuseyWidgetAction.values.where(
+        (a) => a != MuseyWidgetAction.open,
+      )) {
+        expect(museyWidgetActionUsesOmni(other), isTrue, reason: other.name);
+      }
+    });
+
     test('the old new_chat link, unknown links and bare links open the menu', () {
       for (final raw in [
         'conduit://new_chat?homeWidget=true',

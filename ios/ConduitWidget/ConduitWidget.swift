@@ -96,29 +96,41 @@ struct ConduitWidgetEntryView: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            // Main pill: opens Omni with the action menu (the wrench).
-            Link(destination: WidgetDeepLink.url(for: "actions")) {
-                HStack(spacing: 12) {
+            // Main pill. The M opens Musey as it was (no menu, no action);
+            // the text area opens Omni with the action menu (the wrench).
+            HStack(spacing: 0) {
+                Link(destination: WidgetDeepLink.url(for: "open")) {
                     MuseyMark()
                         .stroke(
                             museyBlue,
                             style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round)
                         )
                         .frame(width: 28, height: 22)
-                    Text("Ask Musey")
-                        .font(.system(size: 18, weight: .medium, design: .rounded))
-                        .foregroundStyle(contentColor.opacity(0.85))
-                    Spacer()
+                        .frame(width: 76, height: 56)
+                        .contentShape(Rectangle())
                 }
-                .padding(.horizontal, 20)
-                .frame(maxWidth: .infinity)
-                .frame(height: 56)
-                .background(
-                    Capsule()
-                        .fill(buttonBackground)
-                )
+                .buttonStyle(.plain)
+
+                Link(destination: WidgetDeepLink.url(for: "actions")) {
+                    HStack {
+                        Text("Ask Musey")
+                            .font(.system(size: 18, weight: .medium, design: .rounded))
+                            .foregroundStyle(contentColor.opacity(0.85))
+                        Spacer()
+                    }
+                    .padding(.trailing, 20)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 56)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
+            .frame(maxWidth: .infinity)
+            .frame(height: 56)
+            .background(
+                Capsule()
+                    .fill(buttonBackground)
+            )
 
             // 4 circular icon buttons, fill width; every one lands in Omni
             HStack(spacing: 8) {
@@ -149,6 +161,8 @@ struct ConduitWidgetEntryView: View {
             }
         }
         .padding(16)
+        // Empty background: open Musey as it was, nothing else.
+        .widgetURL(WidgetDeepLink.url(for: "open"))
     }
 }
 

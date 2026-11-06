@@ -228,6 +228,9 @@ class HomeWidgetCoordinator extends _$HomeWidgetCoordinator {
 
     final action = museyWidgetActionOf(uri);
     DebugLogger.log('Widget action: ${action.name}', scope: 'widget');
+    // The M and the empty background: the app is already open as it was.
+    // No Omni, no menu, no voice, no composer action, no chat switch.
+    if (!museyWidgetActionUsesOmni(action)) return;
     await _waitForNavigation();
 
     // Everything lands in the Omni chat. When its id is not known yet the app
@@ -263,6 +266,8 @@ class HomeWidgetCoordinator extends _$HomeWidgetCoordinator {
         await _handleImage(camera: false);
       case MuseyWidgetAction.clipboard:
         await _handleClipboard();
+      case MuseyWidgetAction.open:
+        break;
     }
   }
 
