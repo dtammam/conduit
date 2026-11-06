@@ -22,6 +22,7 @@ import 'package:conduit_core/features/chat/providers/chat_providers.dart'
 import 'package:conduit_core/features/chat/providers/reasoning_effort_provider.dart';
 
 import '../../l10n/app_localizations.dart';
+import '../../features/chat/background/chat_background.dart';
 import '../../shared/theme/theme_extensions.dart';
 import '../../shared/theme/tweakcn_themes.dart';
 
@@ -111,7 +112,9 @@ class NativeSheetPresentationAdmission {
 }
 
 /// Reads a provider once; both `Ref.read` and `WidgetRef.read` fit.
-typedef NativeSheetProviderReader = T Function<T>(ProviderListenable<T> provider);
+typedef NativeSheetProviderReader = T Function<T>(
+  ProviderListenable<T> provider,
+);
 
 /// Which root rows the signed-in account is offered right now, read from the
 /// providers the Flutter Settings page watches.
@@ -148,9 +151,10 @@ NativeProfileRootVisibility readNativeProfileRootVisibility(
 
 /// The saved Open WebUI accounts besides the active one, read now; null
 /// when they could not be read.
-int? readNativeOtherAccountCount(NativeSheetProviderReader read) => read(
-  openWebUiAccountsProvider,
-).value?.where((entry) => !entry.isActive).length;
+int? readNativeOtherAccountCount(NativeSheetProviderReader read) =>
+    read(openWebUiAccountsProvider).value
+        ?.where((entry) => !entry.isActive)
+        .length;
 
 /// The native Accounts page, read now.
 NativeSheetDetailConfig readNativeAccountsDetail(
@@ -1272,6 +1276,63 @@ class NativeSheetHydrationService {
     }
   }
 
+  /// Chat background rows for the native Appearance sheet, right below the
+  /// palette. Ids are handled in `main.dart` (`chat-background-*`).
+  List<NativeSheetItemConfig> _chatBackgroundItems() {
+    final bg = _ref.read(chatBackgroundProvider);
+    return [
+      NativeSheetItemConfig(
+        id: nativeChatBackgroundModeId,
+        title: 'Chat background',
+        sfSymbol: 'photo',
+        kind: NativeSheetItemKind.dropdown,
+        value: bg.mode.name,
+        options: const [
+          NativeSheetOptionConfig(id: 'gradient', label: 'Gradient'),
+          NativeSheetOptionConfig(id: 'color', label: 'Color'),
+          NativeSheetOptionConfig(id: 'image', label: 'Image'),
+          NativeSheetOptionConfig(id: 'none', label: 'None'),
+        ],
+      ),
+      if (bg.mode == ChatBackgroundMode.color)
+        NativeSheetItemConfig(
+          id: nativeChatBackgroundColorId,
+          title: 'Background color',
+          sfSymbol: 'paintpalette',
+          kind: NativeSheetItemKind.dropdown,
+          value: bg.colorValue == null ? 'theme' : '${bg.colorValue}',
+          options: [
+            const NativeSheetOptionConfig(id: 'theme', label: 'Theme default'),
+            for (var i = 0; i < kChatBackgroundSwatches.length; i++)
+              NativeSheetOptionConfig(
+                id: '${kChatBackgroundSwatches[i]}',
+                label: kChatBackgroundSwatchNames[i],
+              ),
+          ],
+        ),
+      if (bg.mode == ChatBackgroundMode.image)
+        NativeSheetItemConfig(
+          id: nativeChatBackgroundPhotoId,
+          title: 'Background photo',
+          sfSymbol: 'photo.on.rectangle',
+          kind: NativeSheetItemKind.dropdown,
+          value: '',
+          options: [
+            NativeSheetOptionConfig(
+              id: 'choose',
+              label: bg.imageName == null ? 'Choose photo' : 'Change photo',
+            ),
+            if (bg.imageName != null)
+              const NativeSheetOptionConfig(
+                id: 'remove',
+                label: 'Remove photo',
+                destructive: true,
+              ),
+          ],
+        ),
+    ];
+  }
+
   Future<void> _applyNativeAppearanceDetail(AppLocalizations l10n) async {
     try {
       final themeMode = _ref.read(appThemeModeProvider);
@@ -1302,6 +1363,7 @@ class NativeSheetHydrationService {
               NativeSheetOptionConfig(id: theme.id, label: theme.label(l10n)),
           ],
         ),
+        ..._chatBackgroundItems(),
       ];
       final languageItem = NativeSheetItemConfig(
         id: 'language',

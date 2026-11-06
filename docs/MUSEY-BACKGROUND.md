@@ -26,3 +26,9 @@ Only behind the chat message list: one static layer at the bottom of the chat pa
 ## Where to change it
 
 `lib/features/chat/background/chat_background.dart` (tint constants, scrim, swatches, keys). UI: `lib/features/profile/widgets/chat_background_section.dart`. Tests: `test/features/chat/background/`.
+
+## Lesson (build 176 to 177): iOS Appearance is native
+
+Build 176 added Chat background only to the Flutter page (`app_customization_page.dart`). On iOS, Settings > Appearance is a native sheet built in `lib/core/services/native_sheet_hydration_service.dart` (`_applyNativeAppearanceDetail`), so Dean never saw it. Any setting added to a Flutter settings page must also be added to the native sheet (and its event handler in `lib/main.dart`, `_handleNativeSheetControlChanged`), or it does not exist on iOS.
+
+Native rows now (below the palette): "Chat background" (Gradient, Color, Image, None); with Color, "Background color" (Theme default plus 7 named swatches); with Image, "Background photo" (Choose or Change photo, Remove photo). Ids are `chat-background-mode|color|photo` in `chat_background.dart`. Each change updates `chatBackgroundProvider` (live chat) and re-hydrates the sheet. Tests: `native_sheet_settings_event_test.dart`, `native_sheet_hydration_locale_test.dart`.

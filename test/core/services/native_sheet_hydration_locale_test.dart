@@ -243,7 +243,11 @@ void main() {
       for (final section in appearance.single.sections)
         for (final item in section.items) item.id,
     ];
-    check(ids).containsEqualInOrder(['theme-light', 'theme-palette']);
+    check(ids).containsEqualInOrder([
+      'theme-light',
+      'theme-palette',
+      'chat-background-mode',
+    ]);
     check(ids).contains('language');
     // The pages that do need the server show the error instead.
     check(patches.where((p) => p.detailId == 'chats')).isNotEmpty();
@@ -370,9 +374,8 @@ void main() {
       check(advanced.items.single.sfSymbol).equals('gearshape.2');
       // The citation titles toggle joins the chat behavior group, as on the
       // Flutter Chat page.
-      final citation = rows(chats).singleWhere(
-        (r) => r.id == 'citation-show-titles',
-      );
+      final citation = rows(chats)
+          .singleWhere((r) => r.id == 'citation-show-titles');
       check(citation.title).equals(l10n.citationShowTitles);
       check(citation.kind).equals(PlatformNativeSheetItemKind.toggle);
       check(citation.value).equals(false);

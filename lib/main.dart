@@ -196,6 +196,9 @@ import 'package:conduit_core/providers/openwebui_route_resolver.dart'
 
 import 'core/services/background_streaming_handler.dart';
 import 'features/profile/widgets/account_actions.dart';
+import 'features/chat/background/chat_background.dart';
+import 'features/profile/widgets/chat_background_section.dart'
+    show pickChatBackgroundPhoto;
 import 'features/profile/widgets/account_sheet.dart'
     show EditDirectConnectionRequest, showAccountSheet;
 
@@ -804,6 +807,10 @@ class _ConduitAppState extends ConsumerState<ConduitApp> {
     );
   }
 
+  Future<void> _refreshNativeAppearance() => ref
+      .read(nativeSheetHydrationServiceProvider)
+      .hydrateDetail(NativeSheetRoutes.appearance);
+
   Future<void> _handleNativeSheetControlChanged(
     NativeSheetControlChanged event,
   ) async {
@@ -1216,6 +1223,29 @@ class _ConduitAppState extends ConsumerState<ConduitApp> {
               await ref.read(appLocaleProvider.notifier).setLocale(locale);
             }
           }
+        case nativeChatBackgroundModeId:
+          final mode = ChatBackgroundMode.values
+              .where((m) => m.name == value)
+              .firstOrNull;
+          if (mode != null) {
+            ref.read(chatBackgroundProvider.notifier).setMode(mode);
+            unawaited(_refreshNativeAppearance());
+          }
+        case nativeChatBackgroundColorId:
+          if (value is String) {
+            ref
+                .read(chatBackgroundProvider.notifier)
+                .setColor(value == 'theme' ? null : int.tryParse(value));
+            unawaited(_refreshNativeAppearance());
+          }
+        case nativeChatBackgroundPhotoId:
+          final notifier = ref.read(chatBackgroundProvider.notifier);
+          if (value == 'remove') {
+            await notifier.removeImage();
+          } else if (value == 'choose') {
+            await pickChatBackgroundPhoto(notifier);
+          }
+          unawaited(_refreshNativeAppearance());
         case 'theme-palette':
           if (value is String && value.isNotEmpty) {
             await ref.read(appThemePaletteProvider.notifier).setPalette(value);

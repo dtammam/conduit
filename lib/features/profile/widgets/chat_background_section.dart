@@ -105,22 +105,24 @@ class ChatBackgroundSection extends ConsumerWidget {
     );
   }
 
-  Future<void> _pick(
-    BuildContext context,
-    ChatBackgroundNotifier notifier,
-  ) async {
-    try {
-      final picked = await ImagePicker().pickImage(
-        source: ImageSource.gallery,
-        maxWidth: 2400,
-        maxHeight: 2400,
-        imageQuality: 88,
-      );
-      if (picked == null) return;
-      await notifier.setImageFrom(File(picked.path));
-    } catch (_) {
-      // Picker unavailable or permission denied: leave the setting as it is.
-    }
+  Future<void> _pick(BuildContext context, ChatBackgroundNotifier notifier) =>
+      pickChatBackgroundPhoto(notifier);
+}
+
+/// Opens the photo library and sets the chosen photo as the chat background.
+/// Shared by the Flutter page and the iOS native Appearance sheet.
+Future<void> pickChatBackgroundPhoto(ChatBackgroundNotifier notifier) async {
+  try {
+    final picked = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 2400,
+      maxHeight: 2400,
+      imageQuality: 88,
+    );
+    if (picked == null) return;
+    await notifier.setImageFrom(File(picked.path));
+  } catch (_) {
+    // Picker unavailable or permission denied: leave the setting as it is.
   }
 }
 

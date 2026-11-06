@@ -4,6 +4,7 @@ import 'package:checks/checks.dart';
 import 'package:conduit/core/providers/app_startup_providers.dart';
 import 'package:conduit/core/router/app_router.dart';
 import 'package:conduit/core/services/native_sheet_bridge.dart';
+import 'package:conduit/features/chat/background/chat_background.dart';
 import 'package:conduit/core/services/native_sheet_hydration_service.dart';
 import 'package:conduit/core/utils/native_sheet_utils.dart';
 import 'package:conduit/main.dart';
@@ -91,9 +92,7 @@ class _SignedInUser extends Notifier<User?> {
   void signIn(User? user) => state = user;
 }
 
-final _signedInUser = NotifierProvider<_SignedInUser, User?>(
-  _SignedInUser.new,
-);
+final _signedInUser = NotifierProvider<_SignedInUser, User?>(_SignedInUser.new);
 
 /// Records every detail patch the app sends to the native sheet.
 List<PlatformNativeSheetApplyDetailPatchRequest> _recordPatches() {
@@ -219,7 +218,10 @@ void main() {
         if (visible) expect(extra, isA<NativeSheetNavigationOrigin>());
         // The sheet has already closed, so a stale row says why nothing
         // opened instead of failing silently.
-        expect(find.text(_unavailable), visible ? findsNothing : findsOneWidget);
+        expect(
+          find.text(_unavailable),
+          visible ? findsNothing : findsOneWidget,
+        );
       },
     );
   }
@@ -264,7 +266,10 @@ void main() {
         if (visible) expect(extra, isA<NativeSheetNavigationOrigin>());
         // The sheet has already closed, so a stale row says why nothing
         // opened instead of failing silently.
-        expect(find.text(_unavailable), visible ? findsNothing : findsOneWidget);
+        expect(
+          find.text(_unavailable),
+          visible ? findsNothing : findsOneWidget,
+        );
       },
     );
   }
@@ -307,7 +312,10 @@ void main() {
         if (visible) expect(extra, isA<NativeSheetNavigationOrigin>());
         // The sheet has already closed, so a stale row says why nothing
         // opened instead of failing silently.
-        expect(find.text(_unavailable), visible ? findsNothing : findsOneWidget);
+        expect(
+          find.text(_unavailable),
+          visible ? findsNothing : findsOneWidget,
+        );
       },
     );
   }
@@ -353,7 +361,10 @@ void main() {
         if (visible) expect(extra, isA<NativeSheetNavigationOrigin>());
         // The sheet has already closed, so a stale row says why nothing
         // opened instead of failing silently.
-        expect(find.text(_unavailable), visible ? findsNothing : findsOneWidget);
+        expect(
+          find.text(_unavailable),
+          visible ? findsNothing : findsOneWidget,
+        );
       },
     );
   }
@@ -410,8 +421,9 @@ void main() {
   );
 
   group('the open Settings root', () {
-    List<String> rootRows(PlatformNativeSheetApplyDetailPatchRequest patch) =>
-        [for (final section in patch.sections) ...section.items.map((i) => i.id)];
+    List<String> rootRows(PlatformNativeSheetApplyDetailPatchRequest patch) => [
+      for (final section in patch.sections) ...section.items.map((i) => i.id),
+    ];
 
     testWidgets('gains and loses the Advanced group as Advanced is toggled', (
       tester,
@@ -444,12 +456,10 @@ void main() {
       final on = patches.lastWhere((p) => p.detailId == 'profile-menu');
       check(on.title).equals('Settings');
       final advanced = on.sections.singleWhere((s) => s.title == 'Advanced');
-      check(advanced.footer).equals(
-        'Shown because Advanced is on in Settings > Chat.',
-      );
-      check(
-        advanced.items.map((i) => i.id),
-      ).deepEquals([NativeSheetRoutes.personalConnections]);
+      check(advanced.footer)
+          .equals('Shown because Advanced is on in Settings > Chat.');
+      check(advanced.items.map((i) => i.id))
+          .deepEquals([NativeSheetRoutes.personalConnections]);
 
       NativeSheetBridge.instance.onControlChanged(
         PlatformNativeSheetControlChangedEvent(
@@ -460,12 +470,10 @@ void main() {
       await tester.pumpAndSettle();
 
       final off = patches.lastWhere((p) => p.detailId == 'profile-menu');
-      check(off.sections.map((s) => s.title)).not(
-        (it) => it.contains('Advanced'),
-      );
-      check(rootRows(off)).not(
-        (it) => it.contains(NativeSheetRoutes.personalConnections),
-      );
+      check(off.sections.map((s) => s.title))
+          .not((it) => it.contains('Advanced'));
+      check(rootRows(off))
+          .not((it) => it.contains(NativeSheetRoutes.personalConnections));
       // A tap on the row it just lost is answered, not ignored.
       NativeSheetBridge.instance.onControlChanged(
         PlatformNativeSheetControlChangedEvent(
@@ -525,6 +533,35 @@ void main() {
       ).isFalse();
       check(patches.where((p) => p.detailId == 'profile-menu')).isEmpty();
     });
+  });
+
+  testWidgets('the native Chat background rows change the live setting', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    PreferencesStore.debugOverride(await FlutterKeyValueStore.load());
+    addTearDown(PreferencesStore.debugReset);
+    final container = await pumpApp(tester);
+    ChatBackgroundSettings bg() => container.read(chatBackgroundProvider);
+    check(bg().mode).equals(ChatBackgroundMode.gradient);
+
+    Future<void> send(String id, Object value) async {
+      NativeSheetBridge.instance.onControlChanged(
+        PlatformNativeSheetControlChangedEvent(id: id, value: value),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    await send('chat-background-mode', 'none');
+    check(bg().mode).equals(ChatBackgroundMode.none);
+    await send('chat-background-mode', 'color');
+    check(bg().mode).equals(ChatBackgroundMode.color);
+    await send('chat-background-color', '${kChatBackgroundSwatches[2]}');
+    check(bg().colorValue).equals(kChatBackgroundSwatches[2]);
+    await send('chat-background-color', 'theme');
+    check(bg().colorValue).isNull();
+    await send('chat-background-mode', 'bogus');
+    check(bg().mode).equals(ChatBackgroundMode.color);
   });
 
   testWidgets('the native citation titles toggle saves its boolean', (
