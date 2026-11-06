@@ -23,7 +23,12 @@ import '../l10n/app_localizations.dart';
 
 import 'package:conduit_core/utils/debug_logger.dart';
 
-import 'app_intents_service.dart';
+import 'widget_omni_routing.dart';
+import '../features/chat/voice_call/presentation/voice_call_launcher.dart';
+import '../features/notifications/providers/notification_socket_listener.dart';
+import 'package:conduit_core/features/chat/omni/omni_chat.dart';
+import 'package:conduit_core/services/settings_service.dart';
+import 'package:conduit_core/providers/app_providers.dart';
 import '../core/services/media_upload_controller.dart';
 import '../shared/services/navigation_service.dart';
 
@@ -32,6 +37,7 @@ part 'home_widget_service.g.dart';
 /// Widget action identifiers matching native widget implementations.
 class WidgetActions {
   static const String newChat = 'new_chat';
+  static const String actions = 'actions';
   static const String mic = 'mic';
   static const String camera = 'camera';
   static const String photos = 'photos';
@@ -220,52 +226,63 @@ class HomeWidgetCoordinator extends _$HomeWidgetCoordinator {
       return;
     }
 
-    final action = homeWidgetActionOf(uri);
-    if (action == null || action.isEmpty) {
-      // Default action: open new chat
-      await _handleNewChat();
+    final action = museyWidgetActionOf(uri);
+    DebugLogger.log('Widget action: ${action.name}', scope: 'widget');
+    await _waitForNavigation();
+
+    // Everything lands in the Omni chat. When its id is not known yet the app
+    // is simply opened (no new chat, no error).
+    final omniId = await openOmniForWidget(
+      resolveId: _omniChatId,
+      open: (id) => openChatById(ref, id),
+    );
+    if (omniId == null) {
+      DebugLogger.log('Widget: Omni unknown, opening app', scope: 'widget');
+      await NavigationService.navigateToChat();
+      return;
+    }
+    final inOmni = await waitForOpenChat(
+      chatId: omniId,
+      currentId: () =>
+          ref.mounted ? ref.read(activeConversationProvider)?.id : null,
+    );
+    if (!ref.mounted) return;
+    if (!inOmni) {
+      DebugLogger.log('Widget: Omni did not open in time', scope: 'widget');
       return;
     }
 
-    DebugLogger.log('Widget action: $action', scope: 'widget');
-
     switch (action) {
-      case WidgetActions.newChat:
-        await _handleNewChat();
-        break;
-      case WidgetActions.mic:
+      case MuseyWidgetAction.actions:
+        ref.read(museyMenuIntentProvider.notifier).request();
+      case MuseyWidgetAction.voice:
         await _handleMic();
-        break;
-      case WidgetActions.camera:
-        await _handleCamera();
-        break;
-      case WidgetActions.photos:
-        await _handlePhotos();
-        break;
-      case WidgetActions.clipboard:
+      case MuseyWidgetAction.camera:
+        await _handleImage(camera: true);
+      case MuseyWidgetAction.photos:
+        await _handleImage(camera: false);
+      case MuseyWidgetAction.clipboard:
         await _handleClipboard();
-        break;
-      default:
-        DebugLogger.log('Unknown widget action: $action', scope: 'widget');
-        await _handleNewChat();
     }
   }
 
-  Future<void> _handleNewChat() async {
-    DebugLogger.log('Widget: Starting new chat', scope: 'widget');
-    await _waitForNavigation();
-    await ref
-        .read(appIntentCoordinatorProvider.notifier)
-        .openChatFromExternal(focusComposer: true, resetChat: true);
+  /// The stored Omni chat id (or one the app already resolved). Nothing is
+  /// created here: with the Omni setting off or no id yet this is null.
+  Future<String?> _omniChatId() async {
+    if (!ref.read(appSettingsProvider).omniChatEnabled) return null;
+    final stored = storedOmniChatId();
+    if (stored != null && stored.isNotEmpty) return stored;
+    final id = ref.read(omniChatProvider).value?.id;
+    return id == null || id.isEmpty ? null : id;
   }
 
+  /// Voice mode in the open (Omni) chat.
   Future<void> _handleMic() async {
-    DebugLogger.log('Widget: Starting voice call', scope: 'widget');
-    await _waitForNavigation();
+    DebugLogger.log('Widget: Starting voice call in Omni', scope: 'widget');
     try {
       await ref
-          .read(appIntentCoordinatorProvider.notifier)
-          .startVoiceCallFromExternal();
+          .read(voiceCallLauncherProvider)
+          .launch(startNewConversation: false);
     } catch (error, stackTrace) {
       DebugLogger.error(
         'home-widget-mic',
@@ -273,10 +290,6 @@ class HomeWidgetCoordinator extends _$HomeWidgetCoordinator {
         error: error,
         stackTrace: stackTrace,
       );
-      // Fall back to opening chat with focus
-      await ref
-          .read(appIntentCoordinatorProvider.notifier)
-          .openChatFromExternal(focusComposer: true, resetChat: true);
       final context = NavigationService.context;
       if (context == null || !context.mounted) return;
       final message = error is StateError
@@ -288,67 +301,26 @@ class HomeWidgetCoordinator extends _$HomeWidgetCoordinator {
     }
   }
 
-  Future<void> _handleCamera() async {
-    DebugLogger.log('Widget: Opening camera', scope: 'widget');
-    await _waitForNavigation();
-
-    // Navigate to chat first
-    await ref
-        .read(appIntentCoordinatorProvider.notifier)
-        .openChatFromExternal(focusComposer: false, resetChat: true);
-
-    // Wait for navigation to settle
-    await Future<void>.delayed(const Duration(milliseconds: 100));
-
+  /// A photo (camera or library) into the Omni composer.
+  Future<void> _handleImage({required bool camera}) async {
+    DebugLogger.log('Widget: Picking image (camera: $camera)', scope: 'widget');
     // Attachments route through the selected model's transport.
     if (!await waitForChatEntryReady(ref, requireModel: true)) {
-      DebugLogger.log('Widget: Chat not ready for camera', scope: 'widget');
+      DebugLogger.log('Widget: Chat not ready for image', scope: 'widget');
       return;
     }
-
     try {
       final picker = ImagePicker();
-      final image = await picker.pickImage(
-        source: ImageSource.camera,
-        imageQuality: 85,
-      );
-
-      if (image != null) {
-        _attachFile(File(image.path));
-        _focusComposer();
+      final List<XFile> images;
+      if (camera) {
+        final one = await picker.pickImage(
+          source: ImageSource.camera,
+          imageQuality: 85,
+        );
+        images = one == null ? const [] : [one];
+      } else {
+        images = await picker.pickMultiImage(imageQuality: 85);
       }
-    } catch (error, stackTrace) {
-      DebugLogger.error(
-        'home-widget-camera',
-        scope: 'widget',
-        error: error,
-        stackTrace: stackTrace,
-      );
-    }
-  }
-
-  Future<void> _handlePhotos() async {
-    DebugLogger.log('Widget: Opening photo picker', scope: 'widget');
-    await _waitForNavigation();
-
-    // Navigate to chat first
-    await ref
-        .read(appIntentCoordinatorProvider.notifier)
-        .openChatFromExternal(focusComposer: false, resetChat: true);
-
-    // Wait for navigation to settle
-    await Future<void>.delayed(const Duration(milliseconds: 100));
-
-    // Attachments route through the selected model's transport.
-    if (!await waitForChatEntryReady(ref, requireModel: true)) {
-      DebugLogger.log('Widget: Chat not ready for photos', scope: 'widget');
-      return;
-    }
-
-    try {
-      final picker = ImagePicker();
-      final images = await picker.pickMultiImage(imageQuality: 85);
-
       if (images.isNotEmpty) {
         for (final image in images) {
           _attachFile(File(image.path));
@@ -357,7 +329,7 @@ class HomeWidgetCoordinator extends _$HomeWidgetCoordinator {
       }
     } catch (error, stackTrace) {
       DebugLogger.error(
-        'home-widget-photos',
+        'home-widget-image',
         scope: 'widget',
         error: error,
         stackTrace: stackTrace,
@@ -365,30 +337,16 @@ class HomeWidgetCoordinator extends _$HomeWidgetCoordinator {
     }
   }
 
+  /// The clipboard text into the Omni composer (not sent).
   Future<void> _handleClipboard() async {
     DebugLogger.log('Widget: Pasting from clipboard', scope: 'widget');
-    await _waitForNavigation();
-
     try {
       final clipboardData = await Clipboard.getData(Clipboard.kTextPlain);
       final text = clipboardData?.text?.trim();
-
-      if (text == null || text.isEmpty) {
-        DebugLogger.log('Widget: Clipboard is empty', scope: 'widget');
-        // Still open chat even if clipboard is empty
-        await ref
-            .read(appIntentCoordinatorProvider.notifier)
-            .openChatFromExternal(focusComposer: true, resetChat: true);
-        return;
+      if (text != null && text.isNotEmpty && ref.mounted) {
+        ref.read(prefilledInputTextProvider.notifier).set(text);
       }
-
-      await ref
-          .read(appIntentCoordinatorProvider.notifier)
-          .openChatFromExternal(
-            prompt: text,
-            focusComposer: true,
-            resetChat: true,
-          );
+      _focusComposer();
     } catch (error, stackTrace) {
       DebugLogger.error(
         'home-widget-clipboard',
@@ -396,10 +354,6 @@ class HomeWidgetCoordinator extends _$HomeWidgetCoordinator {
         error: error,
         stackTrace: stackTrace,
       );
-      // Fall back to just opening chat
-      await ref
-          .read(appIntentCoordinatorProvider.notifier)
-          .openChatFromExternal(focusComposer: true, resetChat: true);
     }
   }
 

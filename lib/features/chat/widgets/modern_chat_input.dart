@@ -88,6 +88,8 @@ import 'package:conduit/l10n/app_localizations.dart';
 import '../musey/musey_actions_provider.dart';
 import '../musey/musey_actions_sheet.dart';
 import '../musey/musey_api.dart';
+import 'package:conduit/platform/widget_omni_routing.dart';
+import 'package:conduit_core/features/chat/omni/omni_chat.dart';
 
 import 'package:conduit_core/providers/host_ports.dart';
 
@@ -676,6 +678,9 @@ class _ModernChatInputState extends ConsumerState<ModernChatInput>
     } catch (_) {}
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) => _serveFocusIntent());
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _serveMuseyMenuIntent(),
+    );
 
     // Apply any prefilled text on first frame (focus handled via inputFocusTrigger)
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -773,6 +778,10 @@ class _ModernChatInputState extends ConsumerState<ModernChatInput>
     if (intentListener != null) {
       OmniLaunchGate.settled.removeListener(intentListener);
     }
+    final menuIntentListener = _menuIntentListener;
+    if (menuIntentListener != null) {
+      OmniLaunchGate.settled.removeListener(menuIntentListener);
+    }
     // Note: Avoid using ref in dispose as per Riverpod best practices
     // The focus state will be naturally cleared when the widget is disposed
     _controller.removeListener(_handleComposerChanged);
@@ -835,6 +844,35 @@ class _ModernChatInputState extends ConsumerState<ModernChatInput>
   }
 
   VoidCallback? _intentListener;
+  VoidCallback? _menuIntentListener;
+
+  /// Serves the home widget's ask for the wrench menu
+  /// ([museyMenuIntentProvider]): only in the Omni chat, only once the launch
+  /// has settled, and only while the ask is fresh.
+  void _serveMuseyMenuIntent() {
+    if (!mounted || _isDeactivated) return;
+    if (!ref.read(museyMenuIntentProvider.notifier).isPending()) return;
+    if (!widget.enabled || !_museyEnabled) return;
+    if (!isOmniChatId(ref.read(activeConversationProvider)?.id)) return;
+    if (!OmniLaunchGate.settled.value) {
+      if (_menuIntentListener != null) return;
+      void onSettled() {
+        if (!OmniLaunchGate.settled.value) return;
+        OmniLaunchGate.settled.removeListener(onSettled);
+        _menuIntentListener = null;
+        WidgetsBinding.instance.ensureVisualUpdate();
+        WidgetsBinding.instance.addPostFrameCallback(
+          (_) => _serveMuseyMenuIntent(),
+        );
+      }
+
+      _menuIntentListener = onSettled;
+      OmniLaunchGate.settled.addListener(onSettled);
+      return;
+    }
+    if (!ref.read(museyMenuIntentProvider.notifier).consume()) return;
+    unawaited(_openMuseySheet());
+  }
 
   /// Serves an explicit ask to type ([composerFocusIntentProvider]): after the
   /// launch has settled (no keyboard flash before then), one frame after any
@@ -3288,6 +3326,23 @@ class _ModernChatInputState extends ConsumerState<ModernChatInput>
       }
     });
 
+    ref.listen<DateTime?>(museyMenuIntentProvider, (previous, next) {
+      if (next != null) {
+        WidgetsBinding.instance.addPostFrameCallback(
+          (_) => _serveMuseyMenuIntent(),
+        );
+      }
+    });
+    ref.listen<String?>(
+      activeConversationProvider.select((conversation) => conversation?.id),
+      (previous, next) {
+        if (ref.read(museyMenuIntentProvider.notifier).isPending()) {
+          WidgetsBinding.instance.addPostFrameCallback(
+            (_) => _serveMuseyMenuIntent(),
+          );
+        }
+      },
+    );
     ref.listen<bool>(composerFocusIntentProvider, (previous, next) {
       if (next) {
         WidgetsBinding.instance.addPostFrameCallback(

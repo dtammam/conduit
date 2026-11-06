@@ -24,6 +24,32 @@ private enum WidgetDeepLink {
     }
 }
 
+// MARK: - Musey look
+
+/// Musey's blue, the colour of the M in the app icon.
+private let museyBlue = Color(red: 0.231, green: 0.576, blue: 0.980)
+
+/// The Musey "M" (the app icon's mark), drawn as a rounded stroke so the
+/// widget needs no image asset.
+private struct MuseyMark: Shape {
+    func path(in rect: CGRect) -> Path {
+        // Control points are the icon's 1024 grid, scaled into rect.
+        func p(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
+            CGPoint(
+                x: rect.minX + (x - 170) / 680 * rect.width,
+                y: rect.minY + (y - 240) / 535 * rect.height
+            )
+        }
+        var path = Path()
+        path.move(to: p(245, 715))
+        path.addCurve(to: p(340, 300), control1: p(215, 600), control2: p(215, 300))
+        path.addCurve(to: p(512, 590), control1: p(440, 300), control2: p(440, 590))
+        path.addCurve(to: p(685, 300), control1: p(585, 590), control2: p(585, 300))
+        path.addCurve(to: p(780, 715), control1: p(810, 300), control2: p(810, 600))
+        return path
+    }
+}
+
 // MARK: - Timeline Entry
 
 struct ConduitEntry: TimelineEntry {
@@ -58,28 +84,28 @@ struct ConduitWidgetEntryView: View {
 
     /// Adaptive text/icon color based on color scheme
     private var contentColor: Color {
-        colorScheme == .dark ? .white : .black
+        colorScheme == .dark ? .white : Color(red: 0.08, green: 0.16, blue: 0.30)
     }
 
-    /// Adaptive button background based on color scheme
+    /// Adaptive button background: a wash of Musey blue
     private var buttonBackground: Color {
         colorScheme == .dark
-            ? .white.opacity(0.15)
-            : .black.opacity(0.08)
+            ? museyBlue.opacity(0.22)
+            : museyBlue.opacity(0.16)
     }
 
     var body: some View {
         VStack(spacing: 12) {
-            // Main "Ask Conduit" pill - ChatGPT style
-            Link(destination: WidgetDeepLink.url(for: "new_chat")) {
+            // Main pill: opens Omni with the action menu (the wrench).
+            Link(destination: WidgetDeepLink.url(for: "actions")) {
                 HStack(spacing: 12) {
-                    Image("HubIcon")
-                        .renderingMode(.template)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 28, height: 28)
-                        .foregroundStyle(contentColor.opacity(0.85))
-                    Text("Ask Conduit")
+                    MuseyMark()
+                        .stroke(
+                            museyBlue,
+                            style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round)
+                        )
+                        .frame(width: 28, height: 22)
+                    Text("Ask Musey")
                         .font(.system(size: 18, weight: .medium, design: .rounded))
                         .foregroundStyle(contentColor.opacity(0.85))
                     Spacer()
@@ -94,7 +120,7 @@ struct ConduitWidgetEntryView: View {
             }
             .buttonStyle(.plain)
 
-            // 4 circular icon buttons - ChatGPT style, fill width
+            // 4 circular icon buttons, fill width; every one lands in Omni
             HStack(spacing: 8) {
                 CircularIconButton(
                     symbol: "camera",
@@ -126,7 +152,7 @@ struct ConduitWidgetEntryView: View {
     }
 }
 
-// MARK: - Circular Icon Button (ChatGPT Style)
+// MARK: - Circular Icon Button 
 
 struct CircularIconButton: View {
     let symbol: String
@@ -164,8 +190,8 @@ struct ConduitWidget: Widget {
                     .background(Color("WidgetBackground"))
             }
         }
-        .configurationDisplayName("Conduit")
-        .description("Quick access to chat, camera, photos, and voice.")
+        .configurationDisplayName("Musey")
+        .description("Open Omni with the action menu, voice, photos or camera.")
         .supportedFamilies([.systemMedium])
         .contentMarginsDisabled()
     }
