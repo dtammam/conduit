@@ -95,6 +95,52 @@ IconData _iconFor(String? sfSymbol) {
   return CupertinoIcons.wrench;
 }
 
+// Menu grouping (2026-11-06, build 175). Full note: docs/MUSEY-MENU.md.
+// Dean: "In the Actions menu there are too many immediate actions. Maybe we
+// sub it to being 'Do a thing' -> Log a chore, expense, grocery stuff all
+// there. Then 'Run a routine', put the routines inside. Then 'Check off a
+// thing' -> check off a routine goes inside. Then 'Undo the last thing' is
+// fine." So the top level is exactly four rows. Only navigation changed: the
+// forms, picks and chat messages are the same as before.
+// Rule for a new action: an id not in [museyGroupById] lands under "Do a
+// thing", so nothing the relay adds can vanish. To place it elsewhere, add one
+// entry to [museyGroupById] and update the "each id has its home" test in
+// test/features/chat/musey/musey_test.dart.
+
+/// The four top-level rows of the wrench sheet, in order.
+enum MuseyGroup {
+  doThing('Do a thing', 'musey-group-do', 'wrench'),
+  runRoutine('Run a routine', 'musey-group-run', 'play'),
+  checkOff('Check off a thing', 'musey-group-check', 'checkmark'),
+  undo('Undo the last thing', 'musey-group-undo', 'undo');
+
+  const MuseyGroup(this.label, this.keyName, this.icon);
+  final String label;
+  final String keyName;
+  final String icon;
+}
+
+/// Catalog ids with a fixed home outside [MuseyGroup.doThing]. Every other id,
+/// including ones the app has never seen, lands under "Do a thing".
+const Map<String, MuseyGroup> museyGroupById = {
+  'routine_start': MuseyGroup.runRoutine,
+  'routine_done': MuseyGroup.checkOff,
+  'undo': MuseyGroup.undo,
+};
+
+MuseyGroup museyGroupOf(String id) => museyGroupById[id] ?? MuseyGroup.doThing;
+
+/// The catalog split into the four groups, each in the relay's order.
+Map<MuseyGroup, List<MuseyAction>> groupMuseyActions(
+  List<MuseyAction> actions,
+) {
+  final out = {for (final g in MuseyGroup.values) g: <MuseyAction>[]};
+  for (final a in actions) {
+    out[museyGroupOf(a.id)]!.add(a);
+  }
+  return out;
+}
+
 /// Opens the actions sheet over the chat. With [initial] it opens straight on
 /// that action (the "/" shortcut).
 Future<void> showMuseyActionsSheet(
@@ -123,6 +169,10 @@ class MuseyActionsSheet extends ConsumerStatefulWidget {
 class _MuseyActionsSheetState extends ConsumerState<MuseyActionsSheet> {
   MuseyAction? _picked;
 
+  /// The sub-list showing (null: the four top rows). A group with a single
+  /// action skips its list and opens that action, so this stays null then.
+  MuseyGroup? _group;
+
   @override
   void initState() {
     super.initState();
@@ -144,7 +194,18 @@ class _MuseyActionsSheetState extends ConsumerState<MuseyActionsSheet> {
         child: SafeArea(
           top: false,
           child: picked == null
-              ? MuseyActionList(onPick: (a) => setState(() => _picked = a))
+              ? MuseyActionList(
+                  group: _group,
+                  onGroup: (g, only) => setState(() {
+                    if (only != null) {
+                      _picked = only;
+                    } else {
+                      _group = g;
+                    }
+                  }),
+                  onBack: () => setState(() => _group = null),
+                  onPick: (a) => setState(() => _picked = a),
+                )
               : MuseyActionForm(
                   key: ValueKey<String>('musey-form-${picked.id}'),
                   action: picked,
@@ -205,9 +266,25 @@ class _SheetTitle extends StatelessWidget {
 /// The action list: the cached list shows at once and refreshes under it; with
 /// nothing cached and no answer, a plain error with a retry.
 class MuseyActionList extends ConsumerWidget {
-  const MuseyActionList({super.key, required this.onPick});
+  const MuseyActionList({
+    super.key,
+    required this.onPick,
+    this.group,
+    this.onGroup,
+    this.onBack,
+  });
 
   final ValueChanged<MuseyAction> onPick;
+
+  /// The sub-list to show, or null for the four top rows.
+  final MuseyGroup? group;
+
+  /// A top row was tapped: the group, and its only action when it has exactly
+  /// one (that action opens directly).
+  final void Function(MuseyGroup group, MuseyAction? only)? onGroup;
+
+  /// Back from a sub-list to the top rows.
+  final VoidCallback? onBack;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -254,23 +331,55 @@ class MuseyActionList extends ConsumerWidget {
           color: theme.textSecondary,
         ),
       );
-    } else {
+    } else if (group == null) {
+      final grouped = groupMuseyActions(actions);
       body = Column(
         key: const ValueKey<String>('musey-actions-list'),
         mainAxisSize: MainAxisSize.min,
         children: [
-          for (final action in actions) ...[
-            MuseyActionRow(action: action, onTap: () => onPick(action)),
+          for (final g in MuseyGroup.values) ...[
+            MuseyMenuRow(
+              rowKey: ValueKey<String>(g.keyName),
+              label: g.label,
+              icon: g.icon,
+              onTap: () {
+                final items = grouped[g]!;
+                onGroup?.call(g, items.length == 1 ? items.single : null);
+              },
+            ),
             const SizedBox(height: Spacing.xs),
           ],
         ],
       );
+    } else {
+      final items = groupMuseyActions(actions)[group]!;
+      body = items.isEmpty
+          ? Text(
+              'Nothing here yet.',
+              key: const ValueKey<String>('musey-group-empty'),
+              style: AppTypography.bodyMediumStyle.copyWith(
+                color: theme.textSecondary,
+              ),
+            )
+          : Column(
+              key: ValueKey<String>('musey-group-list-${group!.keyName}'),
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final action in items) ...[
+                  MuseyActionRow(action: action, onTap: () => onPick(action)),
+                  const SizedBox(height: Spacing.xs),
+                ],
+              ],
+            );
     }
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const _SheetTitle(title: 'Actions'),
+        _SheetTitle(
+          title: group?.label ?? 'Actions',
+          onBack: group == null ? null : onBack,
+        ),
         Flexible(child: SingleChildScrollView(child: body)),
         const SizedBox(height: Spacing.sm),
       ],
@@ -291,15 +400,43 @@ class MuseyActionRow extends StatelessWidget {
   final bool selected;
 
   @override
+  Widget build(BuildContext context) => MuseyMenuRow(
+    rowKey: ValueKey<String>('musey-action-${action.id}'),
+    label: action.label,
+    icon: action.icon,
+    onTap: onTap,
+    selected: selected,
+  );
+}
+
+/// One row of the sheet: icon, label, chevron. Used for actions and for the
+/// four top-level groups.
+class MuseyMenuRow extends StatelessWidget {
+  const MuseyMenuRow({
+    super.key,
+    required this.rowKey,
+    required this.label,
+    required this.onTap,
+    this.icon,
+    this.selected = false,
+  });
+
+  final Key rowKey;
+  final String label;
+  final String? icon;
+  final VoidCallback onTap;
+  final bool selected;
+
+  @override
   Widget build(BuildContext context) {
     final theme = context.conduitTheme;
     return Semantics(
       button: true,
-      label: action.label,
+      label: label,
       excludeSemantics: true,
       onTap: onTap,
       child: ConduitCard(
-        key: ValueKey<String>('musey-action-${action.id}'),
+        key: rowKey,
         onTap: onTap,
         isSelected: selected,
         padding: const EdgeInsets.symmetric(
@@ -309,14 +446,14 @@ class MuseyActionRow extends StatelessWidget {
         child: Row(
           children: [
             Icon(
-              _iconFor(action.icon),
+              _iconFor(icon),
               size: IconSize.medium,
               color: theme.textPrimary,
             ),
             const SizedBox(width: Spacing.sm + Spacing.xs),
             Expanded(
               child: Text(
-                action.label,
+                label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: AppTypography.bodyLargeStyle.copyWith(

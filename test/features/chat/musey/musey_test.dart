@@ -128,6 +128,8 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('musey-group-do')));
+      await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('musey-action-chore')), findsOneWidget);
       expect(
         find.byKey(const ValueKey('musey-action-expense')),
@@ -153,14 +155,15 @@ void main() {
       );
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 50));
-      expect(find.byKey(const ValueKey('musey-action-chore')), findsOneWidget);
+      expect(find.byKey(const ValueKey('musey-group-do')), findsOneWidget);
     });
 
     testWidgets('shows a plain error with retry when never loaded', (
       tester,
     ) async {
       final api = FakeApi();
-      api.onFetch = () async => throw const MuseyApiException('Could not reach the relay.');
+      api.onFetch = () async =>
+          throw const MuseyApiException('Could not reach the relay.');
       await tester.pumpWidget(
         _app(api, MuseyActionsSheet(send: (_) async => true)),
       );
@@ -171,7 +174,7 @@ void main() {
       api.onFetch = () async => parseMuseyActions(_choreActions);
       await tester.tap(find.byKey(const ValueKey('musey-actions-retry')));
       await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('musey-action-chore')), findsOneWidget);
+      expect(find.byKey(const ValueKey('musey-group-do')), findsOneWidget);
     });
 
     test('the slash filter matches label and id', () {
@@ -185,10 +188,206 @@ void main() {
     });
   });
 
+  group('action groups', () {
+    const ids = [
+      'chore_log',
+      'expense_log',
+      'grocery_add',
+      'grocery_run',
+      'event_create',
+      'note_quick',
+      'routine_done',
+      'routine_start',
+      'undo',
+    ];
+    List<Map<String, Object?>> catalog(List<String> withIds) => [
+      for (final id in withIds)
+        {
+          'id': id,
+          'label': 'L $id',
+          'fields': id == 'undo'
+              ? []
+              : [
+                  {
+                    'key': 'k',
+                    'label': 'K',
+                    'type': 'choice',
+                    'required': true,
+                    'options': [
+                      {'value': 'a', 'label': 'A'},
+                    ],
+                  },
+                ],
+        },
+    ];
+    FakeApi apiFor(List<String> withIds) {
+      final api = FakeApi();
+      api.onFetch = () async =>
+          parseMuseyActions({'actions': catalog(withIds)});
+      return api;
+    }
+
+    Future<void> open(
+      WidgetTester tester,
+      FakeApi api, {
+      MuseySend? send,
+    }) async {
+      await tester.pumpWidget(
+        _app(api, MuseyActionsSheet(send: send ?? (_) async => true)),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    ValueKey<String> act(String id) => ValueKey('musey-action-$id');
+
+    testWidgets('four top rows in order, nothing else', (tester) async {
+      await open(tester, apiFor(ids));
+      final keys = [
+        'musey-group-do',
+        'musey-group-run',
+        'musey-group-check',
+        'musey-group-undo',
+      ];
+      final ys = [
+        for (final k in keys) tester.getTopLeft(find.byKey(ValueKey(k))).dy,
+      ];
+      expect(ys, [...ys]..sort());
+      expect(ys.toSet().length, 4);
+      for (final id in ids) {
+        expect(find.byKey(act(id)), findsNothing);
+      }
+      expect(find.text('Do a thing'), findsOneWidget);
+      expect(find.text('Run a routine'), findsOneWidget);
+      expect(find.text('Check off a thing'), findsOneWidget);
+      expect(find.text('Undo the last thing'), findsOneWidget);
+    });
+
+    test('each id has its home and unknown ids land under Do a thing', () {
+      final g = groupMuseyActions(
+        parseMuseyActions({
+          'actions': catalog([...ids, 'brand_new']),
+        }),
+      );
+      List<String> of(MuseyGroup x) => [for (final a in g[x]!) a.id];
+      expect(of(MuseyGroup.doThing), [
+        'chore_log',
+        'expense_log',
+        'grocery_add',
+        'grocery_run',
+        'event_create',
+        'note_quick',
+        'brand_new',
+      ]);
+      expect(of(MuseyGroup.runRoutine), ['routine_start']);
+      expect(of(MuseyGroup.checkOff), ['routine_done']);
+      expect(of(MuseyGroup.undo), ['undo']);
+      expect(g.values.expand((l) => l).length, ids.length + 1);
+    });
+
+    testWidgets(
+      'Do a thing lists its actions, unknown id included; back works',
+      (tester) async {
+        await open(tester, apiFor([...ids, 'brand_new']));
+        await tester.tap(find.byKey(const ValueKey('musey-group-do')));
+        await tester.pumpAndSettle();
+        for (final id in [
+          'chore_log',
+          'expense_log',
+          'grocery_add',
+          'grocery_run',
+          'event_create',
+          'note_quick',
+          'brand_new',
+        ]) {
+          expect(find.byKey(act(id)), findsOneWidget, reason: id);
+        }
+        expect(find.byKey(act('routine_start')), findsNothing);
+        // into a form and back to the sub-list, then back to the top
+        await tester.tap(find.byKey(act('chore_log')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('musey-back')));
+        await tester.pumpAndSettle();
+        expect(find.byKey(act('chore_log')), findsOneWidget);
+        await tester.tap(find.byKey(const ValueKey('musey-back')));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const ValueKey('musey-group-do')), findsOneWidget);
+      },
+    );
+
+    testWidgets('Run a routine and Check off a thing open their pick flow', (
+      tester,
+    ) async {
+      final api = apiFor(ids);
+      final sent = <String>[];
+      api.composeText = 'msg';
+      await open(
+        tester,
+        api,
+        send: (t) async {
+          sent.add(t);
+          return true;
+        },
+      );
+      await tester.tap(find.byKey(const ValueKey('musey-group-run')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('musey-form-routine_start')),
+        findsOneWidget,
+      );
+      await tester.tap(find.byKey(const ValueKey('musey-back')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('musey-group-check')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('musey-form-routine_done')),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('A'));
+      await tester.pumpAndSettle();
+      expect(api.composeCalls.single.$1, 'routine_done');
+      expect(sent, ['msg']);
+    });
+
+    testWidgets('a group with several actions shows a list', (tester) async {
+      await open(tester, apiFor(['routine_done', 'routine_start', 'undo']));
+      // simulate a second check-off action via a new id is not possible by
+      // design (unknown ids go to Do a thing), so the list view is covered by
+      // the Do a thing test; an empty group shows a plain note.
+      await tester.pumpWidget(const SizedBox());
+      await open(tester, apiFor(['chore_log']));
+      await tester.tap(find.byKey(const ValueKey('musey-group-run')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('musey-group-empty')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('musey-back')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('musey-group-do')), findsOneWidget);
+    });
+
+    testWidgets('Undo the last thing acts at once, no sub-list', (
+      tester,
+    ) async {
+      final api = apiFor(ids);
+      api.composeText = 'undo msg';
+      final sent = <String>[];
+      await open(
+        tester,
+        api,
+        send: (t) async {
+          sent.add(t);
+          return true;
+        },
+      );
+      await tester.tap(find.byKey(const ValueKey('musey-group-undo')));
+      await tester.pumpAndSettle();
+      expect(api.composeCalls.single.$1, 'undo');
+      expect(api.composeCalls.single.$2, isEmpty);
+      expect(sent, ['undo msg']);
+    });
+  });
+
   group('action form', () {
-    MuseyAction action(String id) => parseMuseyActions(
-      _choreActions,
-    ).firstWhere((a) => a.id == id);
+    MuseyAction action(String id) =>
+        parseMuseyActions(_choreActions).firstWhere((a) => a.id == id);
 
     testWidgets('one tap on the only required choice composes and sends', (
       tester,
@@ -307,28 +506,29 @@ void main() {
       expect(got!.codeUnits, text.codeUnits);
     });
 
-    testWidgets('a conditional chore field: any chore but Other sends at once', (
-      tester,
-    ) async {
-      final api = FakeApi();
-      await tester.pumpWidget(
-        _app(
-          api,
-          MuseyActionForm(
-            action: action('chore_log'),
-            send: (_) async => true,
-            onDone: () {},
+    testWidgets(
+      'a conditional chore field: any chore but Other sends at once',
+      (tester) async {
+        final api = FakeApi();
+        await tester.pumpWidget(
+          _app(
+            api,
+            MuseyActionForm(
+              action: action('chore_log'),
+              send: (_) async => true,
+              onDone: () {},
+            ),
           ),
-        ),
-      );
-      expect(find.byKey(const ValueKey('musey-field-other')), findsNothing);
-      expect(find.byKey(const ValueKey('musey-send')), findsNothing);
-      await tester.tap(
-        find.byKey(const ValueKey('musey-option-chore-Dishes')),
-      );
-      await tester.pumpAndSettle();
-      expect(api.composeCalls.single.$2, {'chore': 'Dishes'});
-    });
+        );
+        expect(find.byKey(const ValueKey('musey-field-other')), findsNothing);
+        expect(find.byKey(const ValueKey('musey-send')), findsNothing);
+        await tester.tap(
+          find.byKey(const ValueKey('musey-option-chore-Dishes')),
+        );
+        await tester.pumpAndSettle();
+        expect(api.composeCalls.single.$2, {'chore': 'Dishes'});
+      },
+    );
 
     testWidgets('Other reveals a required text field with its note', (
       tester,
@@ -518,20 +718,23 @@ void main() {
       expect(body['persona'], 'Bobby');
     });
 
-    test('a failed post stays queued and goes out on the next launch', () async {
-      final api = FakeApi()..flagsOk = false;
-      final queue = MuseyFlagQueue(() => api);
-      final ok = await submitBreakNote(queue, target, 'lost', build: 'b');
-      expect(ok, isFalse);
-      expect((await queue.pending()).single.note, 'lost');
+    test(
+      'a failed post stays queued and goes out on the next launch',
+      () async {
+        final api = FakeApi()..flagsOk = false;
+        final queue = MuseyFlagQueue(() => api);
+        final ok = await submitBreakNote(queue, target, 'lost', build: 'b');
+        expect(ok, isFalse);
+        expect((await queue.pending()).single.note, 'lost');
 
-      // A new queue object stands in for the next launch.
-      api.flagsOk = true;
-      final relaunched = MuseyFlagQueue(() => api);
-      expect(await relaunched.retryAll(), 1);
-      expect(await relaunched.pending(), isEmpty);
-      expect(api.flags.single.note, 'lost');
-    });
+        // A new queue object stands in for the next launch.
+        api.flagsOk = true;
+        final relaunched = MuseyFlagQueue(() => api);
+        expect(await relaunched.retryAll(), 1);
+        expect(await relaunched.pending(), isEmpty);
+        expect(api.flags.single.note, 'lost');
+      },
+    );
 
     test('no relay client keeps the note queued', () async {
       final queue = MuseyFlagQueue(() => null);
