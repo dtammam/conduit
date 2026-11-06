@@ -32,3 +32,13 @@ Only behind the chat message list: one static layer at the bottom of the chat pa
 Build 176 added Chat background only to the Flutter page (`app_customization_page.dart`). On iOS, Settings > Appearance is a native sheet built in `lib/core/services/native_sheet_hydration_service.dart` (`_applyNativeAppearanceDetail`), so Dean never saw it. Any setting added to a Flutter settings page must also be added to the native sheet (and its event handler in `lib/main.dart`, `_handleNativeSheetControlChanged`), or it does not exist on iOS.
 
 Native rows now (below the palette): "Chat background" (Gradient, Color, Image, None); with Color, "Background color" (Theme default plus 7 named swatches); with Image, "Background photo" (Choose or Change photo, Remove photo). Ids are `chat-background-mode|color|photo` in `chat_background.dart`. Each change updates `chatBackgroundProvider` (live chat) and re-hydrates the sheet. Tests: `native_sheet_settings_event_test.dart`, `native_sheet_hydration_locale_test.dart`.
+
+## Lesson from build 177: the photo row did nothing, and later rows stopped sticking
+
+The Appearance sheet is a native UIKit sheet. "Choose photo" is a dropdown option, so the sheet stays on screen while Dart gets the event. `image_picker` presents from the root view controller, which is already presenting the sheet, so UIKit refuses and the plugin never answers. Two effects: nothing opened, and `_handleNativeSheetControlChanged` is serialized through `_nativeSheetControlQueue` in `lib/main.dart`, so the awaited pick that never finished held up every later row (palette, color scheme, language) until the app restarted. That is the likely cause of "claude and catppuccin won't stick" (the palette handler and `setPalette` themselves persist correctly, tested).
+
+Rules, from build 178:
+- Anything that must open over the app from the native sheet dismisses the sheet first (`NativeSheetBridge.instance.dismiss()`), waits `nativeSheetDismissSettle` (450 ms, because dismiss returns when the slide starts), then opens.
+- Never await a user-paced action inside the control queue: start it with `unawaited`.
+- A pick failure is logged (`chat/background`) and shown in a snack bar; a cancel changes nothing.
+- Not testable without a device: that UIKit really presents the library after 450 ms, and the permission prompt.

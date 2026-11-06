@@ -8,6 +8,7 @@ import 'package:conduit/features/chat/background/chat_background.dart';
 import 'package:conduit/core/services/native_sheet_hydration_service.dart';
 import 'package:conduit/core/utils/native_sheet_utils.dart';
 import 'package:conduit/main.dart';
+import 'package:conduit/shared/theme/theme_providers.dart';
 import 'package:conduit/platform/flutter_key_value_store.dart';
 import 'package:conduit/platform/quick_actions_service.dart';
 import 'package:conduit/platform/conduit_platform_apis.g.dart';
@@ -34,7 +35,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:material_ui/material_ui.dart' show LicensePage, Scaffold;
+import 'package:material_ui/material_ui.dart' show LicensePage, Scaffold, ThemeMode;
 import 'package:mocktail/mocktail.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -562,6 +563,45 @@ void main() {
     check(bg().colorValue).isNull();
     await send('chat-background-mode', 'bogus');
     check(bg().mode).equals(ChatBackgroundMode.color);
+  });
+
+  testWidgets('a photo pick that never answers does not block later rows', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    PreferencesStore.debugOverride(await FlutterKeyValueStore.load());
+    addTearDown(PreferencesStore.debugReset);
+    nativeSheetDismissSettle = Duration.zero;
+    addTearDown(() => nativeSheetDismissSettle = const Duration(milliseconds: 450));
+    final never = Completer<Object?>();
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          const MethodChannel('plugins.flutter.io/image_picker'),
+          (_) => never.future,
+        );
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+            const MethodChannel('plugins.flutter.io/image_picker'),
+            null,
+          ),
+    );
+    final container = await pumpApp(tester);
+
+    Future<void> send(String id, Object value) async {
+      NativeSheetBridge.instance.onControlChanged(
+        PlatformNativeSheetControlChangedEvent(id: id, value: value),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    await send('chat-background-photo', 'choose');
+    await send('theme-palette', 'catppuccin');
+    check(container.read(appThemePaletteProvider).id).equals('catppuccin');
+    await send('theme-palette', 'claude');
+    check(container.read(appThemePaletteProvider).id).equals('claude');
+    await send('theme-light', 'dark');
+    check(container.read(appThemeModeProvider)).equals(ThemeMode.dark);
   });
 
   testWidgets('the native citation titles toggle saves its boolean', (

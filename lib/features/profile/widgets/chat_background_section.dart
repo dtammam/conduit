@@ -3,7 +3,12 @@ import 'dart:io';
 import 'package:flutter/widgets.dart';
 import 'package:material_ui/material_ui.dart' show Icons;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:conduit_core/utils/debug_logger.dart';
+import 'package:flutter/services.dart' show PlatformException;
 import 'package:image_picker/image_picker.dart';
+import 'package:material_ui/material_ui.dart' show ScaffoldMessenger, SnackBar;
+
+import '../../../shared/services/navigation_service.dart';
 
 import '../../../shared/theme/theme_extensions.dart';
 import '../../chat/background/chat_background.dart';
@@ -109,21 +114,68 @@ class ChatBackgroundSection extends ConsumerWidget {
       pickChatBackgroundPhoto(notifier);
 }
 
+/// How a photo pick ended.
+enum ChatBackgroundPickOutcome { chosen, cancelled, failed }
+
 /// Opens the photo library and sets the chosen photo as the chat background.
 /// Shared by the Flutter page and the iOS native Appearance sheet.
-Future<void> pickChatBackgroundPhoto(ChatBackgroundNotifier notifier) async {
+///
+/// [beforePick] runs first: the native sheet passes its dismiss here, because
+/// the photo library cannot present over a sheet that is still on screen (it
+/// never answers, so nothing happens). A cancelled pick changes nothing. Any
+/// failure is logged and shown through [onMessage], never swallowed.
+Future<ChatBackgroundPickOutcome> pickChatBackgroundPhoto(
+  ChatBackgroundNotifier notifier, {
+  Future<void> Function()? beforePick,
+  Future<XFile?> Function()? pick,
+  void Function(String message)? onMessage,
+}) async {
+  final say = onMessage ?? showChatBackgroundMessage;
   try {
-    final picked = await ImagePicker().pickImage(
-      source: ImageSource.gallery,
-      maxWidth: 2400,
-      maxHeight: 2400,
-      imageQuality: 88,
+    await beforePick?.call();
+    final picked = await (pick ?? _pickFromGallery)();
+    if (picked == null) return ChatBackgroundPickOutcome.cancelled;
+    if (await notifier.setImageFrom(File(picked.path))) {
+      return ChatBackgroundPickOutcome.chosen;
+    }
+    DebugLogger.error(
+      'chat-background-save-failed',
+      scope: 'chat/background',
+      error: 'setImageFrom returned false',
     );
-    if (picked == null) return;
-    await notifier.setImageFrom(File(picked.path));
-  } catch (_) {
-    // Picker unavailable or permission denied: leave the setting as it is.
+    say("Couldn't save that photo. Your background is unchanged.");
+  } catch (error, stackTrace) {
+    DebugLogger.error(
+      'chat-background-pick-failed',
+      scope: 'chat/background',
+      error: error,
+      stackTrace: stackTrace,
+    );
+    final denied =
+        error is PlatformException && error.code.contains('access_denied');
+    say(
+      denied
+          ? 'Photo access is off. Turn it on in Settings > Conduit > Photos.'
+          : "Couldn't open your photos. Your background is unchanged.",
+    );
   }
+  return ChatBackgroundPickOutcome.failed;
+}
+
+Future<XFile?> _pickFromGallery() => ImagePicker().pickImage(
+  source: ImageSource.gallery,
+  maxWidth: 2400,
+  maxHeight: 2400,
+  imageQuality: 88,
+);
+
+/// Shows [message] in a snack bar on the app's root navigator.
+void showChatBackgroundMessage(String message) {
+  final context = NavigationService.context;
+  if (context == null) return;
+  ScaffoldMessenger.maybeOf(context)
+    ?..hideCurrentSnackBar()
+    ..showSnackBar(SnackBar(content: Text(message)));
 }
 
 class _Swatch extends StatelessWidget {

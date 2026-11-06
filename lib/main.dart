@@ -807,6 +807,25 @@ class _ConduitAppState extends ConsumerState<ConduitApp> {
     );
   }
 
+  /// Closes the native sheet, waits for it to leave the screen, then opens
+  /// the photo library. Presenting the library while the sheet is still up
+  /// is refused by UIKit without any callback (build 177: "nothing happens").
+  Future<void> _chooseNativeChatBackgroundPhoto(
+    ChatBackgroundNotifier notifier,
+  ) async {
+    final outcome = await pickChatBackgroundPhoto(
+      notifier,
+      beforePick: () async {
+        await NativeSheetBridge.instance.dismiss();
+        await Future<void>.delayed(nativeSheetDismissSettle);
+      },
+    );
+    DebugLogger.log(
+      'chat background photo pick: ${outcome.name}',
+      scope: 'native/sheet',
+    );
+  }
+
   Future<void> _refreshNativeAppearance() => ref
       .read(nativeSheetHydrationServiceProvider)
       .hydrateDetail(NativeSheetRoutes.appearance);
@@ -1243,7 +1262,11 @@ class _ConduitAppState extends ConsumerState<ConduitApp> {
           if (value == 'remove') {
             await notifier.removeImage();
           } else if (value == 'choose') {
-            await pickChatBackgroundPhoto(notifier);
+            // Not awaited: the library cannot open over the sheet, and a
+            // pick that waits on the user would hold up every later row in
+            // this queue (the palette, color scheme and language rows).
+            unawaited(_chooseNativeChatBackgroundPhoto(notifier));
+            break;
           }
           unawaited(_refreshNativeAppearance());
         case 'theme-palette':

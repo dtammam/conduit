@@ -56,6 +56,11 @@ const String nativeChatBackgroundModeId = 'chat-background-mode';
 const String nativeChatBackgroundColorId = 'chat-background-color';
 const String nativeChatBackgroundPhotoId = 'chat-background-photo';
 
+/// How long to wait after asking the native sheet to close before opening the
+/// photo library: the dismiss call returns when the slide-away starts, and
+/// UIKit refuses a new presentation until it ends. Tests set this to zero.
+Duration nativeSheetDismissSettle = const Duration(milliseconds: 450);
+
 /// The user's choice. [colorValue] null means "theme default" (the gradient's
 /// middle tone as a flat color). [imageName] is a file name inside
 /// [kChatBackgroundFolder], never a full path: the app container path changes
