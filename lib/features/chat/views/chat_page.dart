@@ -1,3 +1,4 @@
+import '../background/chat_background.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:conduit/shared/widgets/platform_ui/platform_ui.dart';
 import 'package:conduit/l10n/app_localizations.dart';
@@ -3010,6 +3011,20 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     );
   }
 
+  /// Colors for the top and bottom chrome fades so they melt into the chat
+  /// background (docs/MUSEY-BACKGROUND.md).
+  ({Color top, Color bottom}) _backgroundEdges(
+    BuildContext context,
+    WidgetRef ref,
+  ) {
+    final t = context.conduitTheme;
+    return chatBackgroundEdgeColors(
+      ref.watch(chatBackgroundProvider),
+      t.variant,
+      t.isDark,
+    );
+  }
+
   Widget _buildMessagesList(ThemeData theme, WidgetRef watchRef) {
     watchRef.watch(chatMessageStructureSignatureProvider);
     // Rebuild the list shell only when streaming starts or ends so pin-to-top
@@ -4529,6 +4544,9 @@ class _ChatPageState extends ConsumerState<ChatPage> {
           onTap: _dismissComposerFocus,
           child: Stack(
             children: [
+              // Musey chat background: a static layer behind the list only.
+              // See docs/MUSEY-BACKGROUND.md.
+              const Positioned.fill(child: ChatBackgroundLayer()),
               Positioned.fill(
                 child: Consumer(
                   builder: (context, listRef, _) {
@@ -4544,6 +4562,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                 top: 0,
                 child: ConduitChromeGradientFade.top(
                   contentHeight: chromeTopHeight + _assistantAvatarInset,
+                  backgroundColor: _backgroundEdges(context, ref).top,
                 ),
               ),
               Positioned(
@@ -4559,6 +4578,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                     ),
                   ),
                   fadeHeight: Spacing.md,
+                  backgroundColor: _backgroundEdges(context, ref).bottom,
                 ),
               ),
               Positioned(

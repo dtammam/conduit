@@ -35,6 +35,7 @@ import '../../chat/avatar/persona_appearance_service.dart';
 import '../../chat/providers/text_to_speech_provider.dart';
 import '../../chat/services/voice_input_service.dart';
 import '../widgets/adaptive_segmented_selector.dart';
+import '../widgets/chat_background_section.dart';
 import '../widgets/customization_tile.dart';
 import '../widgets/expandable_card.dart';
 import '../widgets/settings_page_scaffold.dart';
@@ -99,6 +100,9 @@ class AppCustomizationPage extends ConsumerWidget {
           themeDescription,
           activeTheme,
         ),
+        _sectionGap,
+        _sectionGap,
+        const InsetGroupedSection(child: ChatBackgroundSection()),
         _sectionGap,
         _buildLanguageSection(context, ref, currentLanguageCode, languageLabel),
       ],
