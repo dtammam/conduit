@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../features/chat/musey/musey_api.dart';
+
 /// What a Musey home-widget tap asks for. Every one of them happens in the
 /// Omni chat, never in a new chat.
 enum MuseyWidgetAction { actions, voice, camera, photos, clipboard, open }
@@ -30,6 +32,45 @@ MuseyWidgetAction museyWidgetActionOf(Uri uri) {
     default:
       return MuseyWidgetAction.actions;
   }
+}
+
+/// The only shape of a catalog id accepted from a widget URL.
+final RegExp _museyActionIdPattern = RegExp(r'^[a-z_]{1,40}$');
+
+/// The catalog id a "Musey Actions" tile carries
+/// (`musey://actions?homeWidget=true&id=chore_log`), or null when the link has
+/// none or it is not `[a-z_]+`. The id comes from a URL, so nothing else gets
+/// through.
+String? museyWidgetActionIdOf(Uri uri) {
+  if (museyWidgetActionOf(uri) != MuseyWidgetAction.actions) return null;
+  final id = uri.queryParameters['id'];
+  if (id == null || !_museyActionIdPattern.hasMatch(id)) return null;
+  return id;
+}
+
+/// The catalog action a tile asks for, or null (open the normal wrench menu).
+/// [loadCatalog] refreshes the catalog (it may throw or time out); [readCatalog]
+/// returns what is known afterwards. An unknown id (the relay leaves out
+/// `home_control` when the house switch is off) or a catalog that cannot be had
+/// is null, never an error.
+Future<MuseyAction?> resolveWidgetAction({
+  required String? id,
+  required Future<void> Function() loadCatalog,
+  required List<MuseyAction>? Function() readCatalog,
+  Duration timeout = const Duration(seconds: 5),
+}) async {
+  if (id == null) return null;
+  try {
+    await loadCatalog().timeout(timeout);
+  } catch (_) {
+    // Fall through: a cached list may still be there.
+  }
+  final catalog = readCatalog();
+  if (catalog == null) return null;
+  for (final a in catalog) {
+    if (a.id == id) return a;
+  }
+  return null;
 }
 
 /// Moves the app to the Omni chat for a widget tap. Returns the Omni chat id
@@ -76,17 +117,33 @@ final museyMenuIntentProvider =
     NotifierProvider<MuseyMenuIntent, DateTime?>(MuseyMenuIntent.new);
 
 class MuseyMenuIntent extends Notifier<DateTime?> {
+  String? _actionId;
+
   @override
   DateTime? build() => null;
 
-  void request({DateTime? now}) => state = now ?? DateTime.now();
+  /// Asks for the menu, or with [actionId] for that one action's form. A new
+  /// ask replaces any older one, id included.
+  void request({DateTime? now, String? actionId}) {
+    _actionId = actionId;
+    state = now ?? DateTime.now();
+  }
 
   /// True once when a live ask was waiting; an expired one is dropped.
-  bool consume({DateTime? now}) {
+  bool consume({DateTime? now}) => take(now: now) != null;
+
+  /// Like [consume], but returns the ask (null when none or expired). The id
+  /// is cleared with it, so a served or expired ask never comes back.
+  MuseyMenuAsk? take({DateTime? now}) {
     final at = state;
-    if (at == null) return false;
+    final id = _actionId;
+    _actionId = null;
+    if (at == null) return null;
     state = null;
-    return (now ?? DateTime.now()).difference(at) <= kMuseyMenuIntentLife;
+    if ((now ?? DateTime.now()).difference(at) > kMuseyMenuIntentLife) {
+      return null;
+    }
+    return MuseyMenuAsk(id);
   }
 
   bool isPending({DateTime? now}) {
@@ -94,4 +151,10 @@ class MuseyMenuIntent extends Notifier<DateTime?> {
     return at != null &&
         (now ?? DateTime.now()).difference(at) <= kMuseyMenuIntentLife;
   }
+}
+
+/// A live ask for the wrench menu; [actionId] set means "open that action".
+class MuseyMenuAsk {
+  const MuseyMenuAsk(this.actionId);
+  final String? actionId;
 }

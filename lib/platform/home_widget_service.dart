@@ -257,7 +257,9 @@ class HomeWidgetCoordinator extends _$HomeWidgetCoordinator {
 
     switch (action) {
       case MuseyWidgetAction.actions:
-        ref.read(museyMenuIntentProvider.notifier).request();
+        ref
+            .read(museyMenuIntentProvider.notifier)
+            .request(actionId: museyWidgetActionIdOf(uri));
       case MuseyWidgetAction.voice:
         await _handleMic();
       case MuseyWidgetAction.camera:

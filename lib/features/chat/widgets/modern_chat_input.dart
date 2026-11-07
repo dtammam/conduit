@@ -870,8 +870,26 @@ class _ModernChatInputState extends ConsumerState<ModernChatInput>
       OmniLaunchGate.settled.addListener(onSettled);
       return;
     }
-    if (!ref.read(museyMenuIntentProvider.notifier).consume()) return;
-    unawaited(_openMuseySheet());
+    final ask = ref.read(museyMenuIntentProvider.notifier).take();
+    if (ask == null) return;
+    unawaited(_openMuseySheetForAsk(ask.actionId));
+  }
+
+  /// A widget tile's ask: open straight on that catalog action, or the normal
+  /// wrench menu when the id is unknown or the catalog cannot be had.
+  Future<void> _openMuseySheetForAsk(String? actionId) async {
+    MuseyAction? initial;
+    if (actionId != null) {
+      final notifier = ref.read(museyActionsProvider.notifier);
+      initial = await resolveWidgetAction(
+        id: actionId,
+        loadCatalog: notifier.load,
+        readCatalog: () =>
+            mounted ? ref.read(museyActionsProvider).actions : null,
+      );
+    }
+    if (!mounted) return;
+    await _openMuseySheet(initial: initial);
   }
 
   /// Serves an explicit ask to type ([composerFocusIntentProvider]): after the

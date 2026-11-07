@@ -12,5 +12,6 @@ import SwiftUI
 struct ConduitWidgetBundle: WidgetBundle {
     var body: some Widget {
         ConduitWidget()
+        MuseyActionsWidget()
     }
 }

@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:conduit/features/chat/musey/musey_api.dart';
 import 'package:conduit/platform/widget_omni_routing.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -154,6 +157,138 @@ void main() {
       expect(notifier.isPending(now: late), isFalse);
       expect(notifier.consume(now: late), isFalse);
       expect(container.read(museyMenuIntentProvider), isNull);
+    });
+  });
+
+  group('museyWidgetActionIdOf', () {
+    test('reads a catalog id from an actions link', () {
+      expect(
+        museyWidgetActionIdOf(
+          Uri.parse('conduit://actions?homeWidget=true&id=home_control'),
+        ),
+        'home_control',
+      );
+      expect(
+        museyWidgetActionOf(
+          Uri.parse('conduit://actions?homeWidget=true&id=chore_log'),
+        ),
+        MuseyWidgetAction.actions,
+      );
+    });
+
+    test('no id, or an id that is not [a-z_]+, is null (plain menu)', () {
+      for (final raw in [
+        'conduit://actions?homeWidget=true',
+        'conduit://actions?homeWidget=true&id=',
+        'conduit://actions?homeWidget=true&id=Chore',
+        'conduit://actions?homeWidget=true&id=chore-log',
+        'conduit://actions?homeWidget=true&id=chore2',
+        'conduit://actions?homeWidget=true&id=a%20b',
+        'conduit://actions?homeWidget=true&id=..%2Fx',
+        'conduit://actions?homeWidget=true&id=${'a' * 41}',
+      ]) {
+        expect(museyWidgetActionIdOf(Uri.parse(raw)), isNull, reason: raw);
+      }
+    });
+
+    test('other widget links never carry an action id', () {
+      expect(
+        museyWidgetActionIdOf(Uri.parse('conduit://mic?homeWidget=true&id=x')),
+        isNull,
+      );
+    });
+  });
+
+  group('resolveWidgetAction', () {
+    const chore = MuseyAction(id: 'chore_log', label: 'Log a chore');
+    const house = MuseyAction(id: 'home_control', label: 'Control the house');
+
+    test('a known id opens that action', () async {
+      final got = await resolveWidgetAction(
+        id: 'chore_log',
+        loadCatalog: () async {},
+        readCatalog: () => const [house, chore],
+      );
+      expect(got, chore);
+    });
+
+    test('an unknown id (house switch off) falls back to the menu', () async {
+      final got = await resolveWidgetAction(
+        id: 'home_control',
+        loadCatalog: () async {},
+        readCatalog: () => const [chore],
+      );
+      expect(got, isNull);
+    });
+
+    test('a catalog that fails to load falls back, unless a cache is there',
+        () async {
+      final none = await resolveWidgetAction(
+        id: 'chore_log',
+        loadCatalog: () async => throw Exception('relay down'),
+        readCatalog: () => null,
+      );
+      expect(none, isNull);
+      final cached = await resolveWidgetAction(
+        id: 'chore_log',
+        loadCatalog: () async => throw Exception('relay down'),
+        readCatalog: () => const [chore],
+      );
+      expect(cached, chore);
+    });
+
+    test('a catalog that hangs times out and falls back', () async {
+      final got = await resolveWidgetAction(
+        id: 'chore_log',
+        loadCatalog: () => Completer<void>().future,
+        readCatalog: () => null,
+        timeout: const Duration(milliseconds: 20),
+      );
+      expect(got, isNull);
+    });
+
+    test('no id is the plain menu without touching the catalog', () async {
+      var loaded = false;
+      final got = await resolveWidgetAction(
+        id: null,
+        loadCatalog: () async => loaded = true,
+        readCatalog: () => const [chore],
+      );
+      expect(got, isNull);
+      expect(loaded, isFalse);
+    });
+  });
+
+  group('museyMenuIntent action id', () {
+    test('the id rides the ask and is served once', () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final n = container.read(museyMenuIntentProvider.notifier);
+      n.request(actionId: 'chore_log');
+      expect(n.take()?.actionId, 'chore_log');
+      expect(n.take(), isNull);
+    });
+
+    test('an expired ask never reopens a stale action', () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final n = container.read(museyMenuIntentProvider.notifier);
+      final then = DateTime(2026, 11, 6, 9);
+      n.request(now: then, actionId: 'chore_log');
+      final late = then.add(kMuseyMenuIntentLife + const Duration(seconds: 1));
+      expect(n.take(now: late), isNull);
+      // A later plain ask has no id left over.
+      n.request();
+      expect(n.take()?.actionId, isNull);
+    });
+
+    test('a newer plain ask replaces an older tile ask', () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final n = container.read(museyMenuIntentProvider.notifier);
+      n.request(actionId: 'chore_log');
+      n.request();
+      expect(n.take()?.actionId, isNull);
     });
   });
 }

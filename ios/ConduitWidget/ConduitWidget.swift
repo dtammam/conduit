@@ -8,7 +8,7 @@
 import WidgetKit
 import SwiftUI
 
-private enum WidgetDeepLink {
+enum WidgetDeepLink {
     static var scheme: String {
         guard
             let configuredScheme = Bundle.main.object(forInfoDictionaryKey: "AppUrlScheme") as? String,
@@ -21,6 +21,13 @@ private enum WidgetDeepLink {
 
     static func url(for action: String) -> URL {
         URL(string: "\(scheme)://\(action)?homeWidget=true")!
+    }
+
+    /// A Musey Actions tile: the wrench menu opened straight on one catalog
+    /// action. The id is a fixed literal from MuseyActionsWidget.swift
+    /// ([a-z_]+); the app re-checks it and falls back to the menu.
+    static func url(forAction id: String) -> URL {
+        URL(string: "\(scheme)://actions?homeWidget=true&id=\(id)")!
     }
 }
 
