@@ -60,6 +60,7 @@ import 'package:conduit_core/features/tools/providers/tools_providers.dart';
 
 import 'package:conduit/core/startup/omni_launch_gate.dart';
 import 'package:conduit/features/chat/omni/omni_refresh.dart';
+import 'package:conduit/platform/ask_musey.dart';
 import 'package:conduit/features/routines/push_registration.dart';
 import 'package:conduit_core/features/chat/omni/omni_chat.dart';
 import 'package:conduit_core/features/chat/providers/attached_files_provider.dart';
@@ -1209,6 +1210,8 @@ class AppStartupFlow extends _$AppStartupFlow {
     // Server-posted routine messages appear in the Omni chat without
     // leaving and re-entering it.
     ref.read(omniRefreshProvider);
+    // "Ask Musey" from Siri and Shortcuts answers through the Omni chat.
+    ref.read(askMuseyBridgeProvider);
     // Scheduled task reminders resync from here on (or cancel themselves when
     // they are off).
     ref.read(scheduledTaskRemindersProvider);

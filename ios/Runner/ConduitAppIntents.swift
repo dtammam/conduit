@@ -262,6 +262,18 @@ struct ConduitSendImageIntent: AppIntent {
 struct AppShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         return [
+            // "Ask Musey": answers by voice without opening the app. A String
+            // parameter cannot sit inside a phrase, so Siri asks for the
+            // question after the phrase.
+            AppShortcut(
+                intent: AskMuseyIntent(),
+                phrases: [
+                    "Ask \(.applicationName)",
+                    "Ask \(.applicationName) something",
+                ],
+                shortTitle: "Ask Musey",
+                systemImageName: "bubble.left.and.text.bubble.right"
+            ),
             AppShortcut(
                 intent: AskConduitIntent(),
                 phrases: [
