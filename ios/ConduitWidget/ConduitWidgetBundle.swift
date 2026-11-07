@@ -13,5 +13,8 @@ struct ConduitWidgetBundle: WidgetBundle {
     var body: some Widget {
         ConduitWidget()
         MuseyActionsWidget()
+        if #available(iOS 16.2, *) {
+            NextEventLiveActivity()
+        }
     }
 }

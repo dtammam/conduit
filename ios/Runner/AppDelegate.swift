@@ -157,6 +157,7 @@ import UserNotifications
     DisplayBoostBridge.shared.configure(messenger: messenger)
     PushBridge.shared.configure(messenger: messenger)
     AskMuseyBridge.shared.configure(messenger: messenger)
+    LiveActivityBridge.shared.start()
   }
 }
 

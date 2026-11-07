@@ -140,6 +140,8 @@
 	<true/>
 	<key>PushKeychainGroup</key>
 	<string>$(AppIdentifierPrefix)am.tamm.conduit.push</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>

@@ -14,7 +14,8 @@
 		5392225773208F91BA90683B /* SpeechEngineQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E5AB5F21F0375D57CB097B6 /* SpeechEngineQueue.swift */; };
 		5392225773208F91BA906A01 /* SpeechMp3Stream.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E5AB5F21F0375D57CB09A02 /* SpeechMp3Stream.swift */; };
 		55C3ACEC87284E401988509F /* PushBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA5867C78CB89105198C00F8 /* PushBridge.swift */; };
-		A5C0DE0182000000000A5C02 /* AskMuseyIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5C0DE0182000000000A5C01 /* AskMuseyIntent.swift */; };
+		A1B2C3D4E5F60718293A4B01 /* LiveActivityBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B02 /* LiveActivityBridge.swift */; };
+		A1B2C3D4E5F60718293A4B03 /* NextEventAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B04 /* NextEventAttributes.swift */; };
 		56A577DF855E0142104F99D7 /* ConduitObjCTry.m in Sources */ = {isa = PBXBuildFile; fileRef = 57AA3E89E09FC918E6164B60 /* ConduitObjCTry.m */; };
 		74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74858FAE1ED2DC5600515810 /* AppDelegate.swift */; };
 		78A318202AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage in Frameworks */ = {isa = PBXBuildFile; productRef = 78A3181F2AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage */; };
@@ -22,6 +23,7 @@
 		97C146FC1CF9000F007C117D /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FA1CF9000F007C117D /* Main.storyboard */; };
 		97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FD1CF9000F007C117D /* Assets.xcassets */; };
 		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
+		A5C0DE0182000000000A5C02 /* AskMuseyIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5C0DE0182000000000A5C01 /* AskMuseyIntent.swift */; };
 		A66B6643C89B7BB44E2B9471 /* Pods_RunnerTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 42FA90454A654BE3B4EA8A89 /* Pods_RunnerTests.framework */; };
 		B1CCE564261D81DDFD7B85D8 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2778020F54D50802E85E84D /* NotificationService.swift */; };
 		C073CCD19D2508BCAD536200 /* NativeIosTtsBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = C07E41E507BC83CDF6A2F806 /* NativeIosTtsBridge.swift */; };
@@ -152,6 +154,7 @@
 		97C146FD1CF9000F007C117D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		97C147001CF9000F007C117D /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		97C147021CF9000F007C117D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A5C0DE0182000000000A5C01 /* AskMuseyIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AskMuseyIntent.swift; sourceTree = "<group>"; };
 		C0700E3C1D3E25D23C2D9095 /* AppIntentInvocationStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppIntentInvocationStore.swift; sourceTree = "<group>"; };
 		C07202B2AF712D67C45FE1BC /* ConduitBridgeHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConduitBridgeHost.swift; sourceTree = "<group>"; };
 		C0733DBE0EC21B8BA584F742 /* AppIntentBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppIntentBridge.swift; sourceTree = "<group>"; };
@@ -219,7 +222,8 @@
 		F1L10N202EE550000000000B /* ja */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ja; path = ja.lproj/Localizable.strings; sourceTree = "<group>"; };
 		F1L10N202EE550000000000C /* pl */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = pl; path = pl.lproj/Localizable.strings; sourceTree = "<group>"; };
 		FA5867C78CB89105198C00F8 /* PushBridge.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PushBridge.swift; sourceTree = "<group>"; };
-		A5C0DE0182000000000A5C01 /* AskMuseyIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AskMuseyIntent.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B02 /* LiveActivityBridge.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LiveActivityBridge.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B04 /* NextEventAttributes.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = NextEventAttributes.swift; path = ConduitWidget/NextEventAttributes.swift; sourceTree = "<group>"; };
 		FEE957AC198F5541B6DA13E7 /* SpeechEngineBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechEngineBridge.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -451,6 +455,8 @@
 				74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */,
 				28FC060D7E497C44FAD37B3B /* PushKeychain.swift */,
 				FA5867C78CB89105198C00F8 /* PushBridge.swift */,
+				A1B2C3D4E5F60718293A4B02 /* LiveActivityBridge.swift */,
+				A1B2C3D4E5F60718293A4B04 /* NextEventAttributes.swift */,
 				A5C0DE0182000000000A5C01 /* AskMuseyIntent.swift */,
 			);
 			path = Runner;
@@ -807,6 +813,8 @@
 				1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */,
 				FB07FD7C09F0735EC85F3A14 /* PushKeychain.swift in Sources */,
 				55C3ACEC87284E401988509F /* PushBridge.swift in Sources */,
+				A1B2C3D4E5F60718293A4B01 /* LiveActivityBridge.swift in Sources */,
+				A1B2C3D4E5F60718293A4B03 /* NextEventAttributes.swift in Sources */,
 				A5C0DE0182000000000A5C02 /* AskMuseyIntent.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
