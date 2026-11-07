@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../features/chat/musey/musey_api.dart';
@@ -159,4 +160,44 @@ class MuseyMenuIntent extends Notifier<DateTime?> {
 class MuseyMenuAsk {
   const MuseyMenuAsk(this.actionId);
   final String? actionId;
+}
+
+/// Puts the app back at its home state before a widget tap does its action:
+/// every pushed route, bottom sheet and dialog on [navigator] is popped down
+/// to the first route, the keyboard is dismissed, a stale menu ask is dropped,
+/// and [goHome] runs when the app is not on its home route. Then it waits one
+/// frame ([settle]) so the UI is settled.
+///
+/// Nothing is deleted: composer drafts stay in their providers, and an
+/// in-flight message stream is not touched (it lives in providers, not in
+/// routes). Returns the number of routes popped.
+Future<int> resetAppToRoot({
+  required NavigatorState? navigator,
+  required void Function() dismissKeyboard,
+  required void Function() dropMenuAsk,
+  required bool Function() isHome,
+  required void Function() goHome,
+  required Future<void> Function() settle,
+}) async {
+  var popped = 0;
+  try {
+    dismissKeyboard();
+  } catch (_) {}
+  try {
+    dropMenuAsk();
+  } catch (_) {}
+  try {
+    if (navigator != null && navigator.mounted) {
+      navigator.popUntil((route) {
+        final stop = route.isFirst;
+        if (!stop) popped++;
+        return stop;
+      });
+    }
+  } catch (_) {}
+  try {
+    if (!isHome()) goHome();
+  } catch (_) {}
+  await settle();
+  return popped;
 }

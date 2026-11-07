@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:conduit/features/chat/musey/musey_api.dart';
 import 'package:conduit/platform/widget_omni_routing.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -300,6 +301,83 @@ void main() {
       n.request(actionId: 'chore_log');
       n.request();
       expect(n.take()?.actionId, isNull);
+    });
+  });
+
+  group('resetAppToRoot', () {
+    testWidgets('pops pushed routes, sheets and dialogs down to the first',
+        (tester) async {
+      final key = GlobalKey<NavigatorState>();
+      await tester.pumpWidget(MaterialApp(
+        navigatorKey: key,
+        home: const Scaffold(body: Text('home')),
+      ));
+      key.currentState!.push(MaterialPageRoute<void>(
+        builder: (_) => const Scaffold(body: Text('settings')),
+      ));
+      await tester.pumpAndSettle();
+      showModalBottomSheet<void>(
+        context: key.currentContext!,
+        builder: (_) => const Text('sheet'),
+      );
+      await tester.pumpAndSettle();
+      showDialog<void>(
+        context: key.currentContext!,
+        builder: (_) => const AlertDialog(title: Text('dialog')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('dialog'), findsOneWidget);
+
+      var keyboard = 0, dropped = 0, wentHome = 0, settled = 0;
+      final popped = await tester.runAsync(() => resetAppToRoot(
+            navigator: key.currentState,
+            dismissKeyboard: () => keyboard++,
+            dropMenuAsk: () => dropped++,
+            isHome: () => false,
+            goHome: () => wentHome++,
+            settle: () async => settled++,
+          ));
+      await tester.pumpAndSettle();
+      expect(popped, 3);
+      expect(key.currentState!.canPop(), isFalse);
+      expect(find.text('home'), findsOneWidget);
+      expect(find.text('dialog'), findsNothing);
+      expect([keyboard, dropped, wentHome, settled], [1, 1, 1, 1]);
+    });
+
+    testWidgets('already at home: nothing popped, no navigation',
+        (tester) async {
+      final key = GlobalKey<NavigatorState>();
+      await tester.pumpWidget(MaterialApp(
+        navigatorKey: key,
+        home: const Scaffold(body: Text('home')),
+      ));
+      var wentHome = 0;
+      final popped = await resetAppToRoot(
+        navigator: key.currentState,
+        dismissKeyboard: () {},
+        dropMenuAsk: () {},
+        isHome: () => true,
+        goHome: () => wentHome++,
+        settle: () async {},
+      );
+      expect(popped, 0);
+      expect(wentHome, 0);
+    });
+
+    test('no navigator yet (cold start) still settles without throwing',
+        () async {
+      var settled = 0;
+      final popped = await resetAppToRoot(
+        navigator: null,
+        dismissKeyboard: () => throw StateError('x'),
+        dropMenuAsk: () {},
+        isHome: () => true,
+        goHome: () {},
+        settle: () async => settled++,
+      );
+      expect(popped, 0);
+      expect(settled, 1);
     });
   });
 }

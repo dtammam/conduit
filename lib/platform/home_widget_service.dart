@@ -232,6 +232,10 @@ class HomeWidgetCoordinator extends _$HomeWidgetCoordinator {
     // The M and the empty background: the app is already open as it was.
     // No Omni, no menu, no voice, no composer action, no chat switch.
     if (!museyWidgetActionUsesOmni(action)) return;
+    // A widget tap starts from home: close whatever is open first (Dean,
+    // 2026-11-07). Drafts and running streams are not touched.
+    await _resetToRoot();
+    if (!ref.mounted) return;
     await _waitForNavigation();
 
     // Everything lands in the Omni chat. When its id is not known yet the app
@@ -275,6 +279,18 @@ class HomeWidgetCoordinator extends _$HomeWidgetCoordinator {
       case MuseyWidgetAction.open:
         break;
     }
+  }
+
+  Future<void> _resetToRoot() async {
+    final popped = await resetAppToRoot(
+      navigator: NavigationService.navigator,
+      dismissKeyboard: () => FocusManager.instance.primaryFocus?.unfocus(),
+      dropMenuAsk: () => ref.read(museyMenuIntentProvider.notifier).take(),
+      isHome: () => NavigationService.currentRoute == Routes.chat,
+      goHome: () => NavigationService.navigateToChat(),
+      settle: () => WidgetsBinding.instance.endOfFrame,
+    );
+    DebugLogger.log('Widget: reset to root, popped $popped', scope: 'widget');
   }
 
   /// The stored Omni chat id (or one the app already resolved). Nothing is
