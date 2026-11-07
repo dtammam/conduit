@@ -22,6 +22,7 @@ final class PreferenceKeys {
   static const String routinesPushEnabled = 'routines_push_enabled';
   static const String compactToolSummaries = 'compact_tool_summaries';
   static const String omniChatEnabled = 'omni_chat_enabled';
+  static const String voiceModeCollapsed = 'voice_mode_collapsed';
   static const String omniChatId = 'omni_chat_id';
   static const String omniSessionIdleMinutes = 'omni_session_idle_minutes';
   static const String omniSession = 'omni_session_v1';

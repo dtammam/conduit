@@ -27,6 +27,8 @@ import 'package:conduit_core/providers/app_providers.dart'
 
 import 'package:conduit_core/providers/host_ports.dart'
     show appLifecycleProvider;
+import 'package:conduit_core/persistence/persistence_keys.dart';
+import 'package:conduit_core/persistence/preferences_store.dart';
 import 'package:conduit_core/services/settings_service.dart';
 import 'package:conduit_core/services/socket_service.dart'
     show SocketBackgroundActivityLease, SocketService;
@@ -584,7 +586,7 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
             startedAt: DateTime.now(),
             elapsed: Duration.zero,
             clearErrorMessage: true,
-            isCollapsed: false,
+            isCollapsed: storedVoiceModeCollapsed(),
             isMuted: false,
             isSpeakerphoneEnabled: false,
           );
@@ -1280,19 +1282,31 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
   void collapse() {
     if (state.isActive) {
       state = state.copyWith(isCollapsed: true);
+      _storeCollapsed(true);
     }
   }
 
   void expand() {
     if (state.isActive) {
       state = state.copyWith(isCollapsed: false);
+      _storeCollapsed(false);
     }
   }
 
   void toggleCollapsed() {
     if (state.isActive) {
-      state = state.copyWith(isCollapsed: !state.isCollapsed);
+      final next = !state.isCollapsed;
+      state = state.copyWith(isCollapsed: next);
+      _storeCollapsed(next);
     }
+  }
+
+  /// Remembers the view Dean picked last, so voice mode reopens in it.
+  void _storeCollapsed(bool collapsed) {
+    if (!PreferencesStore.isReady) return;
+    unawaited(
+      PreferencesStore.put(PreferenceKeys.voiceModeCollapsed, collapsed),
+    );
   }
 
   /// Starts the call's timing log (voice_event_log.dart) when a Voice
@@ -3282,3 +3296,9 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
     } catch (_) {}
   }
 }
+
+/// The view voice mode last used: true is the condensed pill, false (also a
+/// fresh install) is the expanded panel.
+bool storedVoiceModeCollapsed() =>
+    PreferencesStore.isReady &&
+    (PreferencesStore.getBool(PreferenceKeys.voiceModeCollapsed) ?? false);
