@@ -270,6 +270,9 @@ struct AppShortcuts: AppShortcutsProvider {
                 phrases: [
                     "Ask \(.applicationName)",
                     "Ask \(.applicationName) something",
+                    "Ask Bobby in \(.applicationName)",
+                    "Talk to \(.applicationName)",
+                    "\(.applicationName) question",
                 ],
                 shortTitle: "Ask Musey",
                 systemImageName: "bubble.left.and.text.bubble.right"

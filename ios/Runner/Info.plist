@@ -140,6 +140,33 @@
 	<true/>
 	<key>PushKeychainGroup</key>
 	<string>$(AppIdentifierPrefix)am.tamm.conduit.push</string>
+	<key>INAlternativeAppNames</key>
+	<array>
+		<dict>
+			<key>INAlternativeAppNamePronunciationHint</key>
+			<string>mew zee</string>
+			<key>INAlternativeAppNameString</key>
+			<string>Musi</string>
+		</dict>
+		<dict>
+			<key>INAlternativeAppNamePronunciationHint</key>
+			<string>mews</string>
+			<key>INAlternativeAppNameString</key>
+			<string>Muse</string>
+		</dict>
+		<dict>
+			<key>INAlternativeAppNamePronunciationHint</key>
+			<string>moo zee</string>
+			<key>INAlternativeAppNameString</key>
+			<string>Moosey</string>
+		</dict>
+		<dict>
+			<key>INAlternativeAppNamePronunciationHint</key>
+			<string>muh zee</string>
+			<key>INAlternativeAppNameString</key>
+			<string>Muzzy</string>
+		</dict>
+	</array>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>UIBackgroundModes</key>

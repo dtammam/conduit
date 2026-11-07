@@ -10,6 +10,9 @@ Dean said yes on 2026-11-07: "Hey Siri, ask Musey <question>" (or the shortcut) 
 
 - "Ask Musey"
 - "Ask Musey something"
+- "Ask Bobby in Musey", "Talk to Musey", "Musey question" (added in case Siri mishears the name)
+
+Siri may hear "Musi" or "Muse". Info.plist lists those and "Moosey" and "Muzzy" under `INAlternativeAppNames` with pronunciation hints; whether App Shortcut phrases match them is not verified (needs a device). A personal shortcut in the Shortcuts app named, for example, "Ask Bobby" can run the same action, with no app name to mishear.
 
 Siri then asks "What do you want to ask Bobby?" and Dean says the question. A String parameter cannot sit inside an App Shortcut phrase (only entities and enums can), so "Ask Musey what is on today" in one breath is not available; if the phrase is followed by words Siri may still hear them as the question, but that is not promised. The same intent appears in the Shortcuts app as the action "Ask Musey" (one Question input, the reply as text output), so it can go on a widget or the Action button.
 
