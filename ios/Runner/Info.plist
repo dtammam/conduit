@@ -145,26 +145,20 @@
 		<dict>
 			<key>INAlternativeAppNamePronunciationHint</key>
 			<string>mew zee</string>
-			<key>INAlternativeAppNameString</key>
+			<key>INAlternativeAppName</key>
 			<string>Musi</string>
 		</dict>
 		<dict>
 			<key>INAlternativeAppNamePronunciationHint</key>
 			<string>mews</string>
-			<key>INAlternativeAppNameString</key>
+			<key>INAlternativeAppName</key>
 			<string>Muse</string>
 		</dict>
 		<dict>
 			<key>INAlternativeAppNamePronunciationHint</key>
 			<string>moo zee</string>
-			<key>INAlternativeAppNameString</key>
+			<key>INAlternativeAppName</key>
 			<string>Moosey</string>
-		</dict>
-		<dict>
-			<key>INAlternativeAppNamePronunciationHint</key>
-			<string>muh zee</string>
-			<key>INAlternativeAppNameString</key>
-			<string>Muzzy</string>
 		</dict>
 	</array>
 	<key>NSSupportsLiveActivities</key>
