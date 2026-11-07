@@ -6,7 +6,7 @@ import '../features/chat/musey/musey_api.dart';
 
 /// What a Musey home-widget tap asks for. Every one of them happens in the
 /// Omni chat, never in a new chat.
-enum MuseyWidgetAction { actions, voice, camera, photos, clipboard, open }
+enum MuseyWidgetAction { actions, type, voice, camera, photos, clipboard, open }
 
 /// Whether a tap moves the app to the Omni chat. `open` (the M and the
 /// widget's empty background) does not: the app opens as it was.
@@ -14,13 +14,15 @@ bool museyWidgetActionUsesOmni(MuseyWidgetAction action) =>
     action != MuseyWidgetAction.open;
 
 /// The action a widget link (`musey://actions?homeWidget=true`) asks for.
-/// The main pill and anything unknown (including the old `new_chat` link a
+/// The M and anything unknown (including the old `new_chat` link a
 /// stale widget on the home screen still sends) open the action menu.
 MuseyWidgetAction museyWidgetActionOf(Uri uri) {
   final name = uri.host.isNotEmpty ? uri.host : uri.pathSegments.firstOrNull;
   switch (name) {
     case 'open':
       return MuseyWidgetAction.open;
+    case 'type':
+      return MuseyWidgetAction.type;
     case 'mic':
       return MuseyWidgetAction.voice;
     case 'camera':

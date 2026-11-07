@@ -38,7 +38,7 @@ private let museyBlue = Color(red: 0.231, green: 0.576, blue: 0.980)
 
 /// The Musey "M" (the app icon's mark), drawn as a rounded stroke so the
 /// widget needs no image asset.
-private struct MuseyMark: Shape {
+struct MuseyMark: Shape {
     func path(in rect: CGRect) -> Path {
         // Control points are the icon's 1024 grid, scaled into rect.
         func p(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
@@ -103,10 +103,10 @@ struct ConduitWidgetEntryView: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            // Main pill. The M opens Musey as it was (no menu, no action);
-            // the text area opens Omni with the action menu (the wrench).
+            // Main pill. The M opens Omni with the action menu (the wrench);
+            // the text area opens Omni ready to type (no menu).
             HStack(spacing: 0) {
-                Link(destination: WidgetDeepLink.url(for: "open")) {
+                Link(destination: WidgetDeepLink.url(for: "actions")) {
                     MuseyMark()
                         .stroke(
                             museyBlue,
@@ -118,7 +118,7 @@ struct ConduitWidgetEntryView: View {
                 }
                 .buttonStyle(.plain)
 
-                Link(destination: WidgetDeepLink.url(for: "actions")) {
+                Link(destination: WidgetDeepLink.url(for: "type")) {
                     HStack {
                         Text("Ask Musey")
                             .font(.system(size: 18, weight: .medium, design: .rounded))

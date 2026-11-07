@@ -33,6 +33,12 @@ Dean: "can we make any part of the widget just open raw Musey without anything e
 - "Ask Musey" text area: `actions`, Omni with the wrench menu.
 - Four buttons: camera, photos, mic (voice), clipboard, each in Omni.
 
+### Taps swapped (2026-11-06, build 181)
+
+Dean: "for the other widget, can we switch it so that if you press the little M, it brings you to the actions, and if you click into the Ask Musey, it's just text chat?"
+
+Now the M in the pill opens `actions` (Omni with the wrench menu) and the "Ask Musey" text opens `conduit://type?homeWidget=true` (`MuseyWidgetAction.type`): Omni with the keyboard up, no menu, voice or attachment. It reuses the app's explicit-focus ask (`composerFocusIntentProvider`, the same one shares and Siri use), which the composer serves once Omni is open and the launch has settled, so cold start waits like every other action. The empty background stays `open` (plain app, no Omni switch). The four round buttons are unchanged. The history above stays as the earlier reason: the M used to be the "open raw Musey" tap and the text the menu; Dean swapped them. Whether the keyboard really rises on a cold start needs a device check.
+
 ## Control the house (2026-11-06, build 179)
 
 Dean: "Are there options in the wrench, can we add, like 'turn on the scenes' etc." That is step 2 of the Home Assistant plan (docs/ROADMAP.md in the relay repo): devices grouped by location as tappable picks, read live from Home Assistant, not written into code. First it was a fifth top row; then: "I think I want it under a thing." So there is no fifth row. The four rows stay, and "Control the house" (id `home_control`, house icon) is one entry inside Do a thing, first in that list (`groupMuseyActions` moves it to the front; the rest keep the relay's order).
@@ -71,3 +77,5 @@ Why undo is not a tile: Undo acts immediately with no card, so a stray tap on th
 Why the list is fixed: WidgetKit does not fetch from the network at tap time, and the catalog lives on the relay. So the widget carries a fixed list of ids, labels and symbols, and the relay stays the source of truth for forms and labels. There is no app-group catalog sync (Dean did not ask for it). A new relay action reaches Dean through More as usual.
 
 How to add a tile: add one `MuseyTile` to `museyTiles` in `MuseyActionsWidget.swift` (catalog id, short label, full label, SF Symbol, color). The grid is 5 by 2 and 2 by 5, so ten tiles fill it; an eleventh means changing the row counts in `MuseyActionsEntryView` and checking the smallest phone. The id must be `[a-z_]` only or the app ignores it. Nothing changes on the Dart side. Unproven until a device build: how the tiles look and that taps land (nothing here can tap a home screen widget).
+
+The More tile wears the Musey M (build 181, Dean: "is there any way to incorporate the Musey logo anywhere in that widget, just so it's kind of obvious that it's from that?") instead of the grid symbol, drawn at the other icons' size in the same white. Its label and link are unchanged.

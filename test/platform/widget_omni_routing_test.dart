@@ -30,7 +30,18 @@ void main() {
       );
     });
 
-    test('the M and the background link only open the app', () {
+    test('the Ask Musey text link types in Omni, no menu', () {
+      final uri = Uri.parse('conduit://type?homeWidget=true');
+      expect(museyWidgetActionOf(uri), MuseyWidgetAction.type);
+      expect(museyWidgetActionUsesOmni(MuseyWidgetAction.type), isTrue);
+      expect(museyWidgetActionIdOf(uri), isNull);
+      expect(
+        museyWidgetActionOf(Uri.parse('conduit:///type')),
+        MuseyWidgetAction.type,
+      );
+    });
+
+    test('the background link only opens the app', () {
       final action =
           museyWidgetActionOf(Uri.parse('conduit://open?homeWidget=true'));
       expect(action, MuseyWidgetAction.open);

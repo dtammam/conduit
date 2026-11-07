@@ -38,6 +38,7 @@ part 'home_widget_service.g.dart';
 class WidgetActions {
   static const String newChat = 'new_chat';
   static const String actions = 'actions';
+  static const String type = 'type';
   static const String mic = 'mic';
   static const String camera = 'camera';
   static const String photos = 'photos';
@@ -260,6 +261,9 @@ class HomeWidgetCoordinator extends _$HomeWidgetCoordinator {
         ref
             .read(museyMenuIntentProvider.notifier)
             .request(actionId: museyWidgetActionIdOf(uri));
+      case MuseyWidgetAction.type:
+        // Omni ready to type: the existing explicit-focus ask, no menu.
+        _focusComposer();
       case MuseyWidgetAction.voice:
         await _handleMic();
       case MuseyWidgetAction.camera:

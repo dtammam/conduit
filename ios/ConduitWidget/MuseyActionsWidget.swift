@@ -115,9 +115,20 @@ struct MuseyTileView: View {
 
         Link(destination: tile.url) {
             VStack(alignment: .leading, spacing: 0) {
-                Image(systemName: tile.symbol)
-                    .font(.system(size: icon, weight: .semibold))
-                    .foregroundStyle(.white)
+                if tile.actionId == nil {
+                    // More wears the Musey M, so the widget reads as Musey's.
+                    MuseyMark()
+                        .stroke(
+                            Color.white,
+                            style: StrokeStyle(lineWidth: max(2, icon * 0.14), lineCap: .round, lineJoin: .round)
+                        )
+                        .frame(width: icon * 1.1, height: icon * 0.88)
+                        .frame(height: icon, alignment: .leading)
+                } else {
+                    Image(systemName: tile.symbol)
+                        .font(.system(size: icon, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
                 Spacer(minLength: 0)
                 Text(large ? tile.full : tile.short)
                     .font(.system(size: label, weight: .semibold, design: .rounded))
