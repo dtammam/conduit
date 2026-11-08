@@ -12,6 +12,10 @@ import 'package:conduit_core/features/chat/omni/omni_chat.dart';
 import 'local_notification_service.dart';
 import 'notification_sound_service.dart';
 
+/// The most the system notification waits for its summary: the 2.5 s summary
+/// call plus the time to find the reply text.
+const Duration kPrepareSystemTimeout = Duration(milliseconds: 4500);
+
 /// The visible surface a notification was routed to (or why it was dropped).
 enum NotificationSurface {
   /// In-app banner (app foreground).
@@ -39,6 +43,7 @@ class NotificationRouter {
     required NotificationSoundService sound,
     required void Function(AppNotification) showInAppBanner,
     required void Function(AppNotification) onChannelUnread,
+    Future<AppNotification> Function(AppNotification)? prepareSystem,
     int dedupCapacity = 200,
   }) : _readSettings = readSettings,
        _readActiveView = readActiveView,
@@ -47,6 +52,7 @@ class NotificationRouter {
        _sound = sound,
        _showInAppBanner = showInAppBanner,
        _onChannelUnread = onChannelUnread,
+       _prepareSystem = prepareSystem,
        _dedupCapacity = dedupCapacity;
 
   final AppSettings Function() _readSettings;
@@ -56,6 +62,11 @@ class NotificationRouter {
   final NotificationSoundService _sound;
   final void Function(AppNotification) _showInAppBanner;
   final void Function(AppNotification) _onChannelUnread;
+
+  /// Gives a chat-completion notification its short summary and title just
+  /// before the system notification is shown. It must never block the alert:
+  /// any failure or a wait over [kPrepareSystemTimeout] shows the original.
+  final Future<AppNotification> Function(AppNotification)? _prepareSystem;
   final int _dedupCapacity;
 
   /// Bounded LRU of recently surfaced dedup keys. Lives for the router's
@@ -121,8 +132,18 @@ class NotificationRouter {
       return NotificationSurface.silent;
     } else {
       if (settings.notificationSystem) {
+        var shown = notification;
+        final prepare = _prepareSystem;
+        if (prepare != null &&
+            notification.kind == NotificationKind.chatCompletion) {
+          try {
+            shown = await prepare(notification).timeout(kPrepareSystemTimeout);
+          } catch (_) {
+            shown = notification;
+          }
+        }
         await _localNotifications.show(
-          notification,
+          shown,
           playSound: settings.notificationSound,
         );
         return NotificationSurface.system;

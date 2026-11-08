@@ -10,6 +10,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../../notifications/services/notification_summary.dart';
+
 const Duration _requestTimeout = Duration(seconds: 8);
 
 String? _str(Object? v) => v is String && v.trim().isNotEmpty ? v : null;
@@ -255,6 +257,14 @@ abstract class MuseyFeedApi {
   /// missing route. An older relay answers an emoji and no status.
   Future<TurnHint?> react(String text);
 
+  /// A very short summary of a finished reply for its notification, or null
+  /// for an error or a missing route (an older relay answers 404).
+  Future<NotificationSummary?> summarize({
+    required String text,
+    String? ask,
+    String kind = 'chat',
+  });
+
   /// True when the relay started a run.
   Future<bool> refreshFeed();
   Future<bool> like(String id, {required bool liked});
@@ -277,6 +287,7 @@ class DioMuseyFeedApi implements MuseyFeedApi {
     Object? data,
     Map<String, String>? query,
     ResponseType responseType = ResponseType.json,
+    Duration timeout = _requestTimeout,
   }) async {
     try {
       final voice = _ref.read(directVoiceProviderProvider);
@@ -296,8 +307,8 @@ class DioMuseyFeedApi implements MuseyFeedApi {
           options: Options(
             method: method,
             responseType: responseType,
-            sendTimeout: _requestTimeout,
-            receiveTimeout: _requestTimeout,
+            sendTimeout: timeout,
+            receiveTimeout: timeout,
             validateStatus: (_) => true,
           ),
         );
@@ -360,6 +371,25 @@ class DioMuseyFeedApi implements MuseyFeedApi {
     final d = r!.data;
     if (d is! Map) return null;
     return TurnHint(status: _str(d['status']), emoji: _str(d['emoji']));
+  }
+
+  @override
+  Future<NotificationSummary?> summarize({
+    required String text,
+    String? ask,
+    String kind = 'chat',
+  }) async {
+    final r = await _call(
+      'POST',
+      '/musey/summary',
+      data: {
+        'text': text,
+        if (ask != null && ask.trim().isNotEmpty) 'ask': ask,
+        'kind': kind,
+      },
+      timeout: kNotificationSummaryTimeout,
+    );
+    return parseNotificationSummary(r?.statusCode, r?.data);
   }
 
   @override

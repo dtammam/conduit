@@ -66,7 +66,9 @@ void main() {
     AppSettings settings = allOn,
     ActiveView view = const ActiveView(),
     bool foreground = true,
+    Future<AppNotification> Function(AppNotification)? prepare,
   }) => NotificationRouter(
+    prepareSystem: prepare,
     readSettings: () => settings,
     readActiveView: () => view,
     isAppForeground: () => foreground,
@@ -75,6 +77,33 @@ void main() {
     showInAppBanner: banners.add,
     onChannelUnread: unreads.add,
   );
+
+  group('system notification text', () {
+    test('a prepared chat notification is what is shown', () async {
+      final router = build(
+        foreground: false,
+        prepare: (n) async => n.copyWith(title: 'BMO', body: 'Short'),
+      );
+      await router.route(_chat());
+      final shown = verify(
+        () => local.show(captureAny(), playSound: any(named: 'playSound')),
+      ).captured.single as AppNotification;
+      check(shown.title).equals('BMO');
+      check(shown.body).equals('Short');
+    });
+
+    test('a failing prepare still shows the original', () async {
+      final router = build(
+        foreground: false,
+        prepare: (n) async => throw StateError('boom'),
+      );
+      check(await router.route(_chat())).equals(NotificationSurface.system);
+      final shown = verify(
+        () => local.show(captureAny(), playSound: any(named: 'playSound')),
+      ).captured.single as AppNotification;
+      check(shown.body).equals('Body');
+    });
+  });
 
   group('gating', () {
     test('master toggle off suppresses everything', () async {
