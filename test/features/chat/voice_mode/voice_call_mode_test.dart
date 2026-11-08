@@ -60,14 +60,14 @@ class _Voice extends ChatVoiceModeController {
 const _listening = ChatVoiceModeSnapshot(phase: ChatVoiceModePhase.listening);
 
 /// The same composition the chat page makes: the strip in call mode while
-/// voice mode is on in its expanded view, with the hang-up and mic pill.
+/// voice mode is on (any bottom view), with the hang-up and mic pill.
 class _Host extends ConsumerWidget {
   const _Host();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final voice = ref.watch(chatVoiceModeControllerProvider);
-    final call = voice.isActive && !voice.isCollapsed;
+    final call = voice.isActive;
     return Align(
       alignment: Alignment.topCenter,
       child: Stack(
@@ -218,7 +218,7 @@ void main() {
     check(tester.getSize(circle).width).isCloseTo(72 * 2.2, 0.01);
   });
 
-  testWidgets('the minimal view keeps the normal circle and no call pill', (
+  testWidgets('the text strip view still has the big circle and the pill', (
     tester,
   ) async {
     await mount(
@@ -229,12 +229,15 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    check(tester.getSize(circle).width).equals(AssistantAvatarStrip.avatarSize);
-    check(hangup.evaluate()).isEmpty();
-    // Expanding (the stored preference flips) brings the big circle.
-    voice.set(_listening);
-    await tester.pumpAndSettle();
     check(tester.getSize(circle).width).isCloseTo(72 * 2.2, 0.01);
+    check(hangup.evaluate()).isNotEmpty();
+    check(mute.evaluate()).isNotEmpty();
+    await tester.tap(mute);
+    await tester.pump();
+    check(voice.mutes).equals(1);
+    await tester.tap(hangup);
+    await tester.pumpAndSettle();
+    check(voice.stops).deepEquals(['call-hangup']);
   });
 
   group('MouthStillView cross-fade', () {

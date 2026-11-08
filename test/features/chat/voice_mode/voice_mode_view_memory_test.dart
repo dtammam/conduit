@@ -17,12 +17,26 @@ final _provider =
       _ActiveController.new,
     );
 
+Future<void> pumpWrites() async {
+  for (var i = 0; i < 5; i++) {
+    await Future<void>.delayed(Duration.zero);
+  }
+}
+
 void main() {
   setUp(() => PreferencesStore.debugOverride(InMemoryKeyValueStore()));
   tearDown(PreferencesStore.debugReset);
 
-  test('a fresh install opens expanded', () {
-    expect(storedVoiceModeCollapsed(), isFalse);
+  test('a fresh install opens on the text strip', () {
+    expect(storedVoiceModeCollapsed(), isTrue);
+  });
+
+  test('values saved before build 191 (no version) open on the text strip', () async {
+    // Old meaning: false was the full panel, the default for most installs.
+    await PreferencesStore.put(PreferenceKeys.voiceModeCollapsed, false);
+    expect(storedVoiceModeCollapsed(), isTrue);
+    await PreferencesStore.put(PreferenceKeys.voiceModeCollapsed, true);
+    expect(storedVoiceModeCollapsed(), isTrue);
   });
 
   test('collapse, expand and toggle are saved', () async {
@@ -30,19 +44,20 @@ void main() {
     addTearDown(c.dispose);
     final n = c.read(_provider.notifier);
     n.collapse();
-    await Future<void>.delayed(Duration.zero);
+    await pumpWrites();
     expect(storedVoiceModeCollapsed(), isTrue);
     expect(PreferencesStore.getBool(PreferenceKeys.voiceModeCollapsed), isTrue);
     n.expand();
-    await Future<void>.delayed(Duration.zero);
+    await pumpWrites();
     expect(storedVoiceModeCollapsed(), isFalse);
     n.toggleCollapsed();
-    await Future<void>.delayed(Duration.zero);
+    await pumpWrites();
     expect(storedVoiceModeCollapsed(), isTrue);
     expect(c.read(_provider).isCollapsed, isTrue);
   });
 
   test('the saved view survives a new session (restore)', () async {
+    await PreferencesStore.put(PreferenceKeys.voiceModeViewVersion, 2);
     await PreferencesStore.put(PreferenceKeys.voiceModeCollapsed, true);
     expect(storedVoiceModeCollapsed(), isTrue);
     await PreferencesStore.put(PreferenceKeys.voiceModeCollapsed, false);

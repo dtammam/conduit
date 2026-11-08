@@ -1305,7 +1305,10 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
   void _storeCollapsed(bool collapsed) {
     if (!PreferencesStore.isReady) return;
     unawaited(
-      PreferencesStore.put(PreferenceKeys.voiceModeCollapsed, collapsed),
+      PreferencesStore.putAll({
+        PreferenceKeys.voiceModeCollapsed: collapsed,
+        PreferenceKeys.voiceModeViewVersion: _voiceModeViewVersion,
+      }),
     );
   }
 
@@ -3297,8 +3300,21 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
   }
 }
 
-/// The view voice mode last used: true is the condensed pill, false (also a
-/// fresh install) is the expanded panel.
-bool storedVoiceModeCollapsed() =>
-    PreferencesStore.isReady &&
-    (PreferencesStore.getBool(PreferenceKeys.voiceModeCollapsed) ?? false);
+const int _voiceModeViewVersion = 2;
+
+/// The bottom view voice mode last used: true (also a fresh install) is the
+/// text-only strip, false is the expanded panel (speaker, pause, text).
+///
+/// Before build 191 the same key held "pill" or "full panel", and most
+/// installs had never set it (full panel). A value saved without the version
+/// is from that meaning, so it is ignored and the call opens on the text
+/// strip; the first collapse or expand after that saves under the new
+/// meaning.
+bool storedVoiceModeCollapsed() {
+  if (!PreferencesStore.isReady) return true;
+  if (PreferencesStore.getInt(PreferenceKeys.voiceModeViewVersion) !=
+      _voiceModeViewVersion) {
+    return true;
+  }
+  return PreferencesStore.getBool(PreferenceKeys.voiceModeCollapsed) ?? true;
+}

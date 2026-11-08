@@ -66,8 +66,6 @@ import '../../chat/widgets/context_attachment_widget.dart';
 import '../../chat/widgets/file_attachment_widget.dart';
 import '../../chat/widgets/modern_chat_input.dart';
 import '../../chat/widgets/server_file_picker_sheet.dart';
-import '../../chat/voice_call/presentation/voice_call_launcher.dart';
-import '../../chat/voice_mode/voice_mode_error_text.dart';
 
 import 'package:conduit_core/features/hermes/models/hermes_config.dart';
 import 'package:conduit_core/features/hermes/providers/hermes_providers.dart';
@@ -1025,30 +1023,6 @@ class _FolderPageState extends ConsumerState<FolderPage> {
     );
   }
 
-  Future<void> _handleVoiceCall() async {
-    try {
-      await ref
-          .read(voiceCallLauncherProvider)
-          .launch(startNewConversation: false);
-    } catch (error, stackTrace) {
-      DebugLogger.error(
-        'launch-failed',
-        scope: 'navigation/folder/voice_call',
-        error: error,
-        stackTrace: stackTrace,
-      );
-      if (!mounted) return;
-      final l10n = AppLocalizations.of(context)!;
-      final message = error is VoiceCallStartException
-          ? voiceModeErrorText(l10n, kind: error.kind, message: error.message)!
-          : error is StateError
-          ? error.message.toString()
-          : l10n.errorMessage;
-      ScaffoldMessenger.maybeOf(context)
-          ?.showSnackBar(SnackBar(content: Text(message)));
-    }
-  }
-
   void _dismissComposerFocus() {
     try {
       ref.read(chat.composerAutofocusEnabledProvider.notifier).set(false);
@@ -1569,7 +1543,6 @@ class _FolderPageState extends ConsumerState<FolderPage> {
                       !ref.watch(conversationSelectionProvider).isLoading &&
                       !_isSendingComposerMessage,
                   bottomPadding: 0,
-                  onVoiceCall: _handleVoiceCall,
                   onFileAttachment: _handleFileAttachment,
                   onServerFileAttachment: _handleServerFileAttachment,
                   onImageAttachment: _handleImageAttachment,

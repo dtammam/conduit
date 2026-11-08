@@ -176,18 +176,6 @@ class _ExpandedVoicePanel extends ConsumerWidget {
             Row(
               children: [
                 _CircleAction(
-                  tooltip: snapshot.isMuted ? l10n.unmute : l10n.mute,
-                  icon: snapshot.isMuted
-                      ? (Platform.isIOS
-                            ? CupertinoIcons.mic_slash_fill
-                            : Icons.mic_off_rounded)
-                      : (Platform.isIOS
-                            ? CupertinoIcons.mic_fill
-                            : Icons.mic_rounded),
-                  onPressed: controller.toggleMute,
-                ),
-                const SizedBox(width: Spacing.sm),
-                _CircleAction(
                   tooltip: snapshot.isSpeakerphoneEnabled
                       ? l10n.voiceCallSpeakerOff
                       : l10n.voiceCallSpeakerOn,
@@ -216,15 +204,6 @@ class _ExpandedVoicePanel extends ConsumerWidget {
                       ? controller.resume
                       : (snapshot.canPause ? controller.pause : null),
                 ),
-                const Spacer(),
-                _CircleAction(
-                  tooltip: l10n.voiceCallEnd,
-                  destructive: true,
-                  icon: Platform.isIOS
-                      ? CupertinoIcons.phone_down_fill
-                      : Icons.call_end_rounded,
-                  onPressed: () => controller.stop(reason: 'overlay-end'),
-                ),
               ],
             ),
           ],
@@ -234,10 +213,22 @@ class _ExpandedVoicePanel extends ConsumerWidget {
   }
 }
 
+/// The default bottom view in a call: the live text (what the assistant is
+/// saying, or what Dean said) and a small speaker toggle. Hang-up and mute
+/// live only in the top-right pill. A tap on the strip opens the full panel.
 class _CollapsedVoicePill extends ConsumerWidget {
   const _CollapsedVoicePill({super.key, required this.snapshot});
 
   final ChatVoiceModeSnapshot snapshot;
+
+  bool get _hasText {
+    final speaking =
+        snapshot.phase == ChatVoiceModePhase.speaking ||
+        snapshot.phase == ChatVoiceModePhase.sending;
+    return speaking
+        ? snapshot.spokenResponse.trim().isNotEmpty
+        : snapshot.transcript.trim().isNotEmpty;
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -245,58 +236,53 @@ class _CollapsedVoicePill extends ConsumerWidget {
     final l10n = AppLocalizations.of(context)!;
     final controller = ref.read(chatVoiceModeControllerProvider.notifier);
 
-    return Align(
+    return GestureDetector(
       key: const ValueKey('voice-overlay-collapsed'),
-      alignment: Alignment.center,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 52),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: theme.cardBackground.withValues(alpha: 1),
-            borderRadius: BorderRadius.circular(28),
-            border: Border.all(color: theme.cardBorder),
-            boxShadow: ConduitShadows.messageBubble(context),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 10, 10, 10),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _StatusDot(snapshot: snapshot, compact: true),
-                const SizedBox(width: Spacing.sm),
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 220),
-                  child: Text(
-                    _phaseLabel(l10n, snapshot),
-                    style: AppTypography.labelStyle.copyWith(
-                      color: theme.textPrimary,
-                      fontWeight: FontWeight.w700,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                const SizedBox(width: Spacing.sm),
-                _AdaptiveVoiceAction(
-                  tooltip: l10n.voiceCallExpand,
-                  onPressed: controller.expand,
-                  icon: Platform.isIOS
-                      ? CupertinoIcons.chevron_up
-                      : Icons.keyboard_arrow_up_rounded,
-                  compact: true,
-                ),
-                const SizedBox(width: Spacing.xxs),
-                _AdaptiveVoiceAction(
-                  tooltip: l10n.voiceCallEnd,
-                  onPressed: () => controller.stop(reason: 'pill-end'),
-                  icon: Platform.isIOS
-                      ? CupertinoIcons.phone_down_fill
-                      : Icons.call_end_rounded,
-                  destructive: true,
-                  compact: true,
-                ),
-              ],
-            ),
+      behavior: HitTestBehavior.opaque,
+      onTap: controller.expand,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: theme.cardBackground.withValues(alpha: 1),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: theme.cardBorder),
+          boxShadow: ConduitShadows.messageBubble(context),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 6, 8),
+          child: Row(
+            children: [
+              _StatusDot(snapshot: snapshot, compact: true),
+              const SizedBox(width: Spacing.sm),
+              Expanded(
+                child: _hasText
+                    ? _VoiceText(snapshot: snapshot)
+                    : Text(
+                        _phaseLabel(l10n, snapshot),
+                        key: const ValueKey('voice-strip-status'),
+                        style: AppTypography.labelStyle.copyWith(
+                          color: theme.textSecondary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+              ),
+              const SizedBox(width: Spacing.xs),
+              _AdaptiveVoiceAction(
+                tooltip: snapshot.isSpeakerphoneEnabled
+                    ? l10n.voiceCallSpeakerOff
+                    : l10n.voiceCallSpeakerOn,
+                onPressed: controller.toggleSpeakerphone,
+                icon: snapshot.isSpeakerphoneEnabled
+                    ? (Platform.isIOS
+                          ? CupertinoIcons.speaker_3_fill
+                          : Icons.volume_up_rounded)
+                    : (Platform.isIOS
+                          ? CupertinoIcons.speaker_1
+                          : Icons.volume_down_rounded),
+                compact: true,
+              ),
+            ],
           ),
         ),
       ),
@@ -497,13 +483,11 @@ class _CircleAction extends StatelessWidget {
     required this.tooltip,
     required this.icon,
     required this.onPressed,
-    this.destructive = false,
   });
 
   final String tooltip;
   final IconData icon;
   final VoidCallback? onPressed;
-  final bool destructive;
 
   @override
   Widget build(BuildContext context) {
@@ -511,7 +495,6 @@ class _CircleAction extends StatelessWidget {
       tooltip: tooltip,
       onPressed: onPressed,
       icon: icon,
-      destructive: destructive,
     );
   }
 }
@@ -521,14 +504,12 @@ class _AdaptiveVoiceAction extends StatelessWidget {
     required this.tooltip,
     required this.icon,
     required this.onPressed,
-    this.destructive = false,
     this.compact = false,
   });
 
   final String tooltip;
   final IconData icon;
   final VoidCallback? onPressed;
-  final bool destructive;
   final bool compact;
 
   @override
@@ -536,11 +517,8 @@ class _AdaptiveVoiceAction extends StatelessWidget {
     final theme = context.conduitTheme;
     final usesOpaqueFallback = conduitUsesOpaqueGlassFallback();
     final size = compact ? TouchTarget.micro : TouchTarget.medium;
-    final color = destructive ? Theme.of(context).colorScheme.error : null;
     final iconColor = onPressed == null
         ? theme.iconDisabled
-        : destructive
-        ? Theme.of(context).colorScheme.onError
         : theme.iconSecondary;
 
     return AdaptiveTooltip(
@@ -554,14 +532,8 @@ class _AdaptiveVoiceAction extends StatelessWidget {
           enabled: onPressed != null,
           style: usesOpaqueFallback
               ? AdaptiveButtonStyle.filled
-              : destructive
-              ? AdaptiveButtonStyle.filled
               : AdaptiveButtonStyle.glass,
-          color: destructive
-              ? Theme.of(context).colorScheme.error
-              : usesOpaqueFallback
-              ? theme.surfaceContainerHighest
-              : color,
+          color: usesOpaqueFallback ? theme.surfaceContainerHighest : null,
           size: compact ? AdaptiveButtonSize.small : AdaptiveButtonSize.medium,
           minSize: Size(size, size),
           padding: EdgeInsets.zero,

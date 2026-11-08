@@ -1673,7 +1673,6 @@ void main() {
               body: ModernChatInput(
                 onSendMessage: (_) {},
                 onFileAttachment: _noop,
-                onVoiceCall: () {},
               ),
             ),
           ),
@@ -1683,10 +1682,8 @@ void main() {
 
       final addIcon = tester.widget<Icon>(find.byIcon(Icons.add));
       final micIcon = tester.widget<Icon>(find.byIcon(Icons.mic));
-      final voiceIcon = tester.widget<Icon>(find.byIcon(Icons.graphic_eq));
       expect(addIcon.size, 28);
       expect(micIcon.size, IconSize.large);
-      expect(voiceIcon.size, IconSize.medium);
 
       final addButton = find.byKey(
         const ValueKey<String>('composer-overflow-button'),
@@ -1696,33 +1693,15 @@ void main() {
       );
       expect(tester.getSize(addButton), tester.getSize(micButton));
       expect(tester.getSize(addButton), const Size.square(TouchTarget.minimum));
-      final voiceTarget = find.byKey(
-        const ValueKey<String>('primary-btn-voice-call'),
-      );
+      // No call button next to the dictation mic (build 191).
       expect(
-        tester.getSize(voiceTarget),
-        const Size.square(TouchTarget.minimum),
+        find.byKey(const ValueKey<String>('primary-btn-voice-call')),
+        findsNothing,
       );
+      expect(find.byIcon(Icons.graphic_eq), findsNothing);
       expect(
-        tester
-            .getSemantics(voiceTarget)
-            .getSemanticsData()
-            .hasAction(SemanticsAction.tap),
-        isTrue,
-      );
-      final micGlyphRect = tester.getRect(find.byIcon(Icons.mic));
-      final voiceVisualRect = tester.getRect(
-        find.descendant(of: voiceTarget, matching: find.byType(AdaptiveButton)),
-      );
-      expect(voiceVisualRect.left - micGlyphRect.right, 12);
-      expect(
-        tester.getSize(
-          find.descendant(
-            of: voiceTarget,
-            matching: find.byType(AdaptiveButton),
-          ),
-        ),
-        const Size.square(32),
+        find.byKey(const ValueKey<String>('primary-btn-send-muted')),
+        findsOneWidget,
       );
 
       await tester.enterText(find.byType(TextField), 'Hello');
@@ -1749,6 +1728,58 @@ void main() {
     } finally {
       semanticsHandle.dispose();
     }
+  });
+
+  testWidgets('no call button in the composer, empty, typed or focused', (
+    tester,
+  ) async {
+    final callButton = find.byKey(
+      const ValueKey<String>('primary-btn-voice-call'),
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          apiServiceProvider.overrideWithValue(null),
+          voiceInputAvailableProvider.overrideWith((_) async => true),
+        ],
+        child: MaterialApp(
+          localizationsDelegates: conduitLocalizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: ModernChatInput(
+              onSendMessage: (_) {},
+              onFileAttachment: _noop,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    // Empty, not focused.
+    expect(callButton, findsNothing);
+    expect(find.byIcon(Icons.graphic_eq), findsNothing);
+    expect(find.byIcon(CupertinoIcons.waveform), findsNothing);
+    // Dictation stays.
+    expect(
+      find.byKey(const ValueKey<String>('composer-dictation-start')),
+      findsOneWidget,
+    );
+    // Focused, still empty.
+    await tester.tap(find.byType(TextField));
+    await tester.pump();
+    expect(callButton, findsNothing);
+    // Typed.
+    await tester.enterText(find.byType(TextField), 'Hello');
+    await tester.pump();
+    expect(callButton, findsNothing);
+    expect(
+      find.byKey(const ValueKey<String>('primary-btn-send')),
+      findsOneWidget,
+    );
+    // Cleared again.
+    await tester.enterText(find.byType(TextField), '');
+    await tester.pump();
+    expect(callButton, findsNothing);
   });
 
   testWidgets('overflow close control keeps its compact size when expanded', (

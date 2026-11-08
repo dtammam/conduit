@@ -407,7 +407,6 @@ class ModernChatInput extends ConsumerStatefulWidget {
   final Future<bool> Function(String text)? onMuseySend;
 
   final Function()? onVoiceInput;
-  final Function()? onVoiceCall;
   final Function()? onFileAttachment;
   final Function()? onServerFileAttachment;
   final Function()? onImageAttachment;
@@ -436,7 +435,6 @@ class ModernChatInput extends ConsumerStatefulWidget {
     this.attachedOverlay,
     this.onMuseySend,
     this.onVoiceInput,
-    this.onVoiceCall,
     this.onFileAttachment,
     this.onServerFileAttachment,
     this.onImageAttachment,
@@ -5033,45 +5031,8 @@ class _ModernChatInputState extends ConsumerState<ModernChatInput>
       );
     }
 
-    // VOICE CALL variant when no text is present and voice is available.
-    // Otherwise fall back to a muted send button.
-    if (widget.onVoiceCall != null) {
-      final bool enabledVoiceCall = widget.enabled && !_isRecording;
-      return AdaptiveTooltip(
-        message: AppLocalizations.of(context)!.voiceCallTitle,
-        child: _buildComposerIconButton(
-          key: const ValueKey('primary-btn-voice-call'),
-          onPressed: enabledVoiceCall
-              ? () {
-                  PlatformUtils.lightHaptic();
-                  widget.onVoiceCall!();
-                }
-              : null,
-          size: buttonSize,
-          visualSize: primaryVisualSize,
-          semanticLabel: AppLocalizations.of(context)!.voiceCallTitle,
-          iosSymbolSize: primaryIconSize,
-          isProminent: true,
-          iosSymbol: 'waveform',
-          iosSymbolColor: enabledVoiceCall
-              ? context.conduitTheme.buttonPrimaryText
-              : context.conduitTheme.textPrimary.withValues(
-                  alpha: Alpha.disabled,
-                ),
-          child: ConduitSystemAdaptiveIcon(
-            Platform.isIOS ? CupertinoIcons.waveform : Icons.graphic_eq,
-            size: primaryIconSize,
-            color: enabledVoiceCall
-                ? context.conduitTheme.buttonPrimaryText
-                : context.conduitTheme.textPrimary.withValues(
-                    alpha: Alpha.disabled,
-                  ),
-          ),
-        ),
-      );
-    }
-
-    // Muted send button when no text and no voice call.
+    // Muted send button when no text. There is no call button in the
+    // composer (build 191): the phone icon at the top right starts a call.
     return _buildComposerIconButton(
       key: const ValueKey('primary-btn-send-muted'),
       onPressed: null,

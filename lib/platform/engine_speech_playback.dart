@@ -258,6 +258,11 @@ class EngineSpeechPlayback
   void _fail(Object error) {
     if (_failed) return;
     _failed = true;
+    // From here the run plays whole clips on just_audio (a clip then starts
+    // when its last byte lands), so say why in the voice log.
+    VoiceEventLog.instance.add('engine-failed', <String, Object?>{
+      'error': error.toString().split('\n').first,
+    });
     if (!_failures.isClosed) _failures.add(error);
   }
 

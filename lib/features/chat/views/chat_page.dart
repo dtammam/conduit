@@ -2543,7 +2543,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   double _messageListBottomPadding() {
     final voice = ref.read(chatVoiceModeControllerProvider);
     final voiceOverlayHeight = voice.isActive
-        ? (voice.isCollapsed ? 72.0 : 180.0)
+        ? (voice.isCollapsed ? 84.0 : 170.0)
         : 0.0;
     return Spacing.lg + _inputHeight + voiceOverlayHeight;
   }
@@ -4344,11 +4344,6 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                             chatComposerTextInsertionTargetId,
                         attachedOverlay: attachedOverlay,
                         onVoiceInput: null,
-                        // No call button in the composer (build 190): the
-                        // phone icon at the top right is the one way to
-                        // start a call. The composer's old button did
-                        // nothing else (dictation is onVoiceInput, unused).
-                        onVoiceCall: null,
                         onFileAttachment: _handleFileAttachment,
                         onServerFileAttachment: _handleServerFileAttachment,
                         onImageAttachment: _handleImageAttachment,
@@ -4460,9 +4455,9 @@ class _ChatPageState extends ConsumerState<ChatPage> {
         (voice) => (voice.isActive, voice.isCollapsed),
       ),
     );
-    // Call-style voice mode (the expanded view): big avatar, hang-up and mic
-    // at the top right, composer without its voice button. The minimal pill
-    // view keeps the normal chrome.
+    // Call-style voice mode (every call): big avatar, hang-up and mic at the
+    // top right. The bottom shows only the live text strip (or the expanded
+    // panel when tapped).
     final isLoadingConversation = ref.watch(isLoadingConversationProvider);
     final activeConversation = ref.watch(activeConversationProvider);
     final hermesBot = chatHermesBotPresentation(activeConversation);
@@ -4476,7 +4471,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       appSettingsProvider.select((s) => s.assistantAvatarEnabled),
     );
     // The big avatar needs the avatar on; without it the page is unchanged.
-    final callChrome = voiceView.$1 && !voiceView.$2 && assistantAvatarEnabled;
+    final callChrome = voiceView.$1 && assistantAvatarEnabled;
     final toolbarHeight = conduitAdaptiveToolbarHeightOf(context);
     // The strip takes the toolbar's title slot and hangs below the toolbar.
     _assistantAvatarInset = assistantAvatarEnabled

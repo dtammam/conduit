@@ -24,6 +24,10 @@ final class PreferenceKeys {
   static const String compactToolSummaries = 'compact_tool_summaries';
   static const String omniChatEnabled = 'omni_chat_enabled';
   static const String voiceModeCollapsed = 'voice_mode_collapsed';
+
+  /// Which meaning [voiceModeCollapsed] has. Unset (before build 191) it held
+  /// "pill or full panel"; 2 means "text strip (true) or expanded panel".
+  static const String voiceModeViewVersion = 'voice_mode_view_version';
   static const String omniChatId = 'omni_chat_id';
   static const String omniSessionIdleMinutes = 'omni_session_idle_minutes';
   static const String omniSession = 'omni_session_v1';
