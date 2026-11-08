@@ -17,7 +17,7 @@ import 'package:path_provider/path_provider.dart';
 
 import 'assistant_activity.dart';
 import 'assistant_avatar_media.dart' show isSafePersonaId;
-import 'lip_sync.dart' show kMouthShapeNames;
+import 'lip_sync.dart' show MouthShape, kMouthCoreShapes, kMouthShapeNames;
 
 const String _logScope = 'chat/persona';
 
@@ -74,20 +74,29 @@ class PersonaAppearance {
   final String? bubbleColor;
   final Map<AssistantActivity, PersonaClip> clips;
 
-  /// The lip-sync mouth stills by shape name (see [kMouthShapeNames]): all
-  /// five or none. Only a persona that ships them (Uncle Ruckus) has any.
+  /// The lip-sync mouth stills by shape name (see [kMouthShapeNames]): the
+  /// five core shapes or none, plus whichever optional extras the server has.
+  /// Only a persona that ships them (Uncle Ruckus) has any.
   final Map<String, PersonaClip> mouths;
 
   /// Reads the `mouths` entry of the server's appearance, or of the cache;
-  /// anything short of all five shapes gives an empty map.
+  /// anything short of the five core shapes gives an empty map; a missing or
+  /// malformed extra is just left out.
   static Map<String, PersonaClip> _parseMouths(Object? raw) {
     if (raw is! Map) return const {};
     final out = <String, PersonaClip>{};
     for (final name in kMouthShapeNames) {
+      final core = kMouthCoreShapes.any((shape) => shape.name == name);
       final item = raw[name];
-      if (item is! Map) return const {};
+      if (item is! Map) {
+        if (core) return const {};
+        continue;
+      }
       final etag = item['etag'];
-      if (etag is! String || etag.isEmpty) return const {};
+      if (etag is! String || etag.isEmpty) {
+        if (core) return const {};
+        continue;
+      }
       final type = item['content_type'];
       final url = item['url'];
       out[name] = PersonaClip(
@@ -516,9 +525,10 @@ class PersonaAppearanceService {
   static File mouthFile(Directory personaDir, String shape) =>
       File(p.join(personaDir.path, 'mouths', '$shape.png'));
 
-  /// Brings the mouth stills on disk up to date. All five or none: when one
-  /// cannot be had the persona has no lip sync and the avatar behaves as
-  /// before.
+  /// Brings the mouth stills on disk up to date. The five core stills or
+  /// none: when one cannot be had the persona has no lip sync and the avatar
+  /// behaves as before. An extra that cannot be had is skipped; the mapping
+  /// falls back to a core shape for it.
   Future<Map<String, PersonaClip>> _applyMouths(
     String base,
     String token,
@@ -526,19 +536,25 @@ class PersonaAppearanceService {
     Map<String, PersonaClip> wanted,
     Map<String, PersonaClip> cached,
   ) async {
-    if (wanted.length != kMouthShapeNames.length) {
+    if (!kMouthCoreShapes.every((shape) => wanted.containsKey(shape.name))) {
       await _deleteMouths(dir);
       return const {};
     }
+    final kept = <String, PersonaClip>{};
     try {
       for (final entry in wanted.entries) {
         final file = mouthFile(dir, entry.key);
+        final core = kMouthCoreShapes.any((s) => s.name == entry.key);
         if (cached[entry.key]?.etag == entry.value.etag &&
             await file.exists()) {
+          kept[entry.key] = entry.value;
           continue;
         }
         final url = entry.value.url;
-        if (url.isEmpty) return const {};
+        if (url.isEmpty) {
+          if (core) return const {};
+          continue;
+        }
         final target = url.startsWith('/') ? '$base$url' : '$base/$url';
         final response = await _get<List<int>>(
           target,
@@ -553,14 +569,23 @@ class PersonaAppearanceService {
             scope: _logScope,
             data: {'shape': entry.key, 'status': response.statusCode},
           );
-          return const {};
+          if (core) return const {};
+          continue;
         }
         await file.parent.create(recursive: true);
         final part = File('${file.path}.part');
         await part.writeAsBytes(bytes, flush: true);
         await part.rename(file.path);
+        kept[entry.key] = entry.value;
       }
-      return wanted;
+      // An extra the server no longer lists is dropped from disk too.
+      for (final name in kMouthShapeNames) {
+        if (!kept.containsKey(name)) {
+          final stale = mouthFile(dir, name);
+          if (await stale.exists()) await stale.delete();
+        }
+      }
+      return kept;
     } catch (error) {
       DebugLogger.log(
         'mouth-error',
@@ -578,17 +603,27 @@ class PersonaAppearanceService {
     } catch (_) {}
   }
 
-  /// The five mouth still files of [appearance], in [MouthShape] order, when
-  /// all exist on disk; null otherwise (no lip sync).
-  Future<List<File>?> mouthStills(PersonaAppearance appearance) async {
-    if (appearance.mouths.length != kMouthShapeNames.length) return null;
+  /// The mouth still files of [appearance] by shape: the five core ones must
+  /// all exist on disk (else null, no lip sync); extras come along when their
+  /// files exist.
+  Future<Map<MouthShape, File>?> mouthStills(
+    PersonaAppearance appearance,
+  ) async {
     final folder = await personasFolder();
     final dir = Directory(p.join(folder.path, appearance.id));
-    final files = <File>[];
-    for (final name in kMouthShapeNames) {
-      final file = mouthFile(dir, name);
-      if (!await file.exists()) return null;
-      files.add(file);
+    final files = <MouthShape, File>{};
+    for (final shape in MouthShape.values) {
+      final core = kMouthCoreShapes.contains(shape);
+      if (!appearance.mouths.containsKey(shape.name)) {
+        if (core) return null;
+        continue;
+      }
+      final file = mouthFile(dir, shape.name);
+      if (!await file.exists()) {
+        if (core) return null;
+        continue;
+      }
+      files[shape] = file;
     }
     return files;
   }

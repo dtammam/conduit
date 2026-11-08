@@ -613,6 +613,8 @@ final Map<IconData, String> _kConduitToolbarSfSymbolByIcon = {
   CupertinoIcons.arrow_down_doc: 'arrow.down.doc',
   Icons.save_alt: 'arrow.down.doc',
   Icons.people_outline: 'person.2',
+  CupertinoIcons.phone: 'phone',
+  Icons.phone_outlined: 'phone',
   Icons.circle: 'circle',
 };
 

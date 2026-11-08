@@ -20,14 +20,15 @@ class LipSyncController extends ChangeNotifier {
 
   final SpeechLevelMeter _meter;
   final int Function() _clock;
-  final MouthHold _hold = MouthHold();
+  final MouthTracker _tracker = MouthTracker();
   Timer? _timer;
   bool _enabled = true;
-  List<ImageProvider>? _stills;
+  Map<MouthShape, ImageProvider>? _stills;
   MouthShape? _shape;
   bool _disposed = false;
 
-  /// The shape to show, or null for the idle clip.
+  /// The shape on screen (an extra the persona lacks already replaced by its
+  /// fallback), or null for the idle clip.
   MouthShape? get shape => _shape;
 
   /// The still to show now, or null.
@@ -35,10 +36,10 @@ class LipSyncController extends ChangeNotifier {
     final shape = _shape;
     final stills = _stills;
     if (shape == null || stills == null) return null;
-    return stills[shape.index];
+    return stills[shape];
   }
 
-  /// Whether all five stills are loaded.
+  /// Whether the stills are loaded.
   bool get hasStills => _stills != null;
 
   set enabled(bool value) {
@@ -47,9 +48,10 @@ class LipSyncController extends ChangeNotifier {
     _evaluate();
   }
 
-  /// Sets the five preloaded stills in [MouthShape] order, or null for none.
-  void setStills(List<ImageProvider>? stills) {
-    assert(stills == null || stills.length == MouthShape.values.length);
+  /// Sets the preloaded stills by shape, or null for none. The five core
+  /// shapes must all be there; extras are optional.
+  void setStills(Map<MouthShape, ImageProvider>? stills) {
+    assert(stills == null || kMouthCoreShapes.every(stills.containsKey));
     _stills = stills;
     _evaluate();
   }
@@ -70,13 +72,17 @@ class LipSyncController extends ChangeNotifier {
 
   void _evaluate() {
     if (_disposed) return;
-    final next = mouthShapeToShow(
+    final stills = _stills;
+    final wanted = mouthShapeToShow(
       enabled: _enabled,
-      stillsReady: _stills != null,
+      stillsReady: stills != null,
       level: _meter.level.value,
       nowMs: _clock(),
-      hold: _hold,
+      tracker: _tracker,
     );
+    final next = wanted == null || stills == null
+        ? null
+        : resolveMouthShape(wanted, stills.keys.toSet());
     if (next != _shape) {
       _shape = next;
       notifyListeners();

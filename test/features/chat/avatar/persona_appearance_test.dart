@@ -156,10 +156,14 @@ void main() {
 
     group('mouth stills', () {
       const shapes = ['closed', 'slight', 'open', 'wide', 'oo'];
-      void serveMouths({List<String> shapesToServe = shapes}) {
+      const extras = ['mid', 'ee', 'fv', 'mbp'];
+      void serveMouths({
+        List<String> shapesToServe = shapes,
+        List<String> listed = shapes,
+      }) {
         final base = adapter.handler;
         (active['appearance'] as Map)['mouths'] = {
-          for (final name in shapes)
+          for (final name in listed)
             name: {
               'etag': 'm-$name',
               'content_type': 'image/png',
@@ -211,6 +215,39 @@ void main() {
           check(outcome.appearance!.mouths).isEmpty();
           check(await clip('ada', 'idle.mp4').readAsString()).equals('IDLE-1');
           check(await service.mouthStills(outcome.appearance!)).isNull();
+        },
+      );
+
+      test(
+        'the four extra frames are fetched when the server lists them',
+        () async {
+          serveMouths(
+            listed: [...shapes, ...extras],
+            shapesToServe: [...shapes, ...extras],
+          );
+          final outcome = await sync();
+          check(outcome.appearance!.mouths.length).equals(9);
+          check(await mouth('fv').readAsString()).equals('PNG-fv');
+          final stills = await service.mouthStills(service.loadCached()!);
+          check(stills!.length).equals(9);
+          // The server drops them again: the extras leave the disk too.
+          serveMouths();
+          final back = await sync();
+          check(back.appearance!.mouths.length).equals(5);
+          check(await mouth('fv').exists()).isFalse();
+          check((await service.mouthStills(back.appearance!))!.length)
+              .equals(5);
+        },
+      );
+
+      test(
+        'an extra that fails to download is skipped, the set stays',
+        () async {
+          serveMouths(listed: [...shapes, ...extras], shapesToServe: shapes);
+          final outcome = await sync();
+          check(outcome.appearance!.mouths.length).equals(5);
+          check((await service.mouthStills(outcome.appearance!))!.length)
+              .equals(5);
         },
       );
 

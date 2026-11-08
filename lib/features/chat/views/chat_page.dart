@@ -1,4 +1,5 @@
 import '../background/chat_background.dart';
+
 import 'package:material_ui/material_ui.dart';
 import 'package:conduit/shared/widgets/platform_ui/platform_ui.dart';
 import 'package:conduit/l10n/app_localizations.dart';
@@ -117,6 +118,7 @@ import 'package:conduit_core/features/chat/services/historical_message_regenerat
 
 import '../voice_mode/chat_voice_mode_controller.dart';
 import '../voice_mode/chat_voice_mode_overlay.dart';
+import '../voice_mode/voice_call_controls.dart';
 import '../voice_mode/voice_mode_error_text.dart';
 import '../voice_call/presentation/voice_call_launcher.dart';
 import '../../../core/services/media_upload_controller.dart';
@@ -4187,6 +4189,17 @@ class _ChatPageState extends ConsumerState<ChatPage> {
               if (hasAttachments) const SizedBox(height: Spacing.sm),
               Consumer(
                 builder: (context, composerRef, _) {
+                  final composerCallChrome =
+                      composerRef.watch(
+                        chatVoiceModeControllerProvider.select(
+                          (voice) => voice.isActive && !voice.isCollapsed,
+                        ),
+                      ) &&
+                      composerRef.watch(
+                        appSettingsProvider.select(
+                          (s) => s.assistantAvatarEnabled,
+                        ),
+                      );
                   final isLoadingConversation = composerRef.watch(
                     isLoadingConversationProvider,
                   );
@@ -4342,7 +4355,11 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                             chatComposerTextInsertionTargetId,
                         attachedOverlay: attachedOverlay,
                         onVoiceInput: null,
-                        onVoiceCall: _handleVoiceCall,
+                        // In call mode the composer keeps only the plus and
+                        // the text field: no voice button.
+                        onVoiceCall: composerCallChrome
+                            ? null
+                            : _handleVoiceCall,
                         onFileAttachment: _handleFileAttachment,
                         onServerFileAttachment: _handleServerFileAttachment,
                         onImageAttachment: _handleImageAttachment,
@@ -4449,11 +4466,14 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     final selectedModel = ref.watch(
       selectedModelProvider.select((model) => model),
     );
-    ref.watch(
+    final voiceView = ref.watch(
       chatVoiceModeControllerProvider.select(
         (voice) => (voice.isActive, voice.isCollapsed),
       ),
     );
+    // Call-style voice mode (the expanded view): big avatar, hang-up and mic
+    // at the top right, composer without its voice button. The minimal pill
+    // view keeps the normal chrome.
     final isLoadingConversation = ref.watch(isLoadingConversationProvider);
     final activeConversation = ref.watch(activeConversationProvider);
     final hermesBot = chatHermesBotPresentation(activeConversation);
@@ -4466,6 +4486,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     final assistantAvatarEnabled = ref.watch(
       appSettingsProvider.select((s) => s.assistantAvatarEnabled),
     );
+    // The big avatar needs the avatar on; without it the page is unchanged.
+    final callChrome = voiceView.$1 && !voiceView.$2 && assistantAvatarEnabled;
     final toolbarHeight = conduitAdaptiveToolbarHeightOf(context);
     // The strip takes the toolbar's title slot and hangs below the toolbar.
     _assistantAvatarInset = assistantAvatarEnabled
@@ -4528,6 +4550,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
           modelLabel: modelLabel,
           hermesBot: hermesBot,
           showModelDropdown: showModelDropdown,
+          voiceActive: voiceView.$1,
+          callChrome: callChrome,
           avatarStrip: assistantAvatarEnabled
               ? AssistantAvatarStrip(
                   modelName: hermesBot?.title ?? formattedModelName,
@@ -4536,6 +4560,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                       : null,
                   onActivityPressed: _userScrollToBottom,
                   isLoading: isLoadingConversation || _isOpeningModelSelector,
+                  callMode: callChrome,
                 )
               : null,
         ),
@@ -4726,6 +4751,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     required HermesBotChatPresentation? hermesBot,
     required bool showModelDropdown,
     required Widget? avatarStrip,
+    required bool voiceActive,
+    required bool callChrome,
   }) {
     final activeConversation = ref.watch(activeConversationProvider);
     final isTemporary = ref.watch(temporaryChatEnabledProvider);
@@ -4741,7 +4768,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     // The ring leads, but it still takes one control's width and gap
     // from the title's budget, so it counts here like a trailing action.
     final trailingActionCount =
-        (showNewChatAction ? 1 : 0) + (showContextRing ? 1 : 0) + 1;
+        (showNewChatAction ? 1 : 0) + (showContextRing ? 1 : 0) + 2;
     final maxModelWidth = resolveConduitAdaptiveLeadingPillWidth(
       context,
       trailingActionCount: trailingActionCount,
@@ -4771,6 +4798,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       isTemporary: isTemporary,
       hasMessages: hasMessages,
       showNewChatAction: showNewChatAction,
+      showPhoneAction: !voiceActive,
+      callChrome: callChrome,
     );
     // The context ring sits on the leading side, right after the menu
     // button, so nothing on the trailing side reaches toward a centered title.
@@ -4812,7 +4841,19 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     return wrapConduitAdaptiveAppBarWithOverlay(
       base: appBar,
       height: AssistantAvatarStrip.height,
-      overlay: avatarStrip,
+      overlay: callChrome
+          ? Stack(
+              clipBehavior: Clip.none,
+              children: [
+                avatarStrip,
+                const Positioned(
+                  top: 0,
+                  right: Spacing.inputPadding,
+                  child: VoiceCallControls(),
+                ),
+              ],
+            )
+          : avatarStrip,
     );
   }
 
@@ -4848,9 +4889,27 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     required bool isTemporary,
     required bool hasMessages,
     required bool showNewChatAction,
+    bool showPhoneAction = false,
+    bool callChrome = false,
   }) {
     final actions = <_ChatToolbarActionDescriptor>[];
     final defaultTint = context.conduitTheme.textPrimary;
+    // In call mode the top right belongs to the hang-up and mic pill.
+    if (callChrome) return actions;
+
+    // The phone button starts voice mode (the composer's waveform button
+    // still does too).
+    if (showPhoneAction) {
+      actions.add(
+        _buildChatToolbarIconAction(
+          key: const ValueKey('chat-toolbar-phone'),
+          icon: Platform.isIOS ? CupertinoIcons.phone : Icons.phone_outlined,
+          accessibilityLabel: AppLocalizations.of(context)!.voiceCallTitle,
+          tintColor: defaultTint,
+          onPressed: _handleVoiceCall,
+        ),
+      );
+    }
 
     final temporaryAction = _buildTemporaryChatToolbarAction(
       context: context,
@@ -4892,11 +4951,13 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     required String accessibilityLabel,
     required Color tintColor,
     required VoidCallback? onPressed,
+    Key? key,
   }) {
     final iosSymbol = conduitToolbarSfSymbolForIcon(icon);
     assert(iosSymbol != null);
     return _ChatToolbarActionDescriptor(
       widget: ConduitAdaptiveAppBarIconButton(
+        key: key,
         icon: icon,
         iosSymbol: iosSymbol,
         iconColor: tintColor,

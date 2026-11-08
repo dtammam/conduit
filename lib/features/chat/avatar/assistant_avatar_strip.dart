@@ -23,6 +23,7 @@ import 'assistant_avatar_media.dart';
 import 'assistant_avatar_sheet.dart';
 import 'assistant_pending_approval.dart';
 import 'lip_sync_controller.dart';
+import 'mouth_still_view.dart';
 import '../musey/musey_feed_providers.dart'
     show TurnPhase, TurnReaction, turnReactionProvider;
 import 'persona_appearance_service.dart';
@@ -47,7 +48,23 @@ class AssistantAvatarStrip extends ConsumerStatefulWidget {
     this.isLoading = false,
     this.mediaStore,
     this.doneHold = kAssistantActivityDoneHold,
+    this.callMode = false,
   });
+
+  /// How many times larger the circle is while a voice call shows (the Muse
+  /// call screen's ratio, measured from Dean's screenshots: about 2.2).
+  static const double callScale = 2.2;
+
+  /// Diameter of the circle in call mode.
+  static const double callAvatarSize = avatarSize * callScale;
+
+  /// How long the circle takes to grow or shrink when a call starts or ends.
+  static const Duration callResize = Duration(milliseconds: 280);
+
+  /// Voice call mode: the circle grows to [callAvatarSize] and hangs over the
+  /// top of the chat; the strip's layout height does not change, so the
+  /// transcript does not move. The pill hangs under the bigger circle.
+  final bool callMode;
 
   /// Total height of the strip: the circle and the name pill tucked behind
   /// its bottom edge (2026-11-01), down to the two-line busy
@@ -190,9 +207,11 @@ class _AssistantAvatarStripState extends ConsumerState<AssistantAvatarStrip>
       _lip.setStills(null);
       return;
     }
-    final images = [for (final file in files) FileImage(file)];
+    final images = {
+      for (final entry in files.entries) entry.key: FileImage(entry.value),
+    };
     try {
-      for (final image in images) {
+      for (final image in images.values) {
         await precacheImage(image, context);
       }
     } catch (error) {
@@ -575,13 +594,15 @@ class _AssistantAvatarStripState extends ConsumerState<AssistantAvatarStrip>
     if (mouth != null) {
       // The voice is playing and the persona has mouth stills: one of them
       // stands in for the clip (playingId stays null, so the clip pauses).
-      content = Image(
-        image: mouth,
-        key: ValueKey('mouth-${_lip.shape!.name}'),
-        fit: BoxFit.cover,
-        width: AssistantAvatarStrip.avatarSize,
-        height: AssistantAvatarStrip.avatarSize,
-        gaplessPlayback: true,
+      // The still fills whatever size the circle has (it grows in call mode).
+      content = LayoutBuilder(
+        key: const ValueKey('mouth-still'),
+        builder: (context, box) => MouthStillView(
+          image: mouth,
+          size: box.biggest.shortestSide.isFinite
+              ? box.biggest.shortestSide
+              : AssistantAvatarStrip.avatarSize,
+        ),
       );
     } else if (media != null && !_failedMedia.contains(media.id)) {
       if (media.kind == AssistantAvatarMediaKind.video) {
@@ -610,8 +631,6 @@ class _AssistantAvatarStripState extends ConsumerState<AssistantAvatarStrip>
           File(media.path),
           key: ValueKey(media.id),
           fit: BoxFit.cover,
-          width: AssistantAvatarStrip.avatarSize,
-          height: AssistantAvatarStrip.avatarSize,
           gaplessPlayback: true,
           errorBuilder: (context, error, stackTrace) {
             DebugLogger.error(
@@ -668,155 +687,166 @@ class _AssistantAvatarStripState extends ConsumerState<AssistantAvatarStrip>
     // so the hint says it for VoiceOver.
     final picksModel = !busy && pillTap != null;
 
-    return SizedBox(
-      key: const ValueKey('assistant-avatar-strip'),
-      height: AssistantAvatarStrip.height,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: Spacing.inputPadding),
-        child: Align(
-          alignment: Alignment.topCenter,
-          child: SizedBox(
-            width: AssistantAvatarStrip._pillMaxWidth,
-            height: AssistantAvatarStrip.height,
-            child: Stack(
-              clipBehavior: Clip.none,
-              alignment: Alignment.topCenter,
-              children: [
-                // The pill names the assistant and, while it is busy, says what it
-                // is doing, naming the tool step when there is one. Idle it is
-                // the model selector; busy it jumps to the live reply, where the
-                // tool and thinking rows expand.
-                Positioned(
-                  top:
-                      AssistantAvatarStrip.avatarSize -
-                      AssistantAvatarStrip._pillOverlap,
-                  left: 0,
-                  right: 0,
-                  child: Center(
-                    child: Semantics(
-                      button: pillTap != null,
-                      // The circle already announces "<name>, <state>"; the pill
-                      // reads as the state line while busy and the model picker idle.
-                      label: busy
-                          ? stateLine
-                          : (displayName ?? l10n.chooseModel),
-                      hint: picksModel ? l10n.modelPickerHint : null,
-                      excludeSemantics: true,
-                      child: GestureDetector(
-                        key: const ValueKey('assistant-avatar-pill'),
-                        behavior: HitTestBehavior.opaque,
-                        onTap: pillTap,
-                        child: MediaQuery.withClampedTextScaling(
-                          maxScaleFactor: 1.2,
-                          child: _AssistantAvatarPillSurface(
-                            child: widget.isLoading
-                                ? Center(
-                                    widthFactor: 1,
-                                    child: ConduitLoading.skeleton(
-                                      width: 64,
-                                      height: 12,
-                                      borderRadius: BorderRadius.circular(
-                                        AppBorderRadius.sm,
-                                      ),
-                                    ),
-                                  )
-                                : Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Text(
-                                        displayName ?? l10n.chooseModel,
-                                        key: const ValueKey(
-                                          'assistant-avatar-pill-name',
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(
+        end: widget.callMode
+            ? AssistantAvatarStrip.callAvatarSize
+            : AssistantAvatarStrip.avatarSize,
+      ),
+      duration: context.reduceMotion
+          ? Duration.zero
+          : AssistantAvatarStrip.callResize,
+      curve: Curves.easeInOutCubic,
+      builder: (context, diameter, _) => SizedBox(
+        key: const ValueKey('assistant-avatar-strip'),
+        height: AssistantAvatarStrip.height,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: Spacing.inputPadding),
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: SizedBox(
+              width: AssistantAvatarStrip._pillMaxWidth,
+              height: AssistantAvatarStrip.height,
+              child: Stack(
+                clipBehavior: Clip.none,
+                alignment: Alignment.topCenter,
+                children: [
+                  // The pill names the assistant and, while it is busy, says what it
+                  // is doing, naming the tool step when there is one. Idle it is
+                  // the model selector; busy it jumps to the live reply, where the
+                  // tool and thinking rows expand.
+                  Positioned(
+                    top: diameter - AssistantAvatarStrip._pillOverlap,
+                    left: 0,
+                    right: 0,
+                    child: Center(
+                      child: Semantics(
+                        button: pillTap != null,
+                        // The circle already announces "<name>, <state>"; the pill
+                        // reads as the state line while busy and the model picker idle.
+                        label: busy
+                            ? stateLine
+                            : (displayName ?? l10n.chooseModel),
+                        hint: picksModel ? l10n.modelPickerHint : null,
+                        excludeSemantics: true,
+                        child: GestureDetector(
+                          key: const ValueKey('assistant-avatar-pill'),
+                          behavior: HitTestBehavior.opaque,
+                          onTap: pillTap,
+                          child: MediaQuery.withClampedTextScaling(
+                            maxScaleFactor: 1.2,
+                            child: _AssistantAvatarPillSurface(
+                              child: widget.isLoading
+                                  ? Center(
+                                      widthFactor: 1,
+                                      child: ConduitLoading.skeleton(
+                                        width: 64,
+                                        height: 12,
+                                        borderRadius: BorderRadius.circular(
+                                          AppBorderRadius.sm,
                                         ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        textAlign: TextAlign.center,
-                                        // Centered on the glyphs, not the line box:
-                                        // no extra leading above the cap height or
-                                        // below the descender, so the name sits in the
-                                        // middle of the pill (Muse's sits low).
-                                        textHeightBehavior:
-                                            const TextHeightBehavior(
-                                              applyHeightToFirstAscent: false,
-                                              applyHeightToLastDescent: false,
-                                            ),
-                                        style: AppTypography.labelMediumStyle
-                                            .copyWith(
-                                              color: theme.textPrimary,
-                                              fontWeight: FontWeight.w600,
-                                              height: 1.0,
-                                              leadingDistribution:
-                                                  TextLeadingDistribution.even,
-                                            ),
                                       ),
-                                      if (busy)
-                                        _StateLine(
-                                          text: shownLine,
-                                          holding: holding,
-                                          emoji: reaction,
-                                          emojiLabel: reaction == null
-                                              ? null
-                                              : l10n.museyReactionLabel(
-                                                  reaction,
-                                                ),
-                                          style: AppTypography.captionStyle
+                                    )
+                                  : Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Text(
+                                          displayName ?? l10n.chooseModel,
+                                          key: const ValueKey(
+                                            'assistant-avatar-pill-name',
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          textAlign: TextAlign.center,
+                                          // Centered on the glyphs, not the line box:
+                                          // no extra leading above the cap height or
+                                          // below the descender, so the name sits in the
+                                          // middle of the pill (Muse's sits low).
+                                          textHeightBehavior:
+                                              const TextHeightBehavior(
+                                                applyHeightToFirstAscent: false,
+                                                applyHeightToLastDescent: false,
+                                              ),
+                                          style: AppTypography.labelMediumStyle
                                               .copyWith(
-                                                color: theme.textSecondary,
+                                                color: theme.textPrimary,
+                                                fontWeight: FontWeight.w600,
+                                                height: 1.0,
+                                                leadingDistribution:
+                                                    TextLeadingDistribution
+                                                        .even,
                                               ),
                                         ),
-                                    ],
-                                  ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    Semantics(
-                      button: true,
-                      label: l10n.assistantAvatarEditLabel(
-                        displayName ?? l10n.assistantAvatar,
-                        word,
-                      ),
-                      excludeSemantics: true,
-                      child: GestureDetector(
-                        key: const ValueKey('assistant-avatar-circle'),
-                        behavior: HitTestBehavior.opaque,
-                        onTap: () => unawaited(_openSheet()),
-                        child: Container(
-                          width: AssistantAvatarStrip.avatarSize,
-                          height: AssistantAvatarStrip.avatarSize,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: theme.surfaceContainer,
-                            border: Border.all(color: theme.cardBorder),
-                          ),
-                          child: ClipOval(
-                            child: RepaintBoundary(
-                              key: _mediaBoundaryKey,
-                              child:
-                                  content ??
-                                  _AvatarInitial(name: widget.modelName),
+                                        if (busy)
+                                          _StateLine(
+                                            text: shownLine,
+                                            holding: holding,
+                                            emoji: reaction,
+                                            emojiLabel: reaction == null
+                                                ? null
+                                                : l10n.museyReactionLabel(
+                                                    reaction,
+                                                  ),
+                                            style: AppTypography.captionStyle
+                                                .copyWith(
+                                                  color: theme.textSecondary,
+                                                ),
+                                          ),
+                                      ],
+                                    ),
                             ),
                           ),
                         ),
                       ),
                     ),
-                    Positioned(
-                      top: -2,
-                      right: -2,
-                      child: _AvatarBadge(
-                        failures: unseenFailures,
-                        approval: approvalPending,
+                  ),
+                  Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Semantics(
+                        button: true,
+                        label: l10n.assistantAvatarEditLabel(
+                          displayName ?? l10n.assistantAvatar,
+                          word,
+                        ),
+                        excludeSemantics: true,
+                        child: GestureDetector(
+                          key: const ValueKey('assistant-avatar-circle'),
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () => unawaited(_openSheet()),
+                          child: Container(
+                            width: diameter,
+                            height: diameter,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: theme.surfaceContainer,
+                              border: Border.all(color: theme.cardBorder),
+                            ),
+                            child: ClipOval(
+                              child: RepaintBoundary(
+                                key: _mediaBoundaryKey,
+                                child:
+                                    content ??
+                                    _AvatarInitial(name: widget.modelName),
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-              ],
+                      Positioned(
+                        top: -2,
+                        right: -2,
+                        child: _AvatarBadge(
+                          failures: unseenFailures,
+                          approval: approvalPending,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),
