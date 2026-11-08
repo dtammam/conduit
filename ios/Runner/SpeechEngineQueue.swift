@@ -711,20 +711,35 @@ final class SpeechEngineQueue {
     var peak: Float = 0
     var frames = 0
     var windowStart = ProcessInfo.processInfo.systemUptime
-    engine.mainMixerNode.installTap(onBus: 0, bufferSize: 4096, format: nil) {
+    engine.mainMixerNode.installTap(onBus: 0, bufferSize: 2048, format: nil) {
       [weak self] buffer, _ in
       guard let self, let data = buffer.floatChannelData else { return }
       let n = Int(buffer.frameLength)
       let channels = Int(buffer.format.channelCount)
       if n > 0, channels > 0 {
         let ch = data[0]
+        var bufferSquares = 0.0
+        var crossings = 0
+        var previous = ch[0]
         for i in 0..<n {
           let v = ch[i]
-          sumSquares += Double(v * v)
+          bufferSquares += Double(v * v)
           let a = abs(v)
           if a > peak { peak = a }
+          if (v >= 0) != (previous >= 0) { crossings += 1 }
+          previous = v
         }
+        sumSquares += bufferSquares
         frames += n
+        // Loudness for the avatar's cartoon lip sync: one note per buffer
+        // (about 20 a second), the RMS in dBFS and a rough pitch from the
+        // zero crossings. Only while playback is wanted.
+        if self.wantsPlayback {
+          let r = (bufferSquares / Double(n)).squareRoot()
+          let db = r <= 0.00001 ? -100.0 : 20 * log10(r)
+          let hz = Double(crossings) / Double(n) * buffer.format.sampleRate / 2
+          self.onEvent?(.note("level", ["rmsDb": db, "zcrHz": hz]))
+        }
       }
       let now = ProcessInfo.processInfo.systemUptime
       guard now - windowStart >= 1 else { return }

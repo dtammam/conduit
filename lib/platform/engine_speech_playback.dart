@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:conduit/features/chat/avatar/lip_sync.dart';
 import 'package:conduit_core/conduit_core.dart';
 import 'package:conduit_core/features/chat/voice_mode/voice_event_log.dart';
 import 'package:flutter/services.dart';
@@ -256,6 +257,11 @@ class EngineSpeechPlayback
 
   void _emit(AudioProcessingState processing) {
     _processing = processing;
+    if (!_playing ||
+        processing == AudioProcessingState.completed ||
+        processing == AudioProcessingState.idle) {
+      SpeechLevelMeter.instance.clear();
+    }
     if (!_states.isClosed) {
       _states.add(
         AudioPlaybackState(playing: _playing, processingState: processing),
@@ -303,6 +309,24 @@ class EngineSpeechPlayback
       case 'native':
         final name = args['name'];
         final fields = args['fields'];
+        if (name == 'level') {
+          // The loudness of the voice for the avatar's lip sync, about 20 a
+          // second; not logged. Ignored unless the engine is playing.
+          if (_playing &&
+              _processing != AudioProcessingState.completed &&
+              fields is Map) {
+            final db = fields['rmsDb'];
+            final hz = fields['zcrHz'];
+            if (db is num) {
+              SpeechLevelMeter.instance.push(
+                db.toDouble(),
+                hz is num ? hz.toDouble() : null,
+                DateTime.now().millisecondsSinceEpoch,
+              );
+            }
+          }
+          return null;
+        }
         if (name == 'out-level') {
           // At most about one a second, so a call's log cannot be flooded.
           final now = DateTime.now().millisecondsSinceEpoch;

@@ -584,6 +584,31 @@ class AppCustomizationPage extends ConsumerWidget {
           CustomizationTile(
             leading: _buildIconBadge(
               context,
+              Platform.isIOS
+                  ? CupertinoIcons.waveform
+                  : Icons.record_voice_over_outlined,
+              color: theme.buttonPrimary,
+            ),
+            title: 'Cartoon lip sync',
+            subtitle:
+                'While a persona with drawn mouths speaks (Uncle Ruckus), '
+                'the avatar swaps mouth shapes with the voice',
+            toggled: settings.lipSyncEnabled,
+            trailing: AdaptiveSwitch(
+              value: settings.lipSyncEnabled,
+              onChanged: (value) => ref
+                  .read(appSettingsProvider.notifier)
+                  .setLipSyncEnabled(value),
+            ),
+            showChevron: false,
+            onTap: () => ref
+                .read(appSettingsProvider.notifier)
+                .setLipSyncEnabled(!settings.lipSyncEnabled),
+          ),
+          const SizedBox(height: Spacing.sm),
+          CustomizationTile(
+            leading: _buildIconBadge(
+              context,
               Platform.isIOS ? CupertinoIcons.link : Icons.link,
               color: theme.buttonPrimary,
             ),

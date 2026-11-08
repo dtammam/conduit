@@ -154,6 +154,76 @@ void main() {
       check(cached.clips.containsKey(AssistantActivity.working)).isFalse();
     });
 
+    group('mouth stills', () {
+      const shapes = ['closed', 'slight', 'open', 'wide', 'oo'];
+      void serveMouths({List<String> shapesToServe = shapes}) {
+        final base = adapter.handler;
+        (active['appearance'] as Map)['mouths'] = {
+          for (final name in shapes)
+            name: {
+              'etag': 'm-$name',
+              'content_type': 'image/png',
+              'url': '/api/personas/ada/mouths/$name',
+            },
+        };
+        adapter.handler = (options) {
+          final match = RegExp(r'/mouths/(.+)$').firstMatch(options.path);
+          if (match != null) {
+            return shapesToServe.contains(match.group(1))
+                ? _bytes('PNG-${match.group(1)}', type: 'image/png')
+                : ResponseBody.fromString('missing', 404);
+          }
+          return base(options);
+        };
+      }
+
+      File mouth(String name) => clip('ada', 'mouths/$name.png');
+
+      test(
+        'the five stills are downloaded, cached and found on disk',
+        () async {
+          serveMouths();
+          final outcome = await sync();
+          check(outcome.status).equals(PersonaSyncStatus.updated);
+          check(outcome.appearance!.mouths.length).equals(5);
+          check(await mouth('oo').readAsString()).equals('PNG-oo');
+          final stills = await service.mouthStills(service.loadCached()!);
+          check(stills).isNotNull();
+          check(stills!.length).equals(5);
+          // A second sync downloads nothing again.
+          final before = adapter.requests.length;
+          check((await sync()).status).equals(PersonaSyncStatus.unchanged);
+          check(
+            adapter.requests
+                .skip(before)
+                .where((r) => r.path.contains('mouths')),
+          ).isEmpty();
+        },
+      );
+
+      test(
+        'one missing still means none, the clips stay as they were',
+        () async {
+          active = _persona('ada', clips: {'idle': ('e1', 'video/mp4')});
+          clipBodies = {'ada/idle': 'IDLE-1'};
+          serveMouths(shapesToServe: ['closed', 'slight', 'open', 'wide']);
+          final outcome = await sync();
+          check(outcome.appearance!.mouths).isEmpty();
+          check(await clip('ada', 'idle.mp4').readAsString()).equals('IDLE-1');
+          check(await service.mouthStills(outcome.appearance!)).isNull();
+        },
+      );
+
+      test('a server without mouths removes old ones', () async {
+        serveMouths();
+        await sync();
+        (active['appearance'] as Map).remove('mouths');
+        final outcome = await sync();
+        check(outcome.appearance!.mouths).isEmpty();
+        check(await mouth('closed').exists()).isFalse();
+      });
+    });
+
     test(
       'every request carries the bearer and the cache never holds it',
       () async {

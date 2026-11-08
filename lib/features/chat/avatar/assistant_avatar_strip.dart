@@ -22,6 +22,7 @@ import 'assistant_avatar_accent.dart';
 import 'assistant_avatar_media.dart';
 import 'assistant_avatar_sheet.dart';
 import 'assistant_pending_approval.dart';
+import 'lip_sync_controller.dart';
 import '../musey/musey_feed_providers.dart'
     show TurnPhase, TurnReaction, turnReactionProvider;
 import 'persona_appearance_service.dart';
@@ -123,9 +124,15 @@ class _AssistantAvatarStripState extends ConsumerState<AssistantAvatarStrip>
   /// Asks for the active persona while this chat is on screen.
   Timer? _personaTimer;
 
+  /// Cartoon lip sync: the mouth still to show while the voice plays.
+  final LipSyncController _lip = LipSyncController();
+  String? _stillsKey;
+
   @override
   void initState() {
     super.initState();
+    _lip.addListener(_onLipChanged);
+    _lip.enabled = ref.read(appSettingsProvider).lipSyncEnabled;
     WidgetsBinding.instance.addObserver(this);
     unawaited(_reloadMedia());
     // A chat opening is one of the moments the persona is asked for; then
@@ -137,7 +144,11 @@ class _AssistantAvatarStripState extends ConsumerState<AssistantAvatarStrip>
       unawaited(ref.read(personaAppearanceProvider.notifier).refresh());
     });
     // A chat that is already open counts as loaded.
-    WidgetsBinding.instance.addPostFrameCallback((_) => _scanLoadedChat());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_disposed) return;
+      unawaited(_loadMouthStills(ref.read(activePersonaAppearanceProvider)));
+      _scanLoadedChat();
+    });
   }
 
   @override
@@ -147,11 +158,54 @@ class _AssistantAvatarStripState extends ConsumerState<AssistantAvatarStrip>
     _doneTimer?.cancel();
     _videoAccentTimer?.cancel();
     _personaTimer?.cancel();
+    _lip.dispose();
     for (final controller in _controllers.values) {
       unawaited(controller.dispose());
     }
     _controllers.clear();
     super.dispose();
+  }
+
+  void _onLipChanged() {
+    if (!_disposed && mounted) setState(() {});
+  }
+
+  /// Loads and decodes the five mouth stills of the active persona once per
+  /// version, so showing one later costs no decoding.
+  Future<void> _loadMouthStills(PersonaAppearance? appearance) async {
+    final key = appearance == null || appearance.mouths.isEmpty
+        ? null
+        : '${appearance.id}:${appearance.mouths.values.map((c) => c.etag).join(',')}';
+    if (key == _stillsKey) return;
+    _stillsKey = key;
+    if (key == null) {
+      _lip.setStills(null);
+      return;
+    }
+    final files = await ref
+        .read(personaAppearanceServiceProvider)
+        .mouthStills(appearance!);
+    if (_disposed || !mounted || key != _stillsKey) return;
+    if (files == null) {
+      _lip.setStills(null);
+      return;
+    }
+    final images = [for (final file in files) FileImage(file)];
+    try {
+      for (final image in images) {
+        await precacheImage(image, context);
+      }
+    } catch (error) {
+      DebugLogger.log(
+        'mouth-preload-failed',
+        scope: _logScope,
+        data: {'error': error.runtimeType.toString()},
+      );
+      if (!_disposed && key == _stillsKey) _lip.setStills(null);
+      return;
+    }
+    if (_disposed || !mounted || key != _stillsKey) return;
+    _lip.setStills(images);
   }
 
   Future<void> _reloadMedia() async {
@@ -455,7 +509,12 @@ class _AssistantAvatarStripState extends ConsumerState<AssistantAvatarStrip>
       // New persona, new clips, or the setting turning on or off.
       final same = next == null ? previous == null : next.sameClipsAs(previous);
       if (!same) unawaited(_reloadMedia());
+      unawaited(_loadMouthStills(next));
     });
+    ref.listen<bool>(
+      appSettingsProvider.select((settings) => settings.lipSyncEnabled),
+      (previous, next) => _lip.enabled = next,
+    );
     ref.listen<bool>(
       appSettingsProvider.select((settings) => settings.messageBubbles),
       (previous, next) {
@@ -512,7 +571,19 @@ class _AssistantAvatarStripState extends ConsumerState<AssistantAvatarStrip>
     final media = _media.resolve(activity);
     Widget? content;
     String? playingId;
-    if (media != null && !_failedMedia.contains(media.id)) {
+    final mouth = _lip.current;
+    if (mouth != null) {
+      // The voice is playing and the persona has mouth stills: one of them
+      // stands in for the clip (playingId stays null, so the clip pauses).
+      content = Image(
+        image: mouth,
+        key: ValueKey('mouth-${_lip.shape!.name}'),
+        fit: BoxFit.cover,
+        width: AssistantAvatarStrip.avatarSize,
+        height: AssistantAvatarStrip.avatarSize,
+        gaplessPlayback: true,
+      );
+    } else if (media != null && !_failedMedia.contains(media.id)) {
       if (media.kind == AssistantAvatarMediaKind.video) {
         final controller = _controllerFor(media);
         if (controller != null) {

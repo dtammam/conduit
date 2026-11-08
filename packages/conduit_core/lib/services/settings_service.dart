@@ -322,6 +322,7 @@ class SettingsService {
       PreferenceKeys.personaAppearanceEnabled:
           settings.personaAppearanceEnabled,
       PreferenceKeys.personaAppearanceUrl: settings.personaAppearanceUrl,
+      PreferenceKeys.lipSyncEnabled: settings.lipSyncEnabled,
       PreferenceKeys.routinesServerUrl: settings.routinesServerUrl,
       PreferenceKeys.routinesPushEnabled: settings.routinesPushEnabled,
       PreferenceKeys.deliveryReceiptsEnabled: settings.deliveryReceiptsEnabled,
@@ -803,6 +804,7 @@ class SettingsService {
           get<bool>(PreferenceKeys.personaAppearanceEnabled) ?? true,
       personaAppearanceUrl:
           get<String>(PreferenceKeys.personaAppearanceUrl) ?? '',
+      lipSyncEnabled: get<bool>(PreferenceKeys.lipSyncEnabled) ?? true,
       routinesServerUrl:
           get<String>(PreferenceKeys.routinesServerUrl) ??
           kDefaultRoutinesServerUrl,
@@ -957,6 +959,11 @@ class AppSettings {
   /// until set. Its bearer token lives in secure storage, not here.
   final String personaAppearanceUrl;
 
+  /// Cartoon lip sync: while a persona that ships mouth stills speaks, the
+  /// avatar swaps between them by loudness. On by default; only a persona
+  /// with the stills (Uncle Ruckus) is affected.
+  final bool lipSyncEnabled;
+
   /// The routines server (the chat relay) address: push registration, quiet
   /// hours and the last result of each routine. Empty means none.
   final String routinesServerUrl;
@@ -1097,6 +1104,7 @@ class AppSettings {
     this.assistantAvatarBubbleColor = assistantAvatarBubbleColorAuto,
     this.personaAppearanceEnabled = true,
     this.personaAppearanceUrl = '',
+    this.lipSyncEnabled = true,
     this.routinesServerUrl = kDefaultRoutinesServerUrl,
     this.routinesPushEnabled = false,
     this.compactToolSummaries = false,
@@ -1167,6 +1175,7 @@ class AppSettings {
     String? assistantAvatarBubbleColor,
     bool? personaAppearanceEnabled,
     String? personaAppearanceUrl,
+    bool? lipSyncEnabled,
     String? routinesServerUrl,
     bool? routinesPushEnabled,
     bool? deliveryReceiptsEnabled,
@@ -1242,6 +1251,7 @@ class AppSettings {
       personaAppearanceEnabled:
           personaAppearanceEnabled ?? this.personaAppearanceEnabled,
       personaAppearanceUrl: personaAppearanceUrl ?? this.personaAppearanceUrl,
+      lipSyncEnabled: lipSyncEnabled ?? this.lipSyncEnabled,
       routinesServerUrl: routinesServerUrl ?? this.routinesServerUrl,
       routinesPushEnabled: routinesPushEnabled ?? this.routinesPushEnabled,
       deliveryReceiptsEnabled:
@@ -1351,6 +1361,7 @@ class AppSettings {
         other.assistantAvatarBubbleColor == assistantAvatarBubbleColor &&
         other.personaAppearanceEnabled == personaAppearanceEnabled &&
         other.personaAppearanceUrl == personaAppearanceUrl &&
+        other.lipSyncEnabled == lipSyncEnabled &&
         other.routinesServerUrl == routinesServerUrl &&
         other.routinesPushEnabled == routinesPushEnabled &&
         other.deliveryReceiptsEnabled == deliveryReceiptsEnabled &&
@@ -1426,6 +1437,7 @@ class AppSettings {
       assistantAvatarBubbleColor,
       personaAppearanceEnabled,
       personaAppearanceUrl,
+      lipSyncEnabled,
       routinesServerUrl,
       routinesPushEnabled,
       deliveryReceiptsEnabled,
@@ -1574,6 +1586,11 @@ class AppSettingsNotifier extends _$AppSettingsNotifier {
       PreferenceKeys.assistantAvatarBubbleColor,
       value,
     );
+  }
+
+  Future<void> setLipSyncEnabled(bool value) async {
+    state = state.copyWith(lipSyncEnabled: value);
+    await SettingsService._putPreference(PreferenceKeys.lipSyncEnabled, value);
   }
 
   Future<void> setPersonaAppearanceEnabled(bool value) async {
