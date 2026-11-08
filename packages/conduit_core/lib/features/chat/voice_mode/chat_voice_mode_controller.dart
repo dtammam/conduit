@@ -21,6 +21,8 @@ import 'package:conduit_core/models/conversation.dart';
 import 'package:conduit_core/providers/app_providers.dart'
     show
         activeConversationProvider,
+        isDirectLocalConversation,
+        isTemporaryChat,
         isActiveConversationInPlaceRemap,
         selectedModelProvider,
         socketServiceProvider;
@@ -48,6 +50,12 @@ import 'package:conduit_core/features/chat/realtime_call/realtime_bridge_transpo
 import 'package:conduit_core/features/chat/realtime_call/realtime_call_availability.dart';
 import 'package:conduit_core/features/chat/realtime_call/realtime_call_state.dart';
 import 'package:conduit_core/features/chat/voice_call/voice_call_eligibility.dart';
+import 'package:conduit_core/features/chat/voice_mode/voice_call_history.dart';
+import 'package:conduit_core/features/chat/voice_mode/voice_direct_client.dart';
+import 'package:conduit_core/features/chat/voice_mode/voice_direct_providers.dart';
+import 'package:conduit_core/features/chat/voice_mode/voice_direct_turn.dart';
+import 'package:conduit_core/database/local_conversation_loader.dart'
+    show pullChatOrFetch;
 import 'package:conduit_core/features/chat/voice_mode/voice_event_log.dart';
 import 'package:conduit_core/features/chat/voice_mode/voice_event_sender.dart';
 import 'package:conduit_core/features/chat/voice_mode/voice_mode_ports.dart';
@@ -57,6 +65,7 @@ import 'package:conduit_core/features/chat/server_speech/server_speech_providers
 import 'package:conduit_core/features/tools/providers/tools_providers.dart';
 
 export 'package:conduit_core/voice/voice_session.dart';
+export 'package:conduit_core/features/chat/voice_mode/voice_direct_providers.dart';
 export 'package:conduit_core/features/chat/voice_mode/voice_mode_ports.dart';
 
 final class _ChatVoiceModeStartCancelled implements Exception {
@@ -353,6 +362,21 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
   bool _pausedByInterruption = false;
   bool _pausedByRouteLoss = false;
   bool _sendingTranscript = false;
+
+  // Direct voice turns (Contract A, ~/srv/docs/VOICE-REALTIME.md 12.1). The
+  // relay is the single writer of a direct turn's chat; these hold only what
+  // the call shows and sends.
+  late final VoiceCallHistory _directHistory = VoiceCallHistory();
+  late final VoiceDirectTurnRunner _directRunner = VoiceDirectTurnRunner(
+    history: _directHistory,
+  );
+  bool _directDisabled = false;
+  bool _directTurnActive = false;
+  String? _directCallId;
+  String? _directChatId;
+
+  /// Spoken before the reply text of the turn: the relay's ack clip.
+  String _speechPrefix = '';
   bool _usesOpenWebUiTransport = false;
   List<String> _assistantSpeechChunks = const <String>[];
   int _activeAssistantSpeechChunkIndex = -1;
@@ -2255,6 +2279,9 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
       await _backgroundCoordinator?.keepAlive();
       if (!_isCurrent(token)) return;
       final selectedToolIds = ref.read(selectedToolIdsProvider);
+      _speechPrefix = '';
+      if (await _tryDirectTurn(transcript, token)) return;
+      if (!_isCurrent(token)) return;
       VoiceEventLog.instance.add('durable-send');
       await durableSend(
         ref,
@@ -2277,6 +2304,135 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
         stackTrace: stackTrace,
       );
       await _fail(error.toString(), token, _errorKindOf(error));
+    }
+  }
+
+  /// Sends [transcript] straight to the relay (Contract A). Returns true when
+  /// the turn was handled here (answered, failed or cancelled); false when it
+  /// must go the Open WebUI way (no relay route, route "owui", or the relay
+  /// is missing or off). Writes nothing to Open WebUI.
+  Future<bool> _tryDirectTurn(String transcript, int token) async {
+    final access = ref.read(voiceDirectAccessProvider);
+    final conversation = ref.read(activeConversationProvider);
+    if (access == null ||
+        _directDisabled ||
+        !_usesOpenWebUiTransport ||
+        conversation == null ||
+        isTemporaryChat(conversation.id) ||
+        isDirectLocalConversation(conversation)) {
+      return false;
+    }
+    final chatId = conversation.id;
+    _directChatId = chatId;
+    _directCallId ??= newVoiceTurnId();
+    final VoiceDirectLease lease;
+    try {
+      lease = access.acquire();
+    } catch (_) {
+      return false;
+    }
+    _directTurnActive = true;
+    final spoken = StringBuffer();
+    try {
+      VoiceEventLog.instance.add('direct-send');
+      final result = await _directRunner.run(
+        client: lease.client,
+        callId: _directCallId!,
+        chatId: chatId,
+        text: transcript,
+        chatMessages: ref.read(chatMessagesProvider),
+        personaId: ref.read(voiceDirectPersonaIdProvider),
+        build: VoiceEventLog.instance.build,
+        tz: DateTime.now().timeZoneName,
+        onAck: (ack) {
+          if (!_isCurrent(token) || _speechPrefix.isNotEmpty) return;
+          _speechPrefix = '$ack ';
+          _feedAssistantText(_speechPrefix);
+        },
+        onDelta: (delta) {
+          if (!_isCurrent(token)) return;
+          VoiceEventLog.instance.add('direct-delta');
+          spoken.write(delta);
+          _feedAssistantText(_speechPrefix + spoken.toString());
+        },
+      );
+      if (!_isCurrent(token)) return true;
+      if (result.disableDirect) _directDisabled = true;
+      switch (result.outcome) {
+        case VoiceDirectOutcome.done:
+          final text = spoken.isEmpty ? result.content : spoken.toString();
+          _assistantFinalized = false;
+          await _finishAssistantResponse(
+            token,
+            directText: _speechPrefix + text,
+          );
+          return true;
+        case VoiceDirectOutcome.cancelled:
+          return true;
+        case VoiceDirectOutcome.failed:
+          _assistantFinalized = true;
+          await _fail(
+            result.error ?? 'The voice turn failed.',
+            token,
+            ChatVoiceModeError.message,
+          );
+          return true;
+        case VoiceDirectOutcome.owui:
+        case VoiceDirectOutcome.fallback:
+          VoiceEventLog.instance.add('direct-fallback', <String, Object?>{
+            'why': result.outcome.name,
+            'error': ?result.error,
+          });
+          return false;
+      }
+    } finally {
+      _directTurnActive = false;
+      lease.release();
+    }
+  }
+
+  /// At call end: stop any direct turn in flight and, when the call had direct
+  /// turns, re-read the chat from Open WebUI (the relay saved them there).
+  void _endDirectCall() {
+    _directRunner.cancel();
+    _directTurnActive = false;
+    final had = _directHistory.hasDirectTurns;
+    final chatId = _directChatId;
+    _directHistory.clear();
+    _directDisabled = false;
+    _directCallId = null;
+    _directChatId = null;
+    _speechPrefix = '';
+    if (had && chatId != null && !_disposed) {
+      final access = ref.read(voiceDirectAccessProvider);
+      unawaited(_rereadChatAfterCall(chatId, access));
+    }
+  }
+
+  Future<void> _rereadChatAfterCall(
+    String chatId,
+    VoiceDirectAccess? access,
+  ) async {
+    try {
+      if (access != null) {
+        final lease = access.acquire();
+        try {
+          await lease.client.waitSaved(chatId);
+        } finally {
+          lease.release();
+        }
+      }
+      if (_disposed) return;
+      final refreshed = await pullChatOrFetch(ref, chatId);
+      if (refreshed == null || _disposed) return;
+      if (ref.read(activeConversationProvider)?.id != chatId) return;
+      ref.read(activeConversationProvider.notifier).set(refreshed);
+    } catch (error, stackTrace) {
+      DebugLogger.warning(
+        'direct-call-reread-failed',
+        scope: 'chat/voice_mode',
+        data: {'error': error, 'stackTrace': stackTrace},
+      );
     }
   }
 
@@ -2525,6 +2681,8 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
     VoiceEventLog.instance.add('barge-in-stop');
     if (!_isCurrent(token)) return;
 
+    _directRunner.cancel();
+    _directTurnActive = false;
     try {
       ref.read(stopGenerationProvider)();
     } catch (error, stackTrace) {
@@ -2555,11 +2713,15 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
       return;
     }
 
-    final text = _visibleAssistantText(messages);
-    if (text == null) {
+    if (_directTurnActive) return;
+    final raw = _visibleAssistantText(messages);
+    if (raw == null) {
       return;
     }
+    _feedAssistantText(_speechPrefix + raw);
+  }
 
+  void _feedAssistantText(String text) {
     if (_lastFedAssistantText.isEmpty && text.trim().isNotEmpty) {
       VoiceEventLog.instance.add('chat-first-token');
     }
@@ -2586,6 +2748,9 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
       return;
     }
 
+    // A direct turn is spoken from the relay's stream; the chat the relay saves
+    // to Open WebUI arriving in the message list must not drive the speech.
+    if (_directTurnActive) return;
     final active = _activeAssistantMessage(messages);
     if (active == null) {
       return;
@@ -2616,12 +2781,16 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
     unawaited(_finishAssistantResponse(_token));
   }
 
-  Future<void> _finishAssistantResponse(int token) async {
+  Future<void> _finishAssistantResponse(
+    int token, {
+    String? directText,
+  }) async {
     if (!_isCurrent(token) || _assistantFinalized) {
       return;
     }
 
-    final finalText = _visibleAssistantText() ?? '';
+    final finalText =
+        directText ?? _speechPrefix + (_visibleAssistantText() ?? '');
     _syncAssistantSpeechChunks(finalText);
     state = state.copyWith(assistantPreview: finalText);
 
@@ -2901,6 +3070,7 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
     _endReason = null;
     _endPhase = null;
     _endCallKitOn = false;
+    _endDirectCall();
     final input = _voiceInput;
     final tts = _textToSpeech;
     final callKit = _callKit;

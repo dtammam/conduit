@@ -504,6 +504,10 @@ void main() {
           // Apple Foundation Models through the Pigeon bridge
           // (ios/Runner/PccBridge.swift); the adapter lives in conduit_core.
           applePccHostProvider.overrideWith((ref) => PigeonApplePccHost()),
+          // The Switchboard persona a direct voice turn speaks as (Contract A).
+          voiceDirectPersonaIdProvider.overrideWith(
+            (ref) => ref.watch(activePersonaAppearanceProvider)?.id,
+          ),
           hostDirectProviderAdaptersProvider.overrideWith(
             (ref) => [ref.watch(applePccAdapterProvider)],
           ),
