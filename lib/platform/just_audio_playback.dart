@@ -13,9 +13,28 @@ import 'package:just_audio/just_audio.dart';
 /// [PieceQueuePlayback] on top of it turns a streamed MP3 clip into the small
 /// files it is made of, so a sentence starts as soon as its first half second
 /// has arrived (iOS's player would otherwise wait for the whole clip).
-class JustAudioPlayback extends PieceQueuePlayback {
-  JustAudioPlayback([AudioPlayer? player])
-    : super(_JustAudioQueue(player ?? AudioPlayer()));
+class JustAudioPlayback extends PieceQueuePlayback
+    implements AudioPositionReporting {
+  JustAudioPlayback([AudioPlayer? player]) : this._(player ?? AudioPlayer());
+
+  JustAudioPlayback._(AudioPlayer player)
+    : _player = player,
+      super(_JustAudioQueue(player));
+
+  final AudioPlayer _player;
+
+  /// The play position in the current item, about every 30 to 50 ms while
+  /// playing (the player's own clock, extrapolated between its updates).
+  @override
+  Stream<Duration> get positionStream => _player.createPositionStream(
+    minPeriod: const Duration(milliseconds: 30),
+    maxPeriod: const Duration(milliseconds: 50),
+  );
+}
+
+/// A player that can say how far into the current item it is.
+abstract interface class AudioPositionReporting {
+  Stream<Duration> get positionStream;
 }
 
 class _JustAudioQueue implements AudioSourceQueue {

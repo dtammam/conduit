@@ -108,6 +108,46 @@ final class SpeechEngineQueue {
   private var scheduledFrames: [Int: Int] = [:]
   private var startUptime: [Int: TimeInterval] = [:]
 
+  /// Where each item's first sample sits on the player node's own timeline
+  /// (frames scheduled since the player last stopped, the 10 ms lead
+  /// included), so the output tap can say how far into the playing item the
+  /// audio is, for lip sync from a viseme timeline. Written on [queue], read
+  /// on the audio thread, so under a lock.
+  private let timelineLock = NSLock()
+  private var itemStartFrames: [(item: Int, frame: Int64)] = []
+  private var playerFramesScheduled: Int64 = 0
+
+  private func playerTimelineReset() {
+    timelineLock.lock()
+    itemStartFrames.removeAll()
+    playerFramesScheduled = 0
+    timelineLock.unlock()
+  }
+
+  private func playerTimelineAdd(frames: Int, itemStart item: Int?) {
+    timelineLock.lock()
+    if let item { itemStartFrames.append((item, playerFramesScheduled)) }
+    playerFramesScheduled += Int64(frames)
+    timelineLock.unlock()
+  }
+
+  /// The item playing now and how many milliseconds of it have played, from
+  /// the player node's render time; nil before the first item or when the
+  /// player has no valid time. In source time (the time pitch is bypassed or
+  /// not, the player counts source frames).
+  private func playingPosition() -> (item: Int, posMs: Int)? {
+    guard let render = player.lastRenderTime,
+          let pt = player.playerTime(forNodeTime: render),
+          pt.isSampleTimeValid, pt.sampleRate > 0 else { return nil }
+    let sample = pt.sampleTime
+    timelineLock.lock()
+    defer { timelineLock.unlock() }
+    guard let current = itemStartFrames.last(where: { $0.frame <= sample })
+    else { return nil }
+    let ms = Double(sample - current.frame) * 1000 / pt.sampleRate
+    return (current.item, max(0, Int(ms.rounded())))
+  }
+
   private func note(_ name: String, _ fields: [String: Any] = [:]) {
     var f = fields
     f["engineRunning"] = engine.isRunning
@@ -138,6 +178,7 @@ final class SpeechEngineQueue {
     try queue.sync {
       generation += 1
       try Self.objc { self.player.stop() }
+      playerTimelineReset()
       setGainNow(1)
       items.removeAll()
       streams.removeAll()
@@ -256,6 +297,7 @@ final class SpeechEngineQueue {
     try queue.sync {
       generation += 1
       try Self.objc { self.player.stop() }
+      playerTimelineReset()
       outstanding = 0
       scheduleItem = max(0, index)
       scheduledInItem = 0
@@ -309,6 +351,7 @@ final class SpeechEngineQueue {
         // paused with audio still scheduled: keep the place
         let resume = lastStartedItem ?? scheduleItem
         try Self.objc { self.player.stop() }
+      playerTimelineReset()
         outstanding = 0
         scheduleItem = resume
         scheduledInItem = 0
@@ -316,6 +359,7 @@ final class SpeechEngineQueue {
         pendingStarts.removeAll()
       } else {
         try Self.objc { self.player.stop() }
+      playerTimelineReset()
       }
       if engine.isRunning {
         try Self.objc { self.engine.stop() }
@@ -337,6 +381,7 @@ final class SpeechEngineQueue {
       wantsPlayback = false
       generation += 1
       try Self.objc { self.player.stop() }
+      playerTimelineReset()
       // a stop while ducked (a confirmed barge-in) must not leave the next
       // reply quiet
       setGainNow(1)
@@ -738,7 +783,12 @@ final class SpeechEngineQueue {
           let r = (bufferSquares / Double(n)).squareRoot()
           let db = r <= 0.00001 ? -100.0 : 20 * log10(r)
           let hz = Double(crossings) / Double(n) * buffer.format.sampleRate / 2
-          self.onEvent?(.note("level", ["rmsDb": db, "zcrHz": hz]))
+          var fields: [String: Any] = ["rmsDb": db, "zcrHz": hz]
+          if let at = self.playingPosition() {
+            fields["item"] = at.item
+            fields["posMs"] = at.posMs
+          }
+          self.onEvent?(.note("level", fields))
         }
       }
       let now = ProcessInfo.processInfo.systemUptime
@@ -780,6 +830,7 @@ final class SpeechEngineQueue {
         }
       }
       try Self.objc { self.player.scheduleBuffer(lead, completionHandler: nil) }
+      playerTimelineAdd(frames: Int(lead.frameLength), itemStart: nil)
     }
   }
 
@@ -829,6 +880,7 @@ final class SpeechEngineQueue {
     outstanding += 1
     scheduledCount[item, default: 0] += 1
     scheduledFrames[item, default: 0] += Int(buffer.frameLength)
+    playerTimelineAdd(frames: Int(buffer.frameLength), itemStart: first ? item : nil)
     if first, streamItems.contains(item) { onEvent?(.streamScheduled(item)) }
     if first {
       // The item starts when everything scheduled before it has played.

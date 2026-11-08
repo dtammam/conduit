@@ -5,12 +5,52 @@ import 'package:flutter/foundation.dart';
 /// The drawn mouths of the cartoon lip sync. The first five (closed, slight,
 /// open, wide, oo) are the core set every persona with lip sync must ship;
 /// mid, ee, fv and mbp are optional extra frames (2026-11-08, build 188).
-enum MouthShape { closed, slight, open, wide, oo, mid, ee, fv, mbp }
+///
+/// [blink], [browOpen] and [browWide] are face accents, not speech sounds
+/// (2026-11-08, build 189): the eyes closed, and the open and wide mouths
+/// with raised brows. A persona may ship any of them or none.
+enum MouthShape {
+  closed,
+  slight,
+  open,
+  wide,
+  oo,
+  mid,
+  ee,
+  fv,
+  mbp,
+  blink,
+  browOpen,
+  browWide;
+
+  /// The name the server uses for this still (`brow_open`, not `browOpen`).
+  String get serverName => switch (this) {
+    MouthShape.browOpen => 'brow_open',
+    MouthShape.browWide => 'brow_wide',
+    _ => name,
+  };
+
+  /// Whether this is a face accent rather than a speech mouth.
+  bool get isAccent =>
+      this == MouthShape.blink ||
+      this == MouthShape.browOpen ||
+      this == MouthShape.browWide;
+}
 
 /// Server names of the stills, in [MouthShape] order.
 final List<String> kMouthShapeNames = [
-  for (final shape in MouthShape.values) shape.name,
+  for (final shape in MouthShape.values) shape.serverName,
 ];
+
+/// The mouth for a server shape name (from a viseme timeline), or null for a
+/// name this build does not know.
+MouthShape? mouthShapeFromName(String? name) {
+  if (name == null) return null;
+  for (final shape in MouthShape.values) {
+    if (shape.serverName == name) return shape;
+  }
+  return null;
+}
 
 /// The five shapes a persona must ship; without all of them there is no lip
 /// sync. The extras are used when present.
@@ -29,6 +69,9 @@ const Map<MouthShape, MouthShape> kMouthFallback = {
   MouthShape.ee: MouthShape.open,
   MouthShape.fv: MouthShape.slight,
   MouthShape.mbp: MouthShape.closed,
+  MouthShape.blink: MouthShape.closed,
+  MouthShape.browOpen: MouthShape.open,
+  MouthShape.browWide: MouthShape.wide,
 };
 
 /// [wanted] if the persona has it, else its fallback, else the shape itself
@@ -88,6 +131,39 @@ const int kMouthFadeMs = 50;
 /// No loudness sample for this long means the voice has stopped.
 const int kMouthSilenceTimeoutMs = 400;
 
+/// How far ahead of the playback position the timeline is read, so the mouth
+/// is not late (screen and compositing delay, the fade, and the MP3 encoder's
+/// start delay of about 25 ms, which the server does not subtract from its
+/// timeline).
+const int kMouthLeadMs = 30;
+
+/// The least time a shape stays on screen when it follows a viseme timeline.
+/// The timeline is already clean, so it needs less smoothing than loudness.
+const int kMouthTimelineHoldMs = 40;
+
+/// A position report older than this is not extrapolated: the voice paused
+/// or stopped, and the mouth goes back to loudness (and then to the idle
+/// clip).
+const int kMouthPositionStaleMs = 400;
+
+/// A blink comes every [kBlinkMinGapMs] to [kBlinkMaxGapMs] at random and
+/// shows the eyes-closed still for [kBlinkMs], but only over a closed or
+/// slightly open mouth and never during a cross-fade.
+const int kBlinkMinGapMs = 3000;
+const int kBlinkMaxGapMs = 6000;
+const int kBlinkMs = 120;
+
+/// A brow raise replaces an open or wide mouth for at least [kBrowMinHoldMs],
+/// and all brow time is capped at [kBrowMaxShare] of the time spent speaking.
+const int kBrowMinHoldMs = 300;
+const double kBrowMaxShare = 0.3;
+
+/// A reading counts as the top of the chunk's range when it is within this
+/// many dB of the loudest reading of the chunk so far, and at least
+/// [kBrowFloorDb] (a quiet chunk raises no brows).
+const double kBrowTopDb = 4;
+const double kBrowFloorDb = -32;
+
 /// The shape for one loudness reading. [rmsDb] is dBFS (0 loudest, about
 /// -100 silence); [zcrHz] is the zero-crossing pitch estimate, when known;
 /// [recentlyLoud] says a mid-or-louder reading came within
@@ -125,7 +201,9 @@ MouthShape shapeForLevel(
 class MouthHold {
   MouthHold({this.minHoldMs = kMouthMinHoldMs});
 
-  final int minHoldMs;
+  /// Changed by the caller when the source of the shape changes (loudness or
+  /// a viseme timeline).
+  int minHoldMs;
   MouthShape _shape = MouthShape.closed;
   int? _since;
 
@@ -198,12 +276,165 @@ class SpeechLevelMeter {
 
   final ValueNotifier<SpeechLevel?> level = ValueNotifier<SpeechLevel?>(null);
 
+  /// Where the playing audio is in its clip, when the player can say; with the
+  /// clip's viseme id it picks the mouth from the words.
+  final ValueNotifier<SpeechPosition?> position =
+      ValueNotifier<SpeechPosition?>(null);
+
   void push(double rmsDb, double? zcrHz, int nowMs) {
     level.value = SpeechLevel(rmsDb, zcrHz, nowMs);
   }
 
+  void pushPosition(String? visemeId, int posMs, int nowMs) {
+    position.value = SpeechPosition(visemeId, posMs, nowMs);
+  }
+
+  void clearPosition() {
+    if (position.value != null) position.value = null;
+  }
+
   void clear() {
     if (level.value != null) level.value = null;
+    clearPosition();
+  }
+}
+
+/// How far into a clip the playing audio was at [atMs] (wall clock).
+/// [visemeId] names the clip's viseme timeline, if it has one.
+@immutable
+class SpeechPosition {
+  const SpeechPosition(this.visemeId, this.posMs, this.atMs);
+
+  final String? visemeId;
+  final int posMs;
+  final int atMs;
+
+  /// The position in the clip at [nowMs], carried forward from the report by
+  /// the time since (the reports come every 30 to 50 ms), plus the
+  /// [kMouthLeadMs].
+  int posAt(int nowMs) => posMs + math.max<int>(0, nowMs - atMs) + kMouthLeadMs;
+}
+
+/// Tracks the loudest reading of the chunk playing, to tell the top of its
+/// range (where a brow may rise).
+class LoudnessRange {
+  Object? _chunk;
+  double _peakDb = -100;
+
+  /// Notes [rmsDb] for the chunk named [chunk]; a new chunk starts over.
+  void note(Object? chunk, double rmsDb) {
+    if (chunk != _chunk) {
+      _chunk = chunk;
+      _peakDb = -100;
+    }
+    if (!rmsDb.isNaN && rmsDb > _peakDb) _peakDb = rmsDb;
+  }
+
+  bool isTop(double rmsDb) =>
+      !rmsDb.isNaN && rmsDb >= kBrowFloorDb && rmsDb >= _peakDb - kBrowTopDb;
+
+  void reset() {
+    _chunk = null;
+    _peakDb = -100;
+  }
+}
+
+/// Blinks and brow raises over the speech mouths, only for the accent stills
+/// a persona ships. Time is passed in and the random source is injectable, so
+/// tests are exact.
+class FaceAccents {
+  FaceAccents({math.Random? random}) : _random = random ?? math.Random();
+
+  final math.Random _random;
+  int? _lastMs;
+  int? _nextBlinkMs;
+  int? _blinkUntilMs;
+  MouthShape? _brow;
+  int _browUntilMs = 0;
+  int _speakingMs = 0;
+  int _browMs = 0;
+
+  /// Total time spent speaking and in a brow raise, for the cap.
+  int get speakingMs => _speakingMs;
+  int get browMs => _browMs;
+
+  /// The shape to show: [base] (the speech mouth), or an accent over it.
+  /// [available] is what the persona ships; [fading] says a cross-fade is
+  /// under way; [loud] says the voice is at the top of the chunk's range.
+  MouthShape apply(
+    MouthShape base, {
+    required int nowMs,
+    required Set<MouthShape> available,
+    required bool fading,
+    required bool loud,
+  }) {
+    final last = _lastMs;
+    _lastMs = nowMs;
+    // A gap in readings (the timer's 150 ms, a pause) counts for at most 200.
+    final dt = last == null ? 0 : (nowMs - last).clamp(0, 200);
+    _speakingMs += dt;
+    _nextBlinkMs ??= nowMs + _blinkGap();
+
+    final speaksOpen = base == MouthShape.open || base == MouthShape.wide;
+
+    // A brow raise under way.
+    final brow = _brow;
+    if (brow != null) {
+      _browMs += dt;
+      final held = nowMs < _browUntilMs;
+      final over = _browMs > kBrowMaxShare * _speakingMs;
+      if (held || (speaksOpen && loud && !over && _browFor(base) == brow)) {
+        return brow;
+      }
+      _brow = null;
+    }
+
+    // A blink under way ends early if the mouth opens.
+    final blinkUntil = _blinkUntilMs;
+    if (blinkUntil != null) {
+      if (nowMs < blinkUntil && _blinkOk(base)) return MouthShape.blink;
+      _blinkUntilMs = null;
+    }
+
+    if (speaksOpen && loud) {
+      final want = _browFor(base);
+      if (available.contains(want) &&
+          _browMs + kBrowMinHoldMs <= kBrowMaxShare * _speakingMs) {
+        _brow = want;
+        _browUntilMs = nowMs + kBrowMinHoldMs;
+        return want;
+      }
+    }
+
+    final due = _nextBlinkMs!;
+    if (nowMs >= due &&
+        _blinkOk(base) &&
+        !fading &&
+        available.contains(MouthShape.blink)) {
+      _blinkUntilMs = nowMs + kBlinkMs;
+      _nextBlinkMs = nowMs + _blinkGap();
+      return MouthShape.blink;
+    }
+    return base;
+  }
+
+  static MouthShape _browFor(MouthShape base) =>
+      base == MouthShape.wide ? MouthShape.browWide : MouthShape.browOpen;
+
+  static bool _blinkOk(MouthShape base) =>
+      base == MouthShape.closed || base == MouthShape.slight;
+
+  int _blinkGap() =>
+      kBlinkMinGapMs + _random.nextInt(kBlinkMaxGapMs - kBlinkMinGapMs + 1);
+
+  /// Silence: the next speech starts the clocks again.
+  void reset() {
+    _lastMs = null;
+    _nextBlinkMs = null;
+    _blinkUntilMs = null;
+    _brow = null;
+    _speakingMs = 0;
+    _browMs = 0;
   }
 }
 

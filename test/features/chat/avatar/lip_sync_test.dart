@@ -342,7 +342,9 @@ void main() {
 
     test('a full set is parsed with its urls', () {
       final a = PersonaAppearance.fromServerJson(body(_mouths(count: 9)))!;
-      check(a.mouths.keys.toList()).deepEquals(kMouthShapeNames);
+      check(
+        a.mouths.keys.toList(),
+      ).deepEquals(kMouthShapeNames.take(9).toList());
       check(a.mouths['oo']!.url).equals('/api/personas/uncle-ruckus/mouths/oo');
     });
 

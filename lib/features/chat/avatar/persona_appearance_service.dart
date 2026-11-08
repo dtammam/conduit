@@ -86,7 +86,7 @@ class PersonaAppearance {
     if (raw is! Map) return const {};
     final out = <String, PersonaClip>{};
     for (final name in kMouthShapeNames) {
-      final core = kMouthCoreShapes.any((shape) => shape.name == name);
+      final core = kMouthCoreShapes.any((shape) => shape.serverName == name);
       final item = raw[name];
       if (item is! Map) {
         if (core) return const {};
@@ -536,7 +536,9 @@ class PersonaAppearanceService {
     Map<String, PersonaClip> wanted,
     Map<String, PersonaClip> cached,
   ) async {
-    if (!kMouthCoreShapes.every((shape) => wanted.containsKey(shape.name))) {
+    if (!kMouthCoreShapes.every(
+      (shape) => wanted.containsKey(shape.serverName),
+    )) {
       await _deleteMouths(dir);
       return const {};
     }
@@ -544,7 +546,7 @@ class PersonaAppearanceService {
     try {
       for (final entry in wanted.entries) {
         final file = mouthFile(dir, entry.key);
-        final core = kMouthCoreShapes.any((s) => s.name == entry.key);
+        final core = kMouthCoreShapes.any((s) => s.serverName == entry.key);
         if (cached[entry.key]?.etag == entry.value.etag &&
             await file.exists()) {
           kept[entry.key] = entry.value;
@@ -614,11 +616,11 @@ class PersonaAppearanceService {
     final files = <MouthShape, File>{};
     for (final shape in MouthShape.values) {
       final core = kMouthCoreShapes.contains(shape);
-      if (!appearance.mouths.containsKey(shape.name)) {
+      if (!appearance.mouths.containsKey(shape.serverName)) {
         if (core) return null;
         continue;
       }
-      final file = mouthFile(dir, shape.name);
+      final file = mouthFile(dir, shape.serverName);
       if (!await file.exists()) {
         if (core) return null;
         continue;

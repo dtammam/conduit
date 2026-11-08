@@ -12,6 +12,7 @@ import 'package:conduit_core/ports/progressive_audio.dart';
 import 'package:conduit_core/utils/debug_logger.dart';
 
 import 'direct_voice_provider_settings.dart';
+import 'viseme_timeline.dart';
 import 'server_speech.dart';
 import 'transcription_response.dart';
 
@@ -132,6 +133,7 @@ final class DirectServerSpeech
           responseType: ResponseType.bytes,
           headers: {
             'Accept': 'audio/mpeg',
+            'x-visemes': '1',
             ...VoiceEventLog.instance.turnHeaders,
           },
         ),
@@ -140,9 +142,16 @@ final class DirectServerSpeech
       if (bytes == null || bytes.isEmpty) {
         throw StateError('The Voice provider returned no audio.');
       }
+      final visemeId = response.headers.value('x-viseme-id');
+      if (visemeId != null && visemeId.isNotEmpty) {
+        // A whole clip's timeline is ready within milliseconds.
+        unawaited(_fetchVisemes(visemeId, 1500));
+      }
       final contentType = response.headers.value(Headers.contentTypeHeader);
+      final audio = Uint8List.fromList(bytes);
+      SpeechVisemes.tag(audio, visemeId);
       return (
-        bytes: Uint8List.fromList(bytes),
+        bytes: audio,
         mimeType: contentType != null && contentType.startsWith('audio/')
             ? contentType.split(';').first.trim()
             : 'audio/mpeg',
@@ -192,6 +201,7 @@ final class DirectServerSpeech
           responseType: ResponseType.stream,
           headers: {
             'Accept': 'audio/mpeg',
+            'x-visemes': '1',
             ...VoiceEventLog.instance.turnHeaders,
           },
         ),
@@ -209,7 +219,7 @@ final class DirectServerSpeech
         onCancel: () {
           if (!cancel.isCancelled) cancel.cancel('speech cancelled');
         },
-      );
+      )..visemeId = response.headers.value('x-viseme-id');
       unawaited(
         _pump(body.stream, streamed, firstBytes, release).catchError((_) {}),
       );
@@ -239,6 +249,11 @@ final class DirectServerSpeech
         );
       }
       into.close();
+      // A stream's timeline is built when its last byte has been sent.
+      final visemeId = into.visemeId;
+      if (visemeId != null && visemeId.isNotEmpty && !into.isCancelled) {
+        unawaited(_fetchVisemes(visemeId, 5000));
+      }
     } catch (error) {
       if (!firstBytes.isCompleted) {
         firstBytes.completeError(error);
@@ -251,6 +266,39 @@ final class DirectServerSpeech
       into.close(error);
     } finally {
       release();
+    }
+  }
+
+  /// Fetches the viseme timeline [id] into [VisemeStore.instance], holding
+  /// the request up to [waitMs] while the relay builds it. Never throws: no
+  /// timeline just means the mouth keeps following loudness.
+  Future<void> _fetchVisemes(String id, int waitMs) async {
+    final lease = _clientPool.acquire(_profile);
+    try {
+      for (var attempt = 0; attempt < 2; attempt++) {
+        final response = await lease.dio.get<Object?>(
+          'audio/visemes/$id',
+          queryParameters: {'wait': waitMs},
+          options: Options(
+            validateStatus: (status) => status != null && status < 500,
+            receiveTimeout: Duration(milliseconds: waitMs + 3000),
+          ),
+        );
+        final answer = parseVisemeAnswer(response.statusCode, response.data);
+        switch (answer) {
+          case VisemeReady(:final timeline):
+            VisemeStore.instance.put(id, timeline);
+            return;
+          case VisemePending():
+            continue;
+          case VisemeUnavailable():
+            return;
+        }
+      }
+    } catch (_) {
+      // Loudness mode.
+    } finally {
+      lease.release();
     }
   }
 }

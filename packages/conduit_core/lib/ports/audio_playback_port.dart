@@ -156,7 +156,16 @@ class NullAudioPlayback implements AudioPlaybackPort {
 /// One item in the playback queue.
 @immutable
 class AudioClip {
-  const AudioClip({required this.uri, this.tag, this.progressive});
+  const AudioClip({
+    required this.uri,
+    this.tag,
+    this.progressive,
+    this.visemeId,
+  });
+
+  /// The id of this clip's viseme timeline (lip sync), when the speech server
+  /// sent one.
+  final String? visemeId;
 
   /// Where the audio lives. The mobile host writes chunks to temporary files
   /// and passes their `file:` URIs. A clip with [progressive] audio ignores it.

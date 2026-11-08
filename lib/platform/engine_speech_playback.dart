@@ -39,6 +39,36 @@ class HybridSpeechPlayback
         }),
       )
       ..add(_engine.failures.listen((_) => unawaited(_fallBack())));
+    final files = _files;
+    if (files is AudioPositionReporting) {
+      _subs.add(
+        (files as AudioPositionReporting).positionStream.listen(
+          _onFilePosition,
+        ),
+      );
+    }
+  }
+
+  /// The viseme id of each clip queued on [_files], by index.
+  final List<String?> _fileVisemes = <String?>[];
+
+  /// Reports how far into the playing whole clip the audio is, so the avatar
+  /// can follow the clip's viseme timeline (just_audio has no loudness tap).
+  void _onFilePosition(Duration position) {
+    if (!identical(_active, _files) || !_playing) return;
+    final index = _files.currentIndex;
+    final id = index != null && index >= 0 && index < _fileVisemes.length
+        ? _fileVisemes[index]
+        : null;
+    if (id == null) {
+      SpeechLevelMeter.instance.clearPosition();
+      return;
+    }
+    SpeechLevelMeter.instance.pushPosition(
+      id,
+      position.inMilliseconds,
+      DateTime.now().millisecondsSinceEpoch,
+    );
   }
 
   /// Moves the engine's queue to just_audio as whole clips, from the clip it
@@ -50,6 +80,11 @@ class HybridSpeechPlayback
     final resumeAt = _engine.currentIndex ?? 0;
     final clips = await Future.wait(_engineClips.map(wholeSpeechClip));
     _active = _files;
+    _fileVisemes
+      ..clear()
+      ..addAll(
+        clips.map((clip) => clip.visemeId ?? clip.progressive?.visemeId),
+      );
     if (clips.isEmpty) return;
     await _files.setClips(
       clips,
@@ -114,6 +149,13 @@ class HybridSpeechPlayback
         ..clear()
         ..addAll(clips);
     }
+    if (identical(next, _files)) {
+      _fileVisemes
+        ..clear()
+        ..addAll(
+          clips.map((clip) => clip.visemeId ?? clip.progressive?.visemeId),
+        );
+    }
     await _active.setClips(
       streamed && _engineDisabled
           ? await Future.wait(clips.map(wholeSpeechClip))
@@ -129,6 +171,7 @@ class HybridSpeechPlayback
       _engineClips.add(clip);
       return _engine.addClip(clip);
     }
+    _fileVisemes.add(clip.visemeId ?? clip.progressive?.visemeId);
     if (_engineDisabled && clip.progressive != null) {
       return _files.addClip(await wholeSpeechClip(clip));
     }
@@ -153,12 +196,14 @@ class HybridSpeechPlayback
   @override
   Future<void> pause() {
     _playing = false;
+    SpeechLevelMeter.instance.clearPosition();
     return _active.pause();
   }
 
   @override
   Future<void> stop() {
     _playing = false;
+    SpeechLevelMeter.instance.clearPosition();
     return _active.stop();
   }
 
@@ -271,6 +316,9 @@ class EngineSpeechPlayback
 
   int _lastOutLevelMs = 0;
 
+  /// The viseme id of each queued item, by engine item index.
+  final _itemVisemes = <int, String?>{};
+
   Future<Object?> _onCall(MethodCall call) async {
     if (call.method != 'event') return null;
     final args = call.arguments;
@@ -317,6 +365,19 @@ class EngineSpeechPlayback
               fields is Map) {
             final db = fields['rmsDb'];
             final hz = fields['zcrHz'];
+            final item = fields['item'];
+            final posMs = fields['posMs'];
+            if (item is int && posMs is num) {
+              // How far into the playing item the audio is (the engine's
+              // own sample position), for lip sync from a viseme timeline.
+              SpeechLevelMeter.instance.pushPosition(
+                _itemVisemes[item],
+                posMs.round(),
+                DateTime.now().millisecondsSinceEpoch,
+              );
+            } else {
+              SpeechLevelMeter.instance.clearPosition();
+            }
             if (db is num) {
               SpeechLevelMeter.instance.push(
                 db.toDouble(),
@@ -371,6 +432,7 @@ class EngineSpeechPlayback
     _feeds.clear();
     _count = 0;
     _currentIndex = null;
+    _itemVisemes.clear();
     await _call('reset');
   }
 
@@ -379,6 +441,7 @@ class EngineSpeechPlayback
     final item = _count++;
     final generation = _generation;
     final progressive = clip.progressive;
+    _itemVisemes[item] = clip.visemeId ?? progressive?.visemeId;
     if (progressive != null && isMp3MimeType(progressive.mimeType)) {
       final router = Mp3StreamRouter();
       var announced = false;
@@ -555,5 +618,5 @@ Future<AudioClip> wholeSpeechClip(AudioClip clip) async {
   final extension = isMp3MimeType(progressive.mimeType) ? 'mp3' : 'wav';
   final file = File('${dir.path}/clip.$extension');
   await file.writeAsBytes(builder.takeBytes(), flush: true);
-  return AudioClip(uri: file.uri, tag: clip.tag);
+  return AudioClip(uri: file.uri, tag: clip.tag, visemeId: clip.visemeId);
 }

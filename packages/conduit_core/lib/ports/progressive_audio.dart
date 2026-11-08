@@ -20,6 +20,10 @@ final class ProgressiveAudio {
         ..close();
 
   final String mimeType;
+
+  /// The relay's `X-Viseme-Id` for this clip, when it was asked for visemes
+  /// and sent one (see `VisemeTimeline`).
+  String? visemeId;
   final void Function()? _onCancel;
   final List<List<int>> _pieces = <List<int>>[];
   final List<Completer<void>> _waiters = <Completer<void>>[];

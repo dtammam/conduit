@@ -11,6 +11,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:conduit_core/models/backend_config.dart';
 
 import 'package:conduit_core/features/chat/server_speech/server_speech.dart';
+import 'package:conduit_core/features/chat/server_speech/viseme_timeline.dart';
 
 import '../../../core/services/background_streaming_handler.dart';
 
@@ -1336,17 +1337,26 @@ class TtsManager {
           bytes: Uint8List(0),
           mimeType: progressive.mimeType,
           progressive: progressive,
+          visemeId: progressive.visemeId,
         );
       }
       final whole = clip.whole!;
-      return _AudioChunk(bytes: whole.bytes, mimeType: whole.mimeType);
+      return _AudioChunk(
+        bytes: whole.bytes,
+        mimeType: whole.mimeType,
+        visemeId: SpeechVisemes.idOf(whole.bytes),
+      );
     }
     final result = await speech.synthesize(
       text,
       preferredVoice: voice,
       speed: speed,
     );
-    return _AudioChunk(bytes: result.bytes, mimeType: result.mimeType);
+    return _AudioChunk(
+      bytes: result.bytes,
+      mimeType: result.mimeType,
+      visemeId: SpeechVisemes.idOf(result.bytes),
+    );
   }
 
   Future<_AudioChunk> _fetchServerAudioWithRetry(
@@ -1661,6 +1671,7 @@ class TtsManager {
         uri: Uri.parse('conduit-tts://$sessionId/$index'),
         tag: index,
         progressive: progressive,
+        visemeId: chunk.visemeId ?? progressive.visemeId,
       );
     }
     final tempDir = await getTemporaryDirectory();
@@ -1671,7 +1682,7 @@ class TtsManager {
     final file = File(p.join(dir.path, 'chunk_$index.$extension'));
     await file.writeAsBytes(chunk.bytes, flush: true);
     _serverTempFiles.add(file);
-    return AudioClip(uri: file.uri, tag: index);
+    return AudioClip(uri: file.uri, tag: index, visemeId: chunk.visemeId);
   }
 
   String _audioExtensionForMimeType(String mimeType) {
@@ -1916,9 +1927,13 @@ class _AudioChunk {
     required this.bytes,
     required this.mimeType,
     this.progressive,
+    this.visemeId,
   });
   final Uint8List bytes;
   final String mimeType;
+
+  /// The relay's viseme id for this chunk's audio, when it sent one.
+  final String? visemeId;
 
   /// Set when the clip is still arriving; [bytes] is then empty.
   final ProgressiveAudio? progressive;
