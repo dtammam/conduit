@@ -1,6 +1,7 @@
 import 'package:checks/checks.dart';
 import 'package:conduit/features/chat/avatar/assistant_avatar_strip.dart';
 import 'package:conduit/features/chat/views/chat_page.dart';
+import 'package:conduit/features/chat/voice_call/presentation/voice_call_launcher.dart';
 import 'package:conduit/l10n/app_localizations.dart';
 import 'package:conduit/l10n/conduit_localizations.dart';
 import 'package:conduit/shared/theme/app_theme.dart';
@@ -26,9 +27,19 @@ import 'package:conduit_core/services/optimized_storage_service.dart';
 import 'package:conduit_core/services/settings_service.dart';
 import 'package:conduit_core/services/worker_manager.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:cupertino_ui/cupertino_ui.dart' show CupertinoIcons;
 import 'package:material_ui/material_ui.dart';
+
+class _Launcher extends Fake implements VoiceCallLauncher {
+  int launches = 0;
+
+  @override
+  Future<void> launch({required bool startNewConversation}) async {
+    launches++;
+  }
+}
 
 class _Conversations extends Conversations {
   @override
@@ -122,6 +133,7 @@ void main() {
     WidgetTester tester, {
     required List<ChatMessage> messages,
     AppSettings settings = const AppSettings(),
+    List<Override> extraOverrides = const [],
   }) async {
     final originalErrorWidgetBuilder = ErrorWidget.builder;
     final originalFlutterErrorOnError = FlutterError.onError;
@@ -142,6 +154,7 @@ void main() {
     );
     final container = ProviderContainer(
       overrides: [
+        ...extraOverrides,
         appSettingsProvider.overrideWith(() => _Settings(settings)),
         apiServiceProvider.overrideWithValue(_api()),
         appDatabaseProvider.overrideWith((ref) => null),
@@ -303,4 +316,23 @@ void main() {
       check(firstMessage.top).isGreaterOrEqual(stripRect.bottom);
     },
   );
+
+  testWidgets('the composer has no call button; the top-right phone starts '
+      'voice mode', (tester) async {
+    final launcher = _Launcher();
+    await mountPage(
+      tester,
+      messages: transcript,
+      settings: const AppSettings(assistantAvatarEnabled: true),
+      extraOverrides: [voiceCallLauncherProvider.overrideWithValue(launcher)],
+    );
+    check(find.byKey(const ValueKey('primary-btn-voice-call')).evaluate())
+        .isEmpty();
+    // Dictation stays in the composer.
+    final phone = find.byKey(const ValueKey('chat-toolbar-phone'));
+    check(phone.evaluate()).length.equals(1);
+    await tester.tap(phone);
+    await tester.pump();
+    check(launcher.launches).equals(1);
+  });
 }

@@ -4189,17 +4189,6 @@ class _ChatPageState extends ConsumerState<ChatPage> {
               if (hasAttachments) const SizedBox(height: Spacing.sm),
               Consumer(
                 builder: (context, composerRef, _) {
-                  final composerCallChrome =
-                      composerRef.watch(
-                        chatVoiceModeControllerProvider.select(
-                          (voice) => voice.isActive && !voice.isCollapsed,
-                        ),
-                      ) &&
-                      composerRef.watch(
-                        appSettingsProvider.select(
-                          (s) => s.assistantAvatarEnabled,
-                        ),
-                      );
                   final isLoadingConversation = composerRef.watch(
                     isLoadingConversationProvider,
                   );
@@ -4355,11 +4344,11 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                             chatComposerTextInsertionTargetId,
                         attachedOverlay: attachedOverlay,
                         onVoiceInput: null,
-                        // In call mode the composer keeps only the plus and
-                        // the text field: no voice button.
-                        onVoiceCall: composerCallChrome
-                            ? null
-                            : _handleVoiceCall,
+                        // No call button in the composer (build 190): the
+                        // phone icon at the top right is the one way to
+                        // start a call. The composer's old button did
+                        // nothing else (dictation is onVoiceInput, unused).
+                        onVoiceCall: null,
                         onFileAttachment: _handleFileAttachment,
                         onServerFileAttachment: _handleServerFileAttachment,
                         onImageAttachment: _handleImageAttachment,
@@ -4840,7 +4829,13 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     if (avatarStrip == null) return appBar;
     return wrapConduitAdaptiveAppBarWithOverlay(
       base: appBar,
-      height: AssistantAvatarStrip.height,
+      // In call mode the bar advertises room for the big circle and its
+      // pill, so they are painted and hit-tested in full. The transcript
+      // inset (_assistantAvatarInset) stays on the normal height, so the
+      // list does not move.
+      height: callChrome
+          ? AssistantAvatarStrip.callHeight
+          : AssistantAvatarStrip.height,
       overlay: callChrome
           ? Stack(
               clipBehavior: Clip.none,
@@ -4897,8 +4892,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     // In call mode the top right belongs to the hang-up and mic pill.
     if (callChrome) return actions;
 
-    // The phone button starts voice mode (the composer's waveform button
-    // still does too).
+    // The phone button is the one way to start voice mode.
     if (showPhoneAction) {
       actions.add(
         _buildChatToolbarIconAction(

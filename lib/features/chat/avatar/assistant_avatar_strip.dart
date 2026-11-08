@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:conduit/l10n/app_localizations.dart';
 import 'package:conduit/shared/theme/theme_extensions.dart';
@@ -74,6 +75,10 @@ class AssistantAvatarStrip extends ConsumerStatefulWidget {
 
   /// Diameter of the avatar circle.
   static const double avatarSize = 72;
+
+  /// Height the strip needs in call mode: the big circle and the pill.
+  static const double callHeight =
+      callAvatarSize - _pillOverlap + _pillMaxHeight;
 
   /// Height of the idle one-line pill. It sits behind the circle: only its top
   /// [_pillOverlap] points are hidden, so the name clears the circle's edge.
@@ -699,14 +704,27 @@ class _AssistantAvatarStripState extends ConsumerState<AssistantAvatarStrip>
       curve: Curves.easeInOutCubic,
       builder: (context, diameter, _) => SizedBox(
         key: const ValueKey('assistant-avatar-strip'),
-        height: AssistantAvatarStrip.height,
+        // Grows with the circle so the overhang is inside the strip's own
+        // bounds (painted and tappable); the page's transcript inset uses
+        // the static height, so nothing below moves.
+        height: math.max(
+          AssistantAvatarStrip.height,
+          diameter -
+              AssistantAvatarStrip._pillOverlap +
+              AssistantAvatarStrip._pillMaxHeight,
+        ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: Spacing.inputPadding),
           child: Align(
             alignment: Alignment.topCenter,
             child: SizedBox(
               width: AssistantAvatarStrip._pillMaxWidth,
-              height: AssistantAvatarStrip.height,
+              height: math.max(
+                AssistantAvatarStrip.height,
+                diameter -
+                    AssistantAvatarStrip._pillOverlap +
+                    AssistantAvatarStrip._pillMaxHeight,
+              ),
               child: Stack(
                 clipBehavior: Clip.none,
                 alignment: Alignment.topCenter,
@@ -802,48 +820,55 @@ class _AssistantAvatarStripState extends ConsumerState<AssistantAvatarStrip>
                       ),
                     ),
                   ),
-                  Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      Semantics(
-                        button: true,
-                        label: l10n.assistantAvatarEditLabel(
-                          displayName ?? l10n.assistantAvatar,
-                          word,
-                        ),
-                        excludeSemantics: true,
-                        child: GestureDetector(
-                          key: const ValueKey('assistant-avatar-circle'),
-                          behavior: HitTestBehavior.opaque,
-                          onTap: () => unawaited(_openSheet()),
-                          child: Container(
-                            width: diameter,
-                            height: diameter,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: theme.surfaceContainer,
-                              border: Border.all(color: theme.cardBorder),
-                            ),
-                            child: ClipOval(
-                              child: RepaintBoundary(
-                                key: _mediaBoundaryKey,
-                                child:
-                                    content ??
-                                    _AvatarInitial(name: widget.modelName),
+                  // Tight square box: the parent Stack hands loose
+                  // constraints, and a 158 wide circle was being squashed
+                  // to the strip's 106 height (the oval of build 189).
+                  SizedBox(
+                    width: diameter,
+                    height: diameter,
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Semantics(
+                          button: true,
+                          label: l10n.assistantAvatarEditLabel(
+                            displayName ?? l10n.assistantAvatar,
+                            word,
+                          ),
+                          excludeSemantics: true,
+                          child: GestureDetector(
+                            key: const ValueKey('assistant-avatar-circle'),
+                            behavior: HitTestBehavior.opaque,
+                            onTap: () => unawaited(_openSheet()),
+                            child: Container(
+                              width: diameter,
+                              height: diameter,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: theme.surfaceContainer,
+                                border: Border.all(color: theme.cardBorder),
+                              ),
+                              child: ClipOval(
+                                child: RepaintBoundary(
+                                  key: _mediaBoundaryKey,
+                                  child:
+                                      content ??
+                                      _AvatarInitial(name: widget.modelName),
+                                ),
                               ),
                             ),
                           ),
                         ),
-                      ),
-                      Positioned(
-                        top: -2,
-                        right: -2,
-                        child: _AvatarBadge(
-                          failures: unseenFailures,
-                          approval: approvalPending,
+                        Positioned(
+                          top: -2,
+                          right: -2,
+                          child: _AvatarBadge(
+                            failures: unseenFailures,
+                            approval: approvalPending,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ],
               ),

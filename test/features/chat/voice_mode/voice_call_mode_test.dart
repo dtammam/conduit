@@ -133,18 +133,65 @@ void main() {
     check(tester.getSize(circle).width).isCloseTo(72 * 2.2, 0.01);
     check(hangup.evaluate()).length.equals(1);
     check(mute.evaluate()).length.equals(1);
-    // The strip's layout height is unchanged, so the transcript stays put.
+    // The strip grows to hold the overhang; the chat page's transcript inset
+    // uses the static height, so the transcript stays put.
     check(
       tester
           .getSize(find.byKey(const ValueKey('assistant-avatar-strip')))
           .height,
-    ).equals(AssistantAvatarStrip.height);
+    ).isCloseTo(AssistantAvatarStrip.callHeight, 0.01);
     // The name pill hangs under the bigger circle.
     final pillTop = tester.getTopLeft(
       find.byKey(const ValueKey('assistant-avatar-pill')),
     );
     final circleBottom = tester.getBottomLeft(circle);
     check(pillTop.dy).isGreaterThan(circleBottom.dy - 8);
+  });
+
+  testWidgets('the circle is square at rest, mid-animation and big, and '
+      'fully visible', (tester) async {
+    await mount(tester, const ChatVoiceModeSnapshot());
+    final screen = tester.view.physicalSize / tester.view.devicePixelRatio;
+    void expectRound() {
+      final r = tester.getRect(circle);
+      check(r.width).isCloseTo(r.height, 0.001);
+      // Not clipped: the whole rect is on screen.
+      check(r.left).isGreaterOrEqual(0);
+      check(r.top).isGreaterOrEqual(0);
+      check(r.right).isLessOrEqual(screen.width);
+      check(r.bottom).isLessOrEqual(screen.height);
+      // And inside the strip's own bounds, so it paints and takes taps.
+      final strip = tester.getRect(
+        find.byKey(const ValueKey('assistant-avatar-strip')),
+      );
+      check(strip.top).isLessOrEqual(r.top);
+      check(strip.bottom).isGreaterOrEqual(r.bottom);
+      // Centered at the top.
+      check(r.center.dx).isCloseTo(screen.width / 2, 0.5);
+    }
+
+    expectRound();
+    check(tester.getSize(circle).width).equals(72);
+    voice.set(_listening);
+    await tester.pump();
+    await tester.pump(AssistantAvatarStrip.callResize ~/ 2);
+    expectRound();
+    final mid = tester.getSize(circle).width;
+    check(mid).isGreaterThan(72);
+    check(mid).isLessThan(AssistantAvatarStrip.callAvatarSize);
+    await tester.pumpAndSettle();
+    expectRound();
+    check(tester.getSize(circle).width).isCloseTo(158.4, 0.01);
+  });
+
+  testWidgets('the big circle takes taps over its whole area', (tester) async {
+    await mount(tester, _listening);
+    await tester.pumpAndSettle();
+    final r = tester.getRect(circle);
+    // A point near the bottom edge, beyond the normal 72 pt strip height.
+    final hits = tester.hitTestOnBinding(Offset(r.center.dx, r.bottom - 6));
+    final target = tester.renderObject(circle);
+    check(hits.path.any((h) => identical(h.target, target))).isTrue();
   });
 
   testWidgets('hang up ends voice mode and the circle shrinks back', (
