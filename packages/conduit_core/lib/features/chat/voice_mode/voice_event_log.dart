@@ -37,6 +37,7 @@ class VoiceEventLog {
   VoiceEventSender? _sender;
   Timer? _timer;
   final List<Map<String, Object?>> _buffer = <Map<String, Object?>>[];
+  final List<Map<String, Object?>> _carried = <Map<String, Object?>>[];
   String? _turn;
   int _turnCounter = 0;
   String _device = '';
@@ -67,6 +68,15 @@ class VoiceEventLog {
     _device = _deviceName();
     _timer = Timer.periodic(flushInterval, (_) => flush());
     add('call-start', info);
+    // Out at once, not with the next 3 s batch: the relay warms the persona's
+    // voice on call-start, and every second it waits is a second of cold start.
+    flush();
+    // Engine failures that happened between calls, where nothing was logged.
+    final carried = List<Map<String, Object?>>.of(_carried);
+    _carried.clear();
+    for (final fields in carried) {
+      add('engine-failed', <String, Object?>{...fields, 'between-calls': true});
+    }
   }
 
   /// Ends the call's log: the last events are posted, then logging stops.
@@ -97,7 +107,16 @@ class VoiceEventLog {
 
   /// Records an event now. [t] overrides the time (epoch ms).
   void add(String kind, [Map<String, Object?> fields = const {}, int? t]) {
-    if (!active) return;
+    if (!active) {
+      // A speech engine failure outside a call (hang-up, between calls) used
+      // to vanish, and the next call then played whole clips with no trace of
+      // why (+189 to +191). Keep it for the next call-start.
+      if (kind == 'engine-failed') {
+        _carried.add(Map<String, Object?>.of(fields));
+        if (_carried.length > 5) _carried.removeAt(0);
+      }
+      return;
+    }
     final event = <String, Object?>{
       't': t ?? DateTime.now().millisecondsSinceEpoch,
       'kind': kind,

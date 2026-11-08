@@ -61,6 +61,55 @@ void main() {
       expect(last.chunks, ['Two is still going.']);
     });
 
+    test('speaks a finished trailing sentence at once', () {
+      const text = 'Let me check. ';
+      expect(endsWithSentenceBoundary(text), isTrue);
+      final advance = advanceStreamingChunks(
+        chunks: const ['Let me check.'],
+        fedChunkCount: 0,
+        spokenText: '',
+        finalized: false,
+        trailingChunkComplete: endsWithSentenceBoundary(text),
+      );
+      expect(advance.chunks, ['Let me check.']);
+      expect(advance.fedChunkCount, 1);
+
+      // The answer after the tool round does not repeat it.
+      final later = advanceStreamingChunks(
+        chunks: const ['Let me check.', 'It is sunny.'],
+        fedChunkCount: advance.fedChunkCount,
+        spokenText: advance.spokenText,
+        finalized: true,
+      );
+      expect(later.chunks, ['It is sunny.']);
+    });
+
+    test('a sentence still being written is held', () {
+      for (final text in ['Let me check.', 'Let me check', 'It costs 3.5']) {
+        expect(endsWithSentenceBoundary(text), isFalse);
+      }
+      final advance = advanceStreamingChunks(
+        chunks: const ['Let me check.'],
+        fedChunkCount: 0,
+        spokenText: '',
+        finalized: false,
+        trailingChunkComplete: endsWithSentenceBoundary('Let me check.'),
+      );
+      expect(advance.chunks, isEmpty);
+    });
+
+    test('a running tool block after the filler still counts as finished', () {
+      expect(
+        endsWithSentenceBoundary(
+          'Let me check. <details type="tool_calls" done="false">'
+          '<summary>Running</summary>',
+        ),
+        isTrue,
+      );
+      expect(endsWithSentenceBoundary('Done!\n'), isTrue);
+      expect(endsWithSentenceBoundary('He said "go." '), isTrue);
+    });
+
     test('does not repeat what was heard when a block disappears', () {
       final heard = advanceStreamingChunks(
         chunks: const ['Tool output.', 'The answer.', 'More'],

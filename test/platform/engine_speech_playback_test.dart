@@ -164,12 +164,10 @@ void main() {
     final engine = EngineSpeechPlayback();
     await engine.setClips(const []);
     calls.clear();
-    check(
-      await engine.setDuck(0.28, ramp: const Duration(milliseconds: 80)),
-    ).isTrue();
-    check(
-      await engine.setDuck(1, ramp: const Duration(milliseconds: 150)),
-    ).isTrue();
+    check(await engine.setDuck(0.28, ramp: const Duration(milliseconds: 80)))
+        .isTrue();
+    check(await engine.setDuck(1, ramp: const Duration(milliseconds: 150)))
+        .isTrue();
     check(calls).deepEquals(['gain 0.28 80', 'gain 1.0 150']);
   });
 
@@ -255,6 +253,52 @@ void main() {
       check(files.lastClips.single.progressive).isNull();
     },
   );
+
+  test('the engine is tried again 10 s after a failure, once', () async {
+    var failPlay = true;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          calls.add(call.method);
+          if (call.method == 'play' && failPlay) {
+            throw PlatformException(code: 'speech_engine', message: 'probe');
+          }
+          return true;
+        });
+    var clock = DateTime(2026, 11, 8, 12);
+    final files = _Files();
+    final hybrid = HybridSpeechPlayback(files: files, now: () => clock);
+    ProgressiveAudio streamed() => ProgressiveAudio(mimeType: 'audio/mp3')
+      ..add(_piece(1))
+      ..close();
+
+    await hybrid.setClips([
+      AudioClip(uri: Uri.parse('x:0'), progressive: streamed()),
+    ]);
+    await hybrid.play();
+    await settle();
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+
+    // Inside the retry window streamed clips still play whole on just_audio.
+    clock = clock.add(const Duration(seconds: 5));
+    await hybrid.setClips([
+      AudioClip(uri: Uri.parse('x:1'), progressive: streamed()),
+    ]);
+    check(files.lastClips.single.progressive).isNull();
+
+    // After it the engine takes the queue again: streamed bytes reach it.
+    failPlay = false;
+    clock = clock.add(const Duration(seconds: 6));
+    calls.clear();
+    files.calls.clear();
+    await hybrid.setClips([
+      AudioClip(uri: Uri.parse('x:2'), progressive: streamed()),
+    ]);
+    await settle();
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    check(calls).contains('reset');
+    check(calls).deepEquals(['reset', 'appendPiece', 'finishItem']);
+    check(files.calls).deepEquals(['stop']);
+  });
 
   test('the hybrid player picks the engine only for streamed queues', () async {
     final files = _Files();

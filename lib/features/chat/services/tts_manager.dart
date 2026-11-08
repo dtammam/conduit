@@ -76,12 +76,14 @@ StreamingChunkAdvance advanceStreamingChunksForTesting({
   required int fedChunkCount,
   required String spokenText,
   required bool finalized,
+  bool trailingChunkComplete = false,
 }) {
   return advanceStreamingChunks(
     chunks: chunks,
     fedChunkCount: fedChunkCount,
     spokenText: spokenText,
     finalized: finalized,
+    trailingChunkComplete: trailingChunkComplete,
   );
 }
 
@@ -956,6 +958,7 @@ class TtsManager {
       fedChunkCount: _streamingFedChunkCount,
       spokenText: _streamingSpokenText,
       finalized: finalized,
+      trailingChunkComplete: endsWithSentenceBoundary(accumulatedText),
     );
     // Move the cursor before awaiting: a concurrent feed must not re-enqueue
     // the chunks this call is still handing to playback.

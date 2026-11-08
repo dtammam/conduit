@@ -19,8 +19,12 @@ import 'just_audio_playback.dart';
 /// choice is made when a queue is set and holds until the next one.
 class HybridSpeechPlayback
     implements AudioPlaybackPort, AudioItemEndReporting, AudioDucking {
-  HybridSpeechPlayback({AudioPlaybackPort? files, EngineSpeechPlayback? engine})
-    : _files = files ?? JustAudioPlayback(),
+  HybridSpeechPlayback({
+    AudioPlaybackPort? files,
+    EngineSpeechPlayback? engine,
+    DateTime Function()? now,
+  }) : _now = now ?? DateTime.now,
+       _files = files ?? JustAudioPlayback(),
       _engine = engine ?? EngineSpeechPlayback() {
     _subs
       ..add(_files.stateChanges.listen((s) => _forward(_files, s, _states)))
@@ -76,6 +80,7 @@ class HybridSpeechPlayback
   Future<void> _fallBack() async {
     if (_engineDisabled) return;
     _engineDisabled = true;
+    _engineFailedAt = _now();
     if (!identical(_active, _engine)) return;
     final resumeAt = _engine.currentIndex ?? 0;
     final clips = await Future.wait(_engineClips.map(wholeSpeechClip));
@@ -104,6 +109,27 @@ class HybridSpeechPlayback
   /// Set after the engine failed once; streamed speech then plays whole
   /// clips on just_audio for the rest of the run.
   bool _engineDisabled = false;
+
+  final DateTime Function() _now;
+  DateTime? _engineFailedAt;
+
+  /// How long after a failure the engine is tried again. One failure used to
+  /// switch it off until the app restarted: a failure at hang-up left every
+  /// later call on whole clips, where a clip starts when its last byte lands
+  /// (13.6 s on build 191, 2.6 s on build 189), with nothing in the log.
+  static const Duration engineRetryAfter = Duration(seconds: 10);
+
+  /// Whether [_engineDisabled] still holds; past [engineRetryAfter] the engine
+  /// gets a fresh start. A second failure falls back again as before.
+  bool _engineStillDisabled() {
+    if (!_engineDisabled) return false;
+    final at = _engineFailedAt;
+    if (at == null || _now().difference(at) < engineRetryAfter) return true;
+    _engineDisabled = false;
+    _engine.rearm();
+    VoiceEventLog.instance.add('engine-rearmed');
+    return false;
+  }
   final _subs = <StreamSubscription<Object?>>[];
   final _states = StreamController<AudioPlaybackState>.broadcast();
   final _indices = StreamController<int?>.broadcast();
@@ -139,7 +165,7 @@ class HybridSpeechPlayback
     // During a voice call whose microphone is on the engine, every clip plays
     // there: the echo canceller needs the assistant's voice as its reference.
     final onEngine = streamed || EngineVoiceCapture.voiceProcessingActive;
-    final next = onEngine && !_engineDisabled ? _engine : _files;
+    final next = onEngine && !_engineStillDisabled() ? _engine : _files;
     if (!identical(next, _active)) {
       await _active.stop();
       _active = next;
@@ -254,6 +280,9 @@ class EngineSpeechPlayback
   Stream<Object> get failures => _failures.stream;
   bool _failed = false;
   bool get failed => _failed;
+
+  /// Forgets a past failure so the next queue is tried on the engine again.
+  void rearm() => _failed = false;
 
   void _fail(Object error) {
     if (_failed) return;

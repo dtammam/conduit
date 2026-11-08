@@ -118,6 +118,28 @@ List<String> getMessageContentParts(
   }
 }
 
+/// Whether [text] ends in `.`, `!` or `?` (optionally closed by a quote or
+/// bracket) followed by whitespace: the last sentence is finished.
+///
+/// A tool-call block at the end counts as the whitespace: "Let me check."
+/// followed by a running tool block is a finished sentence however the block
+/// was glued on.
+bool endsWithSentenceBoundary(String text) {
+  var body = text;
+  var blockFollows = false;
+  final open = text.lastIndexOf('<details');
+  if (open > 0 && stripDetailsForSpeech(text.substring(open)).trim().isEmpty) {
+    body = text.substring(0, open);
+    blockFollows = true;
+  }
+  body = stripDetailsForSpeech(body);
+  return RegExp(
+    blockFollows
+        ? r'[.!?]["\u201D\u2019)\]]*\s*$'
+        : r'[.!?]["\u201D\u2019)\]]*\s+$',
+  ).hasMatch(body);
+}
+
 /// The chunks a streaming feed made speakable, plus the cursor to resume from.
 class StreamingChunkAdvance {
   const StreamingChunkAdvance({
@@ -141,15 +163,20 @@ class StreamingChunkAdvance {
 ///
 /// [chunks] is the fresh split of the accumulated text; the result is what is
 /// newly speakable and the cursor for the next feed. The last chunk is held
-/// back until [finalized], since it is still growing.
+/// back until [finalized], since it is still growing, unless
+/// [trailingChunkComplete] says the text so far ends a sentence and what
+/// followed it (see [endsWithSentenceBoundary]): the relay ends a tool round's
+/// filler ("Let me check.") with a trailing space, and that sentence is
+/// finished, so it is spoken at once instead of after the whole answer.
 StreamingChunkAdvance advanceStreamingChunks({
   required List<String> chunks,
   required int fedChunkCount,
   required String spokenText,
   required bool finalized,
+  bool trailingChunkComplete = false,
 }) {
   // Hold the trailing chunk back until finalization: it is still growing.
-  final speakableCount = finalized
+  final speakableCount = finalized || trailingChunkComplete
       ? chunks.length
       : (chunks.length <= 1 ? 0 : chunks.length - 1);
 
