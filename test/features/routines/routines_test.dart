@@ -546,6 +546,42 @@ void main() {
       check(container.read(messageJumpProvider)).isNull();
     });
 
+    test('a message push with a chat id opens that chat, not the Omni chat',
+        () async {
+      await start(
+        settings: const AppSettings(
+          routinesServerUrl: _base,
+          routinesPushEnabled: true,
+        ),
+      );
+      await container.read(pushRegistrationProvider.notifier).start();
+      push.emit({
+        'kind': 'open',
+        'chat_id': 'chat-abc',
+        'message_id': 'msg-3',
+      });
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      final jump = container.read(messageJumpProvider)!;
+      check(jump.chatId).equals('chat-abc');
+      check(jump.messageId).equals('msg-3');
+      // No slug: nothing is armed as a routine reply.
+      check(container.read(routineReplyMarkerProvider)).isNull();
+    });
+
+    test('a push without a chat id never targets another chat', () async {
+      await start(
+        settings: const AppSettings(
+          routinesServerUrl: _base,
+          routinesPushEnabled: true,
+        ),
+      );
+      await container.read(pushRegistrationProvider.notifier).start();
+      push.emit({'kind': 'open', 'message_id': 'msg-3'});
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      final jump = container.read(messageJumpProvider);
+      check(jump?.chatId).not((c) => c.equals('chat-abc'));
+    });
+
     test('a reply event waits for the chat page as a request', () async {
       await start();
       container

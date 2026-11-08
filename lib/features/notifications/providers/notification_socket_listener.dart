@@ -19,15 +19,11 @@ import 'package:conduit_core/utils/debug_logger.dart';
 import 'package:conduit_core/features/channels/providers/channel_providers.dart';
 import 'package:conduit_core/features/channels/providers/channel_socket_handler.dart';
 import 'package:conduit_core/models/channel.dart';
-import 'package:conduit_core/models/chat_message.dart';
 import 'package:conduit_core/features/chat/providers/chat_providers.dart';
 import 'package:conduit_core/features/notifications/models/app_notification.dart';
 import 'package:conduit_core/features/notifications/services/active_view_tracker.dart';
 
-import '../../chat/musey/musey_feed_api.dart';
-import '../../chat/providers/assistant_name_provider.dart';
 import '../services/local_notification_service.dart';
-import '../services/notification_summary.dart';
 import '../services/scheduled_task_reminders.dart';
 import 'scheduled_task_reminders_provider.dart';
 
@@ -52,7 +48,6 @@ NotificationRouter notificationRouter(Ref ref) {
     sound: ref.read(notificationSoundServiceProvider),
     showInAppBanner: (n) => _showInAppBanner(ref, n),
     onChannelUnread: (n) => _bumpChannelUnread(ref, n),
-    prepareSystem: (n) => _prepareChatNotification(ref, n),
   );
 }
 
@@ -79,65 +74,6 @@ void _showInAppBanner(Ref ref, AppNotification notification) {
       NotificationTap(kind: notification.kind, sourceId: notification.sourceId),
     ),
   );
-}
-
-/// The reply's short summary as the body and the chat's subject or the
-/// assistant's name as the title. The done frame may carry no text, so the
-/// reply is read from the open chat or fetched like a chat load. Every step
-/// fails soft: the notification keeps what it had.
-Future<AppNotification> _prepareChatNotification(
-  Ref ref,
-  AppNotification n,
-) async {
-  var reply = n.body;
-  var chatTitle = n.title;
-  String? ask;
-  try {
-    List<ChatMessage>? messages;
-    final active = ref.read(activeConversationProvider);
-    if (active != null && conversationMatchesScopedId(active, n.sourceId)) {
-      messages = ref.read(chatMessagesProvider);
-      if (chatTitle.trim().isEmpty) chatTitle = active.title;
-    } else if (reply.trim().isEmpty) {
-      final api = ref.read(apiServiceProvider);
-      if (api != null) {
-        final conversation = await api
-            .getConversation(n.sourceId)
-            .timeout(const Duration(milliseconds: 1500));
-        messages = conversation.messages;
-        if (chatTitle.trim().isEmpty) chatTitle = conversation.title;
-      }
-    }
-    if (messages != null) {
-      final reversed = messages.reversed;
-      if (reply.trim().isEmpty) {
-        for (final m in reversed) {
-          if (m.role == 'assistant' && m.content.trim().isNotEmpty) {
-            reply = m.content;
-            break;
-          }
-        }
-      }
-      for (final m in reversed) {
-        if (m.role == 'user' && m.content.trim().isNotEmpty) {
-          ask = m.content;
-          break;
-        }
-      }
-    }
-  } catch (_) {
-    // Keep what the frame had.
-  }
-  final title = chooseNotificationTitle(
-    chatTitle: chatTitle,
-    assistantName: ref.read(assistantNameProvider),
-  );
-  final body = await notificationBody(
-    ref.read(museyFeedApiProvider),
-    reply: reply,
-    ask: ask,
-  );
-  return n.copyWith(title: title, body: body.isEmpty ? n.body : body);
 }
 
 void _bumpChannelUnread(Ref ref, AppNotification notification) {

@@ -10,7 +10,6 @@ import 'package:conduit/features/chat/avatar/assistant_avatar_media.dart';
 import 'package:conduit/features/chat/avatar/assistant_avatar_sheet.dart';
 import 'package:conduit/features/chat/avatar/assistant_pending_approval.dart';
 import 'package:conduit/features/chat/musey/musey_feed_api.dart';
-import 'package:conduit/features/notifications/services/notification_summary.dart';
 import 'package:conduit/features/chat/musey/musey_feed_providers.dart';
 import 'package:conduit/features/chat/widgets/link_preview_cards.dart';
 import 'package:conduit/features/chat/widgets/routine_post_actions.dart';
@@ -55,13 +54,6 @@ class _FakeApi implements MuseyFeedApi {
   LinkPreview? preview;
   final List<String> calls = [];
 
-  @override
-  Future<NotificationSummary?> summarize({
-    required String text,
-    String? ask,
-    String kind = 'chat',
-  }) async => null;
-
   /// What the next topics save answers; null saves what was asked.
   TopicsResult? topicsAnswer;
   Completer<void>? topicsGate;
@@ -97,6 +89,9 @@ class _FakeApi implements MuseyFeedApi {
     await dismissGate?.future;
     return dismissAnswer;
   }
+
+  @override
+  Future<void> presence(String state) async {}
 
   @override
   Future<TurnHint?> react(String text) async {

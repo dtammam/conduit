@@ -10,8 +10,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 
-import '../../notifications/services/notification_summary.dart';
-
 const Duration _requestTimeout = Duration(seconds: 8);
 
 String? _str(Object? v) => v is String && v.trim().isNotEmpty ? v : null;
@@ -257,13 +255,11 @@ abstract class MuseyFeedApi {
   /// missing route. An older relay answers an emoji and no status.
   Future<TurnHint?> react(String text);
 
-  /// A very short summary of a finished reply for its notification, or null
-  /// for an error or a missing route (an older relay answers 404).
-  Future<NotificationSummary?> summarize({
-    required String text,
-    String? ask,
-    String kind = 'chat',
-  });
+  /// Tells the relay whether the app is in front ("foreground") or away
+  /// ("background"), so a finished reply is pushed only when he is away.
+  /// Fire and forget: any failure, including a 404 from a relay without the
+  /// route, is ignored.
+  Future<void> presence(String state);
 
   /// True when the relay started a run.
   Future<bool> refreshFeed();
@@ -374,22 +370,17 @@ class DioMuseyFeedApi implements MuseyFeedApi {
   }
 
   @override
-  Future<NotificationSummary?> summarize({
-    required String text,
-    String? ask,
-    String kind = 'chat',
-  }) async {
-    final r = await _call(
-      'POST',
-      '/musey/summary',
-      data: {
-        'text': text,
-        if (ask != null && ask.trim().isNotEmpty) 'ask': ask,
-        'kind': kind,
-      },
-      timeout: kNotificationSummaryTimeout,
-    );
-    return parseNotificationSummary(r?.statusCode, r?.data);
+  Future<void> presence(String state) async {
+    try {
+      await _call(
+        'POST',
+        '/musey/presence',
+        data: {'state': state},
+        timeout: const Duration(seconds: 3),
+      );
+    } catch (_) {
+      // Presence is best effort.
+    }
   }
 
   @override

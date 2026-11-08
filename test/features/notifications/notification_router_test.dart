@@ -66,9 +66,7 @@ void main() {
     AppSettings settings = allOn,
     ActiveView view = const ActiveView(),
     bool foreground = true,
-    Future<AppNotification> Function(AppNotification)? prepare,
   }) => NotificationRouter(
-    prepareSystem: prepare,
     readSettings: () => settings,
     readActiveView: () => view,
     isAppForeground: () => foreground,
@@ -77,33 +75,6 @@ void main() {
     showInAppBanner: banners.add,
     onChannelUnread: unreads.add,
   );
-
-  group('system notification text', () {
-    test('a prepared chat notification is what is shown', () async {
-      final router = build(
-        foreground: false,
-        prepare: (n) async => n.copyWith(title: 'BMO', body: 'Short'),
-      );
-      await router.route(_chat());
-      final shown = verify(
-        () => local.show(captureAny(), playSound: any(named: 'playSound')),
-      ).captured.single as AppNotification;
-      check(shown.title).equals('BMO');
-      check(shown.body).equals('Short');
-    });
-
-    test('a failing prepare still shows the original', () async {
-      final router = build(
-        foreground: false,
-        prepare: (n) async => throw StateError('boom'),
-      );
-      check(await router.route(_chat())).equals(NotificationSurface.system);
-      final shown = verify(
-        () => local.show(captureAny(), playSound: any(named: 'playSound')),
-      ).captured.single as AppNotification;
-      check(shown.body).equals('Body');
-    });
-  });
 
   group('gating', () {
     test('master toggle off suppresses everything', () async {
@@ -153,7 +124,7 @@ void main() {
     });
 
     test(
-      'backgrounded, the active chat still notifies (not suppressed)',
+      'backgrounded, the active chat is not suppressed (the relay push covers it)',
       () async {
         // Start a chat (it is the active view), then background the app: the
         // completion must still fire an OS notification.
@@ -162,7 +133,7 @@ void main() {
           view: const ActiveView(chatId: 'chat-1'),
         );
         check(await router.route(_chat(id: 'chat-1')))
-            .equals(NotificationSurface.system);
+            .equals(NotificationSurface.silent);
       },
     );
   });
@@ -184,10 +155,18 @@ void main() {
       check(banners).isEmpty();
     });
 
-    test('background posts a system notification only', () async {
+    test('background chat completion shows no system notification', () async {
       final router = build(foreground: false);
-      check(await router.route(_chat())).equals(NotificationSurface.system);
+      check(await router.route(_chat())).equals(NotificationSurface.silent);
       check(banners).isEmpty();
+      verifyNever(() => local.show(any(), playSound: any(named: 'playSound')));
+      verifyNever(() => sound.play());
+    });
+
+    test('background channel message still posts a system notification',
+        () async {
+      final router = build(foreground: false);
+      check(await router.route(_channel())).equals(NotificationSurface.system);
       verify(() => local.show(any(), playSound: any(named: 'playSound')))
           .called(1);
     });
@@ -199,7 +178,7 @@ void main() {
           foreground: false,
           settings: allOn.copyWith(notificationSound: false),
         );
-        await router.route(_chat());
+        await router.route(_channel());
         final played =
             verify(
                   () => local.show(

@@ -76,6 +76,7 @@ import '../../features/channels/providers/channel_socket_handler.dart';
 import 'package:conduit_core/features/direct_connections/direct_connections.dart';
 import 'package:conduit_core/features/hermes/models/hermes_model.dart';
 
+import '../../features/chat/musey/musey_presence.dart';
 import '../../features/notifications/providers/notification_socket_listener.dart';
 import '../../features/notifications/providers/scheduled_task_reminders_provider.dart';
 import '../../features/notifications/services/local_notification_service.dart';
@@ -1057,6 +1058,11 @@ class AppStartupFlow extends _$AppStartupFlow {
       const Duration(milliseconds: 48),
       foregroundRefreshProvider,
       label: 'foreground-refresh',
+    );
+    _scheduleDeferredKeepAlive(
+      const Duration(milliseconds: 72),
+      museyPresenceProvider,
+      label: 'musey-presence',
     );
     _scheduleDeferredKeepAlive(
       const Duration(milliseconds: 96),
