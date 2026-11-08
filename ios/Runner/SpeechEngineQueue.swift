@@ -272,6 +272,48 @@ final class SpeechEngineQueue {
     }
   }
 
+  /// Adds 16-bit little-endian mono PCM at [sampleRate] (the voice socket's
+  /// audio, 24 kHz) to item [index], to be played gaplessly after what is
+  /// already queued; converted to [format] when it differs. [isLast] says the
+  /// item has ended ([data] may then be empty). An odd trailing byte is
+  /// ignored (the caller carries it over).
+  func appendPcm16(item index: Int, data: Data, sampleRate: Double, isLast: Bool) throws {
+    let frames = data.count / 2
+    var converted: AVAudioPCMBuffer?
+    if frames > 0 {
+      guard let source = AVAudioFormat(
+        commonFormat: .pcmFormatInt16,
+        sampleRate: sampleRate,
+        channels: 1,
+        interleaved: true
+      ), let buffer = AVAudioPCMBuffer(
+        pcmFormat: source,
+        frameCapacity: AVAudioFrameCount(frames)
+      ), let samples = buffer.int16ChannelData
+      else { throw EngineError(message: "cannot read speech audio") }
+      buffer.frameLength = AVAudioFrameCount(frames)
+      data.withUnsafeBytes { raw in
+        if let base = raw.baseAddress {
+          memcpy(samples[0], base, frames * 2)
+        }
+      }
+      converted = try Self.objc { try Self.convert(buffer, to: self.format) }
+    }
+    try queue.sync {
+      ensureItem(index)
+      if let converted { items[index].buffers.append(converted) }
+      if isLast { items[index].finished = true }
+      try scheduleReady()
+      if isLast { reportIfIdle() }
+    }
+  }
+
+  /// The item playing now and how far into it (ms), or nil when nothing is
+  /// playing. The voice socket reports this to the relay as `played`.
+  func playbackPosition() -> (item: Int, posMs: Int)? {
+    return playingPosition()
+  }
+
   /// Adds PCM to item [index]; converted to [format] when it differs.
   func appendBuffer(item index: Int, buffer: AVAudioPCMBuffer) throws {
     let converted = try Self.convert(buffer, to: format)

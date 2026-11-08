@@ -331,7 +331,7 @@ final class SpeechEngineBridge: ConduitBridge {
 
   private func handle(_ method: String, _ args: [String: Any]) throws -> Any? {
     switch method {
-    case "pause", "stop", "diagnostics", "log", "dispose", "setGain": break
+    case "pause", "stop", "diagnostics", "log", "dispose", "setGain", "playbackPosition": break
     default: cancelRelease()
     }
     if method == "reset", let old = speech, old.inputUsed, !callActive(old) {
@@ -360,6 +360,19 @@ final class SpeechEngineBridge: ConduitBridge {
         data: bytes.data,
         isLast: args["isLast"] as? Bool ?? false
       )
+    case "appendPcm16":
+      guard let item = args["item"] as? Int,
+            let bytes = args["bytes"] as? FlutterStandardTypedData
+      else { return false }
+      try speech.appendPcm16(
+        item: item,
+        data: bytes.data,
+        sampleRate: args["sampleRate"] as? Double ?? 24000,
+        isLast: args["isLast"] as? Bool ?? false
+      )
+    case "playbackPosition":
+      guard let pos = speech.playbackPosition() else { return nil }
+      return ["item": pos.item, "posMs": pos.posMs]
     case "finishItem":
       guard let item = args["item"] as? Int else { return false }
       try speech.finishItem(item)

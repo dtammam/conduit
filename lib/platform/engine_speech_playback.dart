@@ -266,8 +266,67 @@ class EngineSpeechPlayback
     implements AudioPlaybackPort, AudioItemEndReporting, AudioDucking {
   EngineSpeechPlayback({MethodChannel? channel})
     : _channel = channel ?? const MethodChannel(channelName) {
+    claimEvents();
+  }
+
+  /// The instance whose [_onCall] gets the engine's events (the channel has one
+  /// handler). The newest claims it; [releaseEvents] gives it back.
+  static EngineSpeechPlayback? _owner;
+  EngineSpeechPlayback? _previousOwner;
+
+  /// Takes the engine's events (state, item starts, loudness for lip sync).
+  void claimEvents() {
+    if (identical(_owner, this)) return;
+    _previousOwner = _owner;
+    _owner = this;
     _channel.setMethodCallHandler(_onCall);
   }
+
+  /// Gives the events back to the instance that had them before.
+  void releaseEvents() {
+    if (!identical(_owner, this)) return;
+    final previous = _previousOwner;
+    _previousOwner = null;
+    _owner = previous;
+    _channel.setMethodCallHandler(previous?._onCall);
+  }
+
+  // The voice socket's PCM path (2026-11-08): the relay's audio parts as
+  // PCM16 24 kHz, item index = part number.
+
+  /// Forgets everything queued and restores full volume.
+  Future<void> resetQueue() => _resetQueue();
+
+  /// Queues [pcm] (PCM16 little-endian mono, [sampleRate]) on item [part].
+  Future<void> appendPcm(
+    int part,
+    Uint8List pcm, {
+    bool isLast = false,
+    int sampleRate = 24000,
+  }) => _call('appendPcm16', {
+    'item': part,
+    'bytes': pcm,
+    'sampleRate': sampleRate.toDouble(),
+    'isLast': isLast,
+  });
+
+  /// The item playing now and how many ms of it have played, from the
+  /// engine's own sample clock; null when nothing is playing.
+  Future<({int item, int posMs})?> playbackPosition() async {
+    if (_failed) return null;
+    try {
+      final r = await _channel.invokeMapMethod<String, Object?>(
+        'playbackPosition',
+      );
+      final item = r?['item'];
+      final pos = r?['posMs'];
+      if (item is int && pos is int) return (item: item, posMs: pos);
+    } catch (_) {}
+    return null;
+  }
+
+  /// Sets which viseme timeline goes with the PCM item [part].
+  void bindViseme(int part, String? visemeId) => _itemVisemes[part] = visemeId;
 
   static const channelName = 'app.cogwheel.conduit/speech_engine';
 

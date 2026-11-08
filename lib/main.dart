@@ -40,6 +40,7 @@ import 'package:conduit_core/services/share_staging_cleanup.dart'
 import 'platform/ios_share_staging.dart';
 import 'platform/engine_speech_playback.dart';
 import 'platform/engine_voice_capture.dart';
+import 'platform/engine_voice_socket.dart';
 import 'platform/just_audio_playback.dart';
 import 'platform/record_audio_capture.dart';
 import 'platform/flutter_secure_key_value_store.dart';
@@ -570,6 +571,17 @@ void main() {
           ),
           voiceModePlatformProvider.overrideWithValue(
             const FlutterVoiceModePlatform(),
+          ),
+          // The realtime voice socket (relay :1236/voice/call) on iOS: the
+          // microphone and the speaker both on the speech engine, so its voice
+          // processing cancels the assistant's own echo.
+          voiceCallSocketKitProvider.overrideWithValue(
+            !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS
+                ? VoiceCallSocketKit(
+                    mic: EngineVoiceCallMic.new,
+                    player: EngineVoiceCallPlayer.new,
+                  )
+                : null,
           ),
           // A realtime voice needs the native echo-cancelled audio engine.
           realtimePcmAudioFactoryProvider.overrideWithValue(

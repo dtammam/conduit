@@ -52,6 +52,11 @@ import 'package:conduit_core/features/chat/realtime_call/realtime_call_state.dar
 import 'package:conduit_core/features/chat/voice_call/voice_call_eligibility.dart';
 import 'package:conduit_core/features/chat/voice_mode/voice_call_history.dart';
 import 'package:conduit_core/features/chat/voice_mode/voice_direct_client.dart';
+import 'package:conduit_core/features/chat/voice_mode/voice_call_socket.dart';
+import 'package:conduit_core/features/direct_connections/services/direct_http_client.dart'
+    show directRequestHeaders;
+import 'package:conduit_core/features/chat/voice_mode/voice_call_socket_engine.dart';
+import 'package:conduit_core/features/chat/voice_mode/voice_call_socket_providers.dart';
 import 'package:conduit_core/features/chat/voice_mode/voice_direct_providers.dart';
 import 'package:conduit_core/features/chat/voice_mode/voice_direct_turn.dart';
 import 'package:conduit_core/database/local_conversation_loader.dart'
@@ -65,6 +70,7 @@ import 'package:conduit_core/features/chat/server_speech/server_speech_providers
 import 'package:conduit_core/features/tools/providers/tools_providers.dart';
 
 export 'package:conduit_core/voice/voice_session.dart';
+export 'package:conduit_core/features/chat/voice_mode/voice_call_socket_providers.dart';
 export 'package:conduit_core/features/chat/voice_mode/voice_direct_providers.dart';
 export 'package:conduit_core/features/chat/voice_mode/voice_mode_ports.dart';
 
@@ -329,6 +335,10 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
   /// The realtime voice of a call that has one; the turn-by-turn input and
   /// speech are then unused.
   RealtimeCallEngine? _realtime;
+
+  /// Carries on a call on the direct or old path from where its realtime
+  /// socket ended (dropped, or the relay handed a turn back). Null otherwise.
+  Future<void> Function(String? sendText)? _standardFallback;
   ChatBridgeCallHost? _realtimeHost;
   StreamSubscription<RealtimeCallState>? _realtimeSub;
   ProviderSubscription<Conversation?>? _realtimeChatSub;
@@ -453,6 +463,7 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
       final realtimeSub = _realtimeSub;
       final realtimeChatSub = _realtimeChatSub;
       _realtime = null;
+      _standardFallback = null;
       _realtimeHost = null;
       _realtimeSub = null;
       _realtimeChatSub = null;
@@ -691,38 +702,97 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
             return;
           }
 
-          await _initializeTts(tts, settings);
-          if (lostOwnership()) return;
-          cancelIfRequested();
-          _listenForTtsEvents(tts, startToken);
-          await _listenForResponseCaptureFailures(
-            input,
-            _audioSessionCoordinator,
-            startToken,
-          );
-          await _startCallKit(model.name, startToken);
-          if (lostOwnership()) return;
-          cancelIfRequested();
-          await _startBackgroundVoiceLease(input, startToken);
-          if (lostOwnership()) return;
-          cancelIfRequested();
-          _startElapsedTimer(startToken);
-          await _beginVoiceEventLog(settings);
-          await _startListening(
-            startToken,
-            why: 'call-start',
-            beforeAcceptingTranscripts: startNewConversation
-                ? () {
-                    cancelIfRequested();
-                    startNewChat(ref, modelForNewConversation: model);
-                  }
-                : null,
-          );
-          if (lostOwnership()) return;
-          cancelIfRequested();
-          if (_isCurrent(startToken) && state.isActive) {
-            result = ChatVoiceModeStartResult.started;
+          Future<void> runStandard({
+            required bool callStarted,
+            String? sendText,
+          }) async {
+            await _initializeTts(tts, settings);
+            if (lostOwnership()) return;
+            cancelIfRequested();
+            _listenForTtsEvents(tts, startToken);
+            await _listenForResponseCaptureFailures(
+              input,
+              _audioSessionCoordinator,
+              startToken,
+            );
+            if (!callStarted) {
+              await _startCallKit(model.name, startToken);
+              if (lostOwnership()) return;
+              cancelIfRequested();
+              await _startBackgroundVoiceLease(input, startToken);
+              if (lostOwnership()) return;
+              cancelIfRequested();
+              _startElapsedTimer(startToken);
+              await _beginVoiceEventLog(settings);
+            }
+            await _startListening(
+              startToken,
+              why: callStarted ? 'socket-fallback' : 'call-start',
+              beforeAcceptingTranscripts: startNewConversation
+                  ? () {
+                      cancelIfRequested();
+                      startNewChat(ref, modelForNewConversation: model);
+                    }
+                  : null,
+            );
+            if (lostOwnership()) return;
+            cancelIfRequested();
+            if (sendText != null && sendText.isNotEmpty) {
+              // The relay handed this turn back (a tool turn): it goes the
+              // direct or Open WebUI way from here.
+              await _sendTranscript(sendText, startToken);
+            }
+            if (_isCurrent(startToken) && state.isActive) {
+              result = ChatVoiceModeStartResult.started;
+            }
           }
+
+          // The realtime socket (Contract B) carries a standard call on an
+          // open chat when the relay takes it; refused or silent, the call
+          // goes on the direct or old path exactly as before.
+          final VoiceSocketCallEngine? socket = realtime == null
+              ? await _prepareSocketCall(callChatId, startToken)
+              : null;
+          if (lostOwnership()) return;
+          cancelIfRequested();
+          if (socket != null) {
+            _standardFallback = (text) =>
+                runStandard(callStarted: true, sendText: text);
+            await _startCallKit(model.name, startToken);
+            if (lostOwnership()) return;
+            cancelIfRequested();
+            await _startBackgroundVoiceLease(input, startToken);
+            if (lostOwnership()) return;
+            cancelIfRequested();
+            _startElapsedTimer(startToken);
+            await _beginVoiceEventLog(settings);
+            await _audioSessionCoordinator?.configureForBargeInSpeaking();
+            if (lostOwnership()) return;
+            cancelIfRequested();
+            try {
+              await _startSocketCall(socket, startToken, chatId: callChatId!);
+            } on VoiceSocketUnavailable catch (error) {
+              cancelIfRequested();
+              VoiceEventLog.instance.add('socket-fallback', <String, Object?>{
+                'why': error.reason,
+              });
+              await _discardSocket(socket);
+              _standardFallback = null;
+              await runStandard(callStarted: true);
+              return;
+            } catch (_) {
+              cancelIfRequested();
+              rethrow;
+            }
+            if (lostOwnership()) return;
+            cancelIfRequested();
+            if (_isCurrent(startToken) && state.isActive) {
+              result = ChatVoiceModeStartResult.started;
+            }
+            return;
+          }
+
+          await runStandard(callStarted: false);
         });
       } catch (error, stackTrace) {
         final startToken = token;
@@ -876,6 +946,153 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
     }
   }
 
+  /// The socket engine for this call, with the socket open and the relay
+  /// ready; null when the call cannot use it (no host kit, no Voice
+  /// provider, a new or temporary chat, a refusal). A refusal (503 when
+  /// `voice_call_socket` is off, 404 when the relay lacks it) is logged and
+  /// the call goes on the direct or old path.
+  Future<VoiceSocketCallEngine?> _prepareSocketCall(
+    String? chatId,
+    int token,
+  ) async {
+    final kit = ref.read(voiceCallSocketKitProvider);
+    final voice = ref.read(directVoiceProviderProvider);
+    final conversation = ref.read(activeConversationProvider);
+    if (kit == null ||
+        voice == null ||
+        chatId == null ||
+        _directDisabled ||
+        !_usesOpenWebUiTransport ||
+        conversation == null ||
+        conversation.id != chatId ||
+        isTemporaryChat(conversation.id) ||
+        isDirectLocalConversation(conversation)) {
+      if (kit != null) {
+        VoiceEventLog.instance.add('socket-skipped', <String, Object?>{
+          'voice': voice != null,
+          'chat': chatId != null,
+          'direct': !_directDisabled,
+          'owui': _usesOpenWebUiTransport,
+          'open': conversation?.id == chatId,
+        });
+      }
+      return null;
+    }
+    _directChatId = chatId;
+    _directCallId ??= newVoiceTurnId();
+    final engine = VoiceSocketCallEngine(
+      connector: kit.connector,
+      uri: voiceCallSocketUri(voice.profile),
+      headers: directRequestHeaders(voice.profile),
+      mic: kit.mic(),
+      player: kit.player(),
+      chatId: chatId,
+      chatMessages: () => ref.read(chatMessagesProvider),
+      history: _directHistory,
+      callId: _directCallId,
+      personaId: ref.read(voiceDirectPersonaIdProvider),
+      build: VoiceEventLog.instance.build,
+      tz: DateTime.now().timeZoneName,
+    );
+    try {
+      await engine.preflight();
+    } on VoiceSocketUnavailable catch (error) {
+      VoiceEventLog.instance.add('socket-unavailable', <String, Object?>{
+        'why': error.reason,
+        'status': error.status,
+      });
+      await engine.end();
+      return null;
+    }
+    if (!_isCurrent(token)) {
+      await engine.end();
+      return null;
+    }
+    _realtime = engine;
+    return engine;
+  }
+
+  /// Starts the microphone and the call's snapshot on [engine] (socket open).
+  Future<void> _startSocketCall(
+    VoiceSocketCallEngine engine,
+    int token, {
+    required String chatId,
+  }) async {
+    _followSocketChat(chatId, token);
+    await engine.connect();
+    _realtimeSub = engine.states.listen(
+      (realtime) => _onRealtimeState(realtime, token),
+    );
+    _onRealtimeState(engine.state, token);
+    final callId = state.activeCallId;
+    if (_isCurrent(token) && !_markedCallConnected && callId != null) {
+      _markedCallConnected = true;
+      unawaited(_callKit!.markCallConnected(callId));
+    }
+  }
+
+  void _followSocketChat(String chatId, int token) {
+    _realtimeChatSub = ref.listen<Conversation?>(activeConversationProvider, (
+      _,
+      next,
+    ) {
+      if (!_isCurrent(token)) return;
+      if (next?.id == chatId ||
+          isActiveConversationInPlaceRemap(ref, chatId, next?.id)) {
+        return;
+      }
+      unawaited(stop());
+    });
+  }
+
+  /// Drops a socket engine that never went live.
+  Future<void> _discardSocket(VoiceSocketCallEngine engine) async {
+    final sub = _realtimeSub;
+    _realtimeSub = null;
+    if (identical(_realtime, engine)) _realtime = null;
+    _realtimeChatSub?.close();
+    _realtimeChatSub = null;
+    await sub?.cancel();
+    await engine.end();
+  }
+
+  /// The socket ended without the user hanging up: it dropped and did not
+  /// come back, or the relay handed a tool turn back. Carry the call on the
+  /// direct or old path; nothing stays stuck.
+  Future<void> _socketFallback(VoiceSocketCallEngine engine, int token) async {
+    if (!_isCurrent(token) || _disposed) return;
+    VoiceEventLog.instance.add('socket-fallback', <String, Object?>{
+      'why': engine.endKind.name,
+    });
+    final fallback = _standardFallback;
+    await _discardSocket(engine);
+    _standardFallback = null;
+    if (!_isCurrent(token) || _disposed) return;
+    if (fallback == null) {
+      await _fail('Voice connection lost.', token, ChatVoiceModeError.message);
+      return;
+    }
+    state = state.copyWith(
+      phase: ChatVoiceModePhase.starting,
+      assistantPreview: '',
+      clearErrorMessage: true,
+    );
+    try {
+      await fallback(engine.owuiText);
+    } on _ChatVoiceModeStartCancelled {
+      return;
+    } catch (error, stackTrace) {
+      if (!_isCurrent(token)) return;
+      DebugLogger.error(
+        'socket-fallback-failed',
+        scope: 'chat/voice_mode',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      await _fail(error.toString(), token, _errorKindOf(error));
+    }
+  }
+
   /// Ends a realtime call when the user leaves its chat: the voice talks
   /// about that chat, and a request it handed over is answered there. The
   /// chat the call's own send creates, and that chat's server id, stay the
@@ -905,6 +1122,13 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
   void _onRealtimeState(RealtimeCallState realtime, int token) {
     if (!_isCurrent(token) || _disposed) return;
     if (realtime.phase == RealtimeCallPhase.ended) {
+      final engine = _realtime;
+      if (engine is VoiceSocketCallEngine &&
+          (engine.endKind == VoiceSocketEnd.dropped ||
+              engine.endKind == VoiceSocketEnd.owui)) {
+        unawaited(_socketFallback(engine, token));
+        return;
+      }
       final error = realtime.error;
       if (error != null) {
         unawaited(_fail(error, token, ChatVoiceModeError.message));
@@ -3125,6 +3349,7 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
     _iosAudioSessionManagedExternally = false;
     _usesOpenWebUiTransport = false;
     _realtime = null;
+    _standardFallback = null;
     _realtimeHost = null;
     _realtimeSub = null;
     _realtimeChatSub = null;

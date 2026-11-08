@@ -9,6 +9,9 @@ import 'package:conduit_core/features/chat/realtime_call/realtime_call_availabil
 import 'package:conduit_core/features/chat/realtime_call/realtime_call_ports.dart';
 import 'package:conduit_core/features/chat/voice_call/voice_call_eligibility.dart';
 import 'package:conduit_core/features/chat/voice_mode/chat_voice_mode_controller.dart';
+import 'package:conduit_core/features/chat/server_speech/direct_voice_provider_settings.dart';
+import 'package:conduit_core/features/chat/server_speech/server_speech_providers.dart';
+import 'package:conduit_core/features/chat/voice_mode/voice_call_socket.dart';
 import 'package:conduit_core/features/chat/voice_mode/voice_event_log.dart';
 import 'package:conduit_core/features/direct_connections/models/direct_connection_profile.dart';
 import 'package:conduit_core/features/direct_connections/models/direct_remote_model.dart';
@@ -33,6 +36,7 @@ import 'package:conduit_core/services/socket_service.dart';
 import 'package:conduit_core/testing.dart';
 import 'package:riverpod/riverpod.dart';
 import 'package:test/fake.dart';
+import 'voice_call_socket_fakes.dart';
 import 'package:conduit_core/voice/voice_route.dart';
 import 'package:test/test.dart';
 
@@ -4021,6 +4025,169 @@ void main() {
       await controller.stop();
     });
   });
+
+  group('voice call socket', () {
+    late _FakeVoiceInputService input;
+    late FakeRelay relay;
+    late FakeMic mic;
+    late FakePlayer player;
+
+    setUp(() async {
+      input = _FakeVoiceInputService();
+      relay = await FakeRelay.start();
+      mic = FakeMic();
+      player = FakePlayer();
+    });
+    tearDown(() => relay.close());
+
+    ProviderContainer socketContainer() {
+      final profile = DirectConnectionProfile(
+        id: 'voice',
+        name: 'Voice',
+        adapterKey: 'openai',
+        baseUrl: 'http://127.0.0.1:1237/v1',
+      );
+      final container = ProviderContainer(
+        overrides: [
+          appSettingsProvider.overrideWithValue(const AppSettings()),
+          voiceModeInputProvider.overrideWithValue(input),
+          voiceModeSpeechProvider.overrideWithValue(_FakeTextToSpeechService()),
+          voiceCallKitProvider.overrideWithValue(_UnavailableCallKitService()),
+          chatVoiceModeBackgroundCoordinatorProvider.overrideWithValue(
+            _FakeChatVoiceBackgroundCoordinator(),
+          ),
+          voiceAudioSessionProvider.overrideWithValue(
+            _FakeChatVoiceAudioSessionCoordinator(),
+          ),
+          realtimeCallRouteResolverProvider.overrideWithValue((
+            _, {
+            newChat = false,
+          }) async => (
+            bridge: null,
+            hermes: null,
+            block: RealtimeCallBlock.standardChosen,
+          )),
+          chatMessagesProvider.overrideWith(_VoiceSocketMessages.new),
+          directVoiceProviderProvider.overrideWithValue((
+            profile: profile,
+            settings: const DirectVoiceProviderSettings(profileId: 'voice'),
+          )),
+          voiceCallSocketKitProvider.overrideWithValue(
+            VoiceCallSocketKit(
+              mic: () => mic,
+              player: () => player,
+              // the test relay stands in for the host's :1236
+              connector: (uri, headers) =>
+                  ioVoiceSocketConnector(relay.uri, headers),
+            ),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      // the chat screen listens to these in the app; here something must
+      container.listen(activeConversationProvider, (_, _) {});
+      container
+          .read(activeConversationProvider.notifier)
+          .set(
+            Conversation(
+              id: 'chat-1',
+              title: 'Chat',
+              createdAt: DateTime(2024),
+              updatedAt: DateTime(2024),
+            ),
+          );
+      return container;
+    }
+
+    test('a call on an open chat runs on the socket, not turn by turn',
+        () async {
+      final container = socketContainer();
+      final controller = container.read(
+        chatVoiceModeControllerProvider.notifier,
+      );
+      final result = await controller.start(
+        startNewConversation: false,
+        admittedModel: _model,
+      );
+      check(result).equals(ChatVoiceModeStartResult.started);
+      check(input.beginCalls).equals(0);
+      check(mic.starts).equals(1);
+      check(relay.hellos.single['chat_id']).equals('chat-1');
+
+      relay.json({'type': 'partial', 'text': 'what is'});
+      await _until(
+        () =>
+            container.read(chatVoiceModeControllerProvider).transcript ==
+            'what is',
+      );
+      relay.json({'type': 'eot', 'turn_id': 't1', 'text': 'what is up'});
+      relay.json({
+        'type': 'part',
+        'turn_id': 't1',
+        'part': 0,
+        'text': 'Not much.',
+        'chars': [0, 9],
+      });
+      relay.audio(0, 4800);
+      await _until(
+        () =>
+            container.read(chatVoiceModeControllerProvider).phase ==
+            ChatVoiceModePhase.speaking,
+      );
+      check(
+        container.read(chatVoiceModeControllerProvider).assistantPreview,
+      ).equals('Not much.');
+
+      await controller.toggleMute();
+      check(container.read(chatVoiceModeControllerProvider).isMuted).isTrue();
+      await controller.toggleMute();
+      await controller.stop();
+      check(mic.stops).equals(1);
+      check(player.log).contains('dispose');
+    });
+
+    test('a refused socket (503) falls back to the turn by turn call',
+        () async {
+      relay.refuseWith = 503;
+      final container = socketContainer();
+      final controller = container.read(
+        chatVoiceModeControllerProvider.notifier,
+      );
+      final result = await controller.start(
+        startNewConversation: false,
+        admittedModel: _model,
+      );
+      check(result).equals(ChatVoiceModeStartResult.started);
+      check(input.beginCalls).isGreaterThan(0);
+      check(mic.starts).equals(0);
+      await controller.stop();
+    });
+
+    test('a socket that drops for good carries the call on turn by turn',
+        () async {
+      final container = socketContainer();
+      final controller = container.read(
+        chatVoiceModeControllerProvider.notifier,
+      );
+      await controller.start(
+        startNewConversation: false,
+        admittedModel: _model,
+      );
+      check(input.beginCalls).equals(0);
+      relay.refuseWith = 503;
+      await relay.ws.close(1011);
+      await _until(() => input.beginCalls > 0);
+      final phase = container.read(chatVoiceModeControllerProvider).phase;
+      check(phase).not((it) => it.equals(ChatVoiceModePhase.error));
+      check(mic.stops).equals(1);
+      await controller.stop();
+    });
+  });
+}
+
+class _VoiceSocketMessages extends ChatMessagesNotifier {
+  @override
+  List<ChatMessage> build() => [];
 }
 
 const _usableHermesConfig = HermesConfig(
