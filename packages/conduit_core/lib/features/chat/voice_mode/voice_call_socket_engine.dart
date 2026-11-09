@@ -6,7 +6,7 @@
 /// This is a [RealtimeCallEngine], so the call controller shows it in the
 /// same snapshot a realtime call uses (phase, captions, mute, hang-up).
 ///
-/// Barge-in is always on and has no setting (Dean, 2026-11-08): the relay
+/// Barge-in is always on and has no setting (product decision, 2026-11-08): the relay
 /// sends `duck` at about 90 ms of loud voice and `stop` at about 200 ms; the
 /// phone turns down at once, stops within the same message, keeps what was
 /// heard (the relay cuts the reply at the `played` position) and listens on.

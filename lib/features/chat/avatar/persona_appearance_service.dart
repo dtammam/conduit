@@ -76,7 +76,7 @@ class PersonaAppearance {
 
   /// The lip-sync mouth stills by shape name (see [kMouthShapeNames]): the
   /// five core shapes or none, plus whichever optional extras the server has.
-  /// Only a persona that ships them (Uncle Ruckus) has any.
+  /// Only a persona that ships them has any.
   final Map<String, PersonaClip> mouths;
 
   /// Reads the `mouths` entry of the server's appearance, or of the cache;

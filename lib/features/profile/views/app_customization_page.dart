@@ -591,7 +591,7 @@ class AppCustomizationPage extends ConsumerWidget {
             ),
             title: 'Cartoon lip sync',
             subtitle:
-                'While a persona with drawn mouths speaks (Uncle Ruckus), '
+                'While a persona with drawn mouths speaks, '
                 'the avatar swaps mouth shapes with the voice',
             toggled: settings.lipSyncEnabled,
             trailing: AdaptiveSwitch(

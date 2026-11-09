@@ -143,7 +143,7 @@ class PushSettings {
       Object.hash(quiet, quietStart, quietEnd, quietNow, devices, held);
 }
 
-/// Talks to the routines server (the chat relay on SANDYJAR): the last result
+/// Talks to the routines server (the chat relay): the last result
 /// of each routine, push settings, and push registration. The bearer token is
 /// the one stored for Switchboard; it is only ever sent in the Authorization
 /// header and never logged.

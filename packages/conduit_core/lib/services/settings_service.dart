@@ -961,7 +961,7 @@ class AppSettings {
 
   /// Cartoon lip sync: while a persona that ships mouth stills speaks, the
   /// avatar swaps between them by loudness. On by default; only a persona
-  /// with the stills (Uncle Ruckus) is affected.
+  /// with the stills is affected.
   final bool lipSyncEnabled;
 
   /// The routines server (the chat relay) address: push registration, quiet
