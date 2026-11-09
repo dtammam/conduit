@@ -12,7 +12,7 @@ Map<String, Object?> _mouths({int count = 5}) => {
     name: {
       'etag': 'e-$name',
       'content_type': 'image/png',
-      'url': '/api/personas/uncle-ruckus/mouths/$name',
+      'url': '/api/personas/sample-persona/mouths/$name',
     },
 };
 
@@ -329,8 +329,8 @@ void main() {
 
   group('mouths in the persona appearance', () {
     Map<String, Object?> body(Object? mouths) => {
-      'id': 'uncle-ruckus',
-      'name': 'Uncle Ruckus',
+      'id': 'sample-persona',
+      'name': 'Sample Persona',
       'appearance': {'clips': <String, Object?>{}, 'mouths': mouths},
     };
 
@@ -345,7 +345,7 @@ void main() {
       check(
         a.mouths.keys.toList(),
       ).deepEquals(kMouthShapeNames.take(9).toList());
-      check(a.mouths['oo']!.url).equals('/api/personas/uncle-ruckus/mouths/oo');
+      check(a.mouths['oo']!.url).equals('/api/personas/sample-persona/mouths/oo');
     });
 
     test('a partial or missing set means no mouths at all', () {

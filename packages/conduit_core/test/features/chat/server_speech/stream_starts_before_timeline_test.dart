@@ -107,7 +107,7 @@ DirectServerSpeech _speech(HttpClientAdapter adapter, {bool stream = false}) {
     settings: DirectVoiceProviderSettings(
       profileId: 'voice',
       speechModel: 'custom',
-      speechVoice: 'uncle-ruckus-5',
+      speechVoice: 'sample-voice-1',
       streamSpeech: stream,
     ),
     clientPool: pool,
