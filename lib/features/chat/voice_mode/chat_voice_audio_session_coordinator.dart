@@ -15,6 +15,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:riverpod/riverpod.dart';
 
+import 'package:conduit_core/features/chat/voice_mode/voice_event_log.dart';
 import 'package:conduit_core/features/chat/voice_mode/voice_mode_ports.dart';
 import 'package:conduit_core/utils/debug_logger.dart';
 
@@ -801,9 +802,12 @@ class ChatVoiceAudioSessionCoordinator implements VoiceAudioSessionPort {
       return;
     }
     _iosRouteChangeSub = AVAudioSession().routeChangeStream.listen(
-      (change) => unawaited(
-        _syncObservedRoute(phase: 'route-change-${change.reason.name}'),
-      ),
+      (change) {
+        unawaited(_logRouteChange(change.reason.name));
+        unawaited(
+          _syncObservedRoute(phase: 'route-change-${change.reason.name}'),
+        );
+      },
       onError: (Object error, StackTrace stackTrace) {
         DebugLogger.error(
           'ios-route-change-watch-failed',
@@ -813,6 +817,63 @@ class ChatVoiceAudioSessionCoordinator implements VoiceAudioSessionPort {
         );
       },
     );
+  }
+
+  /// 2026-11-09: every route change of a call goes in the voice log with the
+  /// route it landed on (`builtInSpeaker`, `builtInReceiver`, `bluetoothHFP`,
+  /// ...), so a speaker-to-earpiece move shows up in the call's events and the
+  /// route per call can be read from them.
+  Future<void> _logRouteChange(String reason) async {
+    try {
+      final payload = await _safeIosRouteCall(
+        () => _iosVoiceAudioRouteChannel.invokeMapMethod<Object?, Object?>(
+          'currentRoute',
+        ),
+        operation: 'current-route',
+        phase: 'route-log',
+      );
+      final route = voiceRouteClassFromPayload(payload);
+      VoiceEventLog.instance.add('route-change', <String, Object?>{
+        'reason': reason,
+        'route': route.name,
+        'speakerphone': _speakerphoneEnabled,
+      });
+      await _holdSpeakerRoute(route);
+    } catch (_) {}
+  }
+
+  DateTime? _lastSpeakerHoldAt;
+
+  /// 2026-11-09: the call stays on the loudspeaker it chose. When the system
+  /// moves it to the earpiece on its own (a mode or voice processing switch,
+  /// not a headset or the car, which are other route classes) while the
+  /// loudspeaker is the chosen route, the override goes back on. At most once
+  /// every 2 s, so a change this call's own override causes cannot loop.
+  Future<void> _holdSpeakerRoute(VoiceRouteClass route) async {
+    if (!Platform.isIOS ||
+        !_speakerphoneEnabled ||
+        _routeChangesStopped ||
+        route != VoiceRouteClass.builtInReceiver) {
+      return;
+    }
+    final now = DateTime.now();
+    final last = _lastSpeakerHoldAt;
+    if (last != null && now.difference(last) < const Duration(seconds: 2)) {
+      return;
+    }
+    _lastSpeakerHoldAt = now;
+    final generation = _callGeneration;
+    await _serializeRouteChange(() async {
+      if (_routeChangesStopped ||
+          generation != _callGeneration ||
+          !_speakerphoneEnabled) {
+        return;
+      }
+      await _setIosSpeakerphoneEnabled(true, phase: 'route-hold');
+      VoiceEventLog.instance.add('route-held', <String, Object?>{
+        'route': VoiceRouteClass.builtInSpeaker.name,
+      });
+    });
   }
 
   /// Keeps the default following the hardware for the rest of the call:

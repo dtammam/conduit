@@ -101,6 +101,8 @@ class EngineVoiceCallMic implements VoiceCallMicPort {
   @override
   Future<void> stop() async {
     await _capture.stop();
-    await EngineVoiceCapture.endCall();
+    // The call may go on (a turn handed back to the direct path): leave voice
+    // processing as it is; the session teardown switches it off at the end.
+    await EngineVoiceCapture.endCall(keepVoiceProcessing: true);
   }
 }

@@ -151,12 +151,27 @@ class EngineVoiceCapture implements AudioCapturePort {
   /// so other playback goes back to the plain media path. The next call tries
   /// the engine again. [endsCall] false only cleans up after a failed engine
   /// capture inside a call.
+  ///
+  /// [keepVoiceProcessing] stops only the microphone: the call goes on (the
+  /// relay handed a turn back and the direct path answers it). 2026-11-09: the
+  /// socket's mic stop used to switch voice processing off here, so the reply
+  /// played on the plain media path, the engine reconfigured twice mid-part
+  /// (each time replaying the part from its start), and turning it back on for
+  /// the next listen changed the loudness again.
   static Future<void> endCall({
     MethodChannel? channel,
     bool endsCall = true,
+    bool keepVoiceProcessing = false,
   }) async {
     final engine =
         channel ?? const MethodChannel(EngineSpeechPlayback.channelName);
+    if (keepVoiceProcessing) {
+      if (!voiceProcessingActive) return;
+      try {
+        await engine.invokeMethod<Object?>('stopCapture');
+      } catch (_) {}
+      return;
+    }
     final wasActive = voiceProcessingActive;
     voiceProcessingActive = false;
     if (endsCall) {

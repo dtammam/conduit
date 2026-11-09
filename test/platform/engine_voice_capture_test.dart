@@ -83,6 +83,19 @@ void main() {
     check(EngineVoiceCapture.voiceProcessingActive).isFalse();
   });
 
+  test('a mic stop that keeps the call leaves voice processing on', () async {
+    // 2026-11-09: the socket's stop switched it off mid-call, the reply played
+    // on the plain path and the engine reconfigured under it.
+    final capture = EngineVoiceCapture(fallback: _Record());
+    await capture.startStream(call);
+    calls.clear();
+    await EngineVoiceCapture.endCall(keepVoiceProcessing: true);
+    check(calls).deepEquals(['stopCapture']);
+    check(EngineVoiceCapture.voiceProcessingActive).isTrue();
+    await EngineVoiceCapture.endCall();
+    check(calls.last).equals('vp false');
+  });
+
   test('dictation stays on record', () async {
     final record = _Record();
     await EngineVoiceCapture(fallback: record).startStream(dictation);

@@ -85,6 +85,19 @@ final class SpeechEngineQueue {
   private var scheduleItem = 0
   /// How many buffers of [scheduleItem] are scheduled.
   private var scheduledInItem = 0
+  /// 2026-11-09: a resume after an engine reconfiguration or a voice
+  /// processing toggle goes on from where the item was, not from its start
+  /// (the start was replayed, heard as the assistant saying it twice). Frames
+  /// still to skip from the head of [scheduleItem], and frames skipped so far.
+  private var skipFramesLeft = 0
+  private var skippedFrames = 0
+  private var firstAfterSkipPending = false
+  /// The playing position when the last configuration change arrived, read
+  /// by the recovery (the engine has stopped by then).
+  private var positionAtConfigChange: (item: Int, posMs: Int)?
+  /// Whether the player was paused since the item began, so the wall clock
+  /// cannot stand in for its position.
+  private var pausedSinceStart = false
   /// Scheduled buffers not yet played back.
   private var outstanding = 0
   private var generation = 0
@@ -124,9 +137,11 @@ final class SpeechEngineQueue {
     timelineLock.unlock()
   }
 
-  private func playerTimelineAdd(frames: Int, itemStart item: Int?) {
+  private func playerTimelineAdd(frames: Int, itemStart item: Int?, skipped: Int = 0) {
     timelineLock.lock()
-    if let item { itemStartFrames.append((item, playerFramesScheduled)) }
+    // A resumed item starts [skipped] frames before its first scheduled one,
+    // so the position inside the item stays true.
+    if let item { itemStartFrames.append((item, playerFramesScheduled - Int64(skipped))) }
     playerFramesScheduled += Int64(frames)
     timelineLock.unlock()
   }
@@ -335,9 +350,12 @@ final class SpeechEngineQueue {
   }
 
   /// Plays from the start of item [index] (a replay or a skip).
-  func seek(toItem index: Int) throws {
+  func seek(toItem index: Int, skipMs: Int = 0) throws {
     try queue.sync {
       generation += 1
+      skipFramesLeft = max(0, Int(Double(skipMs) * format.sampleRate / 1000))
+      skippedFrames = 0
+      firstAfterSkipPending = skipFramesLeft > 0
       try Self.objc { self.player.stop() }
       playerTimelineReset()
       outstanding = 0
@@ -414,6 +432,7 @@ final class SpeechEngineQueue {
   func pause() throws {
     try queue.sync {
       wantsPlayback = false
+      pausedSinceStart = true
       try Self.objc { self.player.pause() }
     }
   }
@@ -487,9 +506,35 @@ final class SpeechEngineQueue {
   /// After the engine stopped for a route or format change: start it again
   /// and replay the current item from its start (the player's schedule does
   /// not survive the stop).
+  /// How far into [item] the audio had played, in milliseconds, for a resume
+  /// that must not replay it: from the player's own time (captured when the
+  /// configuration change arrived, or now), else the wall clock when the
+  /// player was never paused. 0 when unknown (the item then starts over).
+  /// On [queue].
+  private func resumeOffsetMs(forItem item: Int) -> Int {
+    diagLock.lock()
+    let atChange = positionAtConfigChange
+    positionAtConfigChange = nil
+    diagLock.unlock()
+    var ms: Int?
+    if let atChange, atChange.item == item { ms = atChange.posMs }
+    if ms == nil, let now = playingPosition(), now.item == item { ms = now.posMs }
+    if ms == nil, !pausedSinceStart, wantsPlayback, let began = startUptime[item] {
+      ms = Int(((ProcessInfo.processInfo.systemUptime - began) * 1000).rounded())
+    }
+    guard var value = ms, value > 0 else { return 0 }
+    if item < items.count, items[item].finished {
+      let total = items[item].buffers.reduce(0) { $0 + Int($1.frameLength) }
+      let totalMs = Int(Double(total) * 1000 / format.sampleRate)
+      // Within 150 ms of the end: not worth a replay either.
+      value = min(value, max(0, totalMs - 150))
+    }
+    return max(0, value)
+  }
+
   func recoverAfterConfigurationChange() throws {
-    let (wants, resumeItem) = queue.sync {
-      (wantsPlayback, lastStartedItem ?? scheduleItem)
+    let (wants, resumeItem, skipMs) = queue.sync {
+      (wantsPlayback, lastStartedItem ?? scheduleItem, resumeOffsetMs(forItem: lastStartedItem ?? scheduleItem))
     }
     countDiag { recoveries += 1 }
     Self.log.notice("recover after configuration change, wants=\(wants, privacy: .public)")
@@ -498,9 +543,9 @@ final class SpeechEngineQueue {
       return
     }
     try queue.sync { try startEngineIfNeeded() }
-    try seek(toItem: resumeItem)
+    try seek(toItem: resumeItem, skipMs: skipMs)
     queue.sync {
-      note("config-change", ["wants": true, "recovered": true, "resumeItem": resumeItem])
+      note("config-change", ["wants": true, "recovered": true, "resumeItem": resumeItem, "resumeMs": skipMs])
     }
   }
 
@@ -518,8 +563,8 @@ final class SpeechEngineQueue {
   /// that was playing goes on from its start.
   func setVoiceProcessing(_ on: Bool) throws {
     guard on != voiceProcessing else { return }
-    let (wasRunning, resumeItem) = queue.sync {
-      (engine.isRunning, lastStartedItem ?? scheduleItem)
+    let (wasRunning, resumeItem, skipMs) = queue.sync {
+      (engine.isRunning, lastStartedItem ?? scheduleItem, resumeOffsetMs(forItem: lastStartedItem ?? scheduleItem))
     }
     if capturing { try stopCapture() }
     countDiag {
@@ -527,7 +572,7 @@ final class SpeechEngineQueue {
       togglingVoiceProcessing = true
     }
     Self.log.notice("setVoiceProcessing \(on, privacy: .public)")
-    queue.sync { note("voice-processing", ["on": on, "wasRunning": wasRunning, "resumeItem": resumeItem]) }
+    queue.sync { note("voice-processing", ["on": on, "wasRunning": wasRunning, "resumeItem": resumeItem, "resumeMs": skipMs]) }
     defer { countDiag { togglingVoiceProcessing = false } }
     inputUsed = true
     try Self.objc {
@@ -546,7 +591,7 @@ final class SpeechEngineQueue {
     voiceProcessing = on
     if wasRunning || wantsPlayback {
       try queue.sync { try startEngineIfNeeded() }
-      if wantsPlayback { try seek(toItem: resumeItem) }
+      if wantsPlayback { try seek(toItem: resumeItem, skipMs: skipMs) }
     }
   }
 
@@ -642,6 +687,11 @@ final class SpeechEngineQueue {
     let n = configChanges
     let duringToggle = togglingVoiceProcessing
     diagLock.unlock()
+    if let pos = playingPosition() {
+      diagLock.lock()
+      positionAtConfigChange = pos
+      diagLock.unlock()
+    }
     onEvent?(.note("engine-config-change", [
       "n": n,
       "duringToggle": duringToggle,
@@ -887,17 +937,34 @@ final class SpeechEngineQueue {
     while scheduleItem < items.count {
       let item = items[scheduleItem]
       while scheduledInItem < item.buffers.count {
-        try schedule(
-          item.buffers[scheduledInItem],
-          item: scheduleItem,
-          first: scheduledInItem == 0
-        )
+        var buffer = item.buffers[scheduledInItem]
+        if skipFramesLeft > 0 {
+          let n = Int(buffer.frameLength)
+          if skipFramesLeft >= n {
+            skipFramesLeft -= n
+            skippedFrames += n
+            scheduledInItem += 1
+            continue
+          }
+          let head = skipFramesLeft
+          if let rest = Self.cut(buffer, trim: PieceTrim(leading: AVAudioFrameCount(head), trailing: 0)) {
+            buffer = rest
+            skippedFrames += head
+          }
+          skipFramesLeft = 0
+        }
+        let first = scheduledInItem == 0 || firstAfterSkipPending
+        firstAfterSkipPending = false
+        try schedule(buffer, item: scheduleItem, first: first)
         scheduledInItem += 1
       }
       guard item.finished else { return }
       reportEndIfDone(scheduleItem)
       scheduleItem += 1
       scheduledInItem = 0
+      skipFramesLeft = 0
+      skippedFrames = 0
+      firstAfterSkipPending = false
     }
   }
 
@@ -922,7 +989,11 @@ final class SpeechEngineQueue {
     outstanding += 1
     scheduledCount[item, default: 0] += 1
     scheduledFrames[item, default: 0] += Int(buffer.frameLength)
-    playerTimelineAdd(frames: Int(buffer.frameLength), itemStart: first ? item : nil)
+    playerTimelineAdd(
+      frames: Int(buffer.frameLength),
+      itemStart: first ? item : nil,
+      skipped: first ? skippedFrames : 0
+    )
     if first, streamItems.contains(item) { onEvent?(.streamScheduled(item)) }
     if first {
       // The item starts when everything scheduled before it has played.
@@ -949,6 +1020,7 @@ final class SpeechEngineQueue {
   private func reportStarted(_ item: Int) {
     guard lastStartedItem != item else { return }
     lastStartedItem = item
+    pausedSinceStart = false
     startUptime[item] = ProcessInfo.processInfo.systemUptime
     var gap: Int?
     if item > 0, let ended = lastEndUptime {

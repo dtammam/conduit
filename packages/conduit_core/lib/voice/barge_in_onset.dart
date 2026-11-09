@@ -94,6 +94,7 @@ class BargeInOnsetDetector {
     this.preRoll = defaultPreRoll,
     this.marginDb = defaultMarginDb,
     this.minThresholdDb = defaultMinThresholdDb,
+    this.minPeakOverDb = defaultMinPeakOverDb,
   });
 
   static const Duration defaultGrace = Duration(milliseconds: 300);
@@ -102,6 +103,14 @@ class BargeInOnsetDetector {
   static const Duration defaultPreRoll = Duration(milliseconds: 500);
   static const double defaultMarginDb = 12;
   static const double defaultMinThresholdDb = -50;
+
+  /// 2026-11-09: the call of 04:19 UTC ducked the assistant three times on
+  /// frames only 2 to 3 dB over the threshold (the echo canceller's residue of
+  /// the assistant's own voice on the loudspeaker); every one was judged echo
+  /// 0.5 s later, after the assistant had been turned down to 28 percent. An
+  /// onset now also needs one frame this far over the threshold. Speech in
+  /// the same logs sat 20 dB or more over it.
+  static const double defaultMinPeakOverDb = 6;
 
   /// How fast the floor climbs towards louder frames, per frame, during the
   /// grace period and after it.
@@ -121,7 +130,11 @@ class BargeInOnsetDetector {
   final double marginDb;
   final double minThresholdDb;
 
+  /// How far over [thresholdDb] at least one frame of an onset must reach.
+  final double minPeakOverDb;
+
   double? _floorDb;
+  double _candidatePeakDb = -100;
   bool _armed = false;
   bool _fired = false;
   Duration _sinceArmed = Duration.zero;
@@ -171,6 +184,17 @@ class BargeInOnsetDetector {
       _candidateSpan += level.duration;
       _candidateAbove += level.duration;
       _candidateGap = Duration.zero;
+      if (level.dbfs > _candidatePeakDb) _candidatePeakDb = level.dbfs;
+      if (_candidateAbove >= sustain &&
+          _candidatePeakDb < thresholdDb + minPeakOverDb) {
+        // Barely over the floor for a while: the assistant's own echo. Let the
+        // floor climb to it (so it stops counting) and keep the span bounded.
+        _track(level.dbfs, rise: _steadyRise);
+        if (_candidateSpan > maxWeakSpan) {
+          _candidateSpan = maxWeakSpan;
+        }
+        return null;
+      }
       if (_candidateAbove >= sustain) {
         _fired = true;
         final lookback = _candidateSpan + preRoll;
@@ -200,5 +224,9 @@ class BargeInOnsetDetector {
     _candidateSpan = Duration.zero;
     _candidateAbove = Duration.zero;
     _candidateGap = Duration.zero;
+    _candidatePeakDb = -100;
   }
+
+  /// The most of a weak run kept as the onset's lookback.
+  static const Duration maxWeakSpan = Duration(seconds: 1);
 }

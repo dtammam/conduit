@@ -37,6 +37,16 @@ void main() {
       check(_feed(detector, -25, 20)).isNull();
     });
 
+    test('does not fire on echo only a few dB over the threshold', () {
+      // 2026-11-09: three ducks on frames 2 to 3 dB over the threshold.
+      final detector = BargeInOnsetDetector()..arm();
+      _feed(detector, -80, 20);
+      check(detector.thresholdDb).equals(-50);
+      check(_feed(detector, -47, 40)).isNull();
+      // Real speech afterwards still fires.
+      check(_feed(detector, -25, 20)).isNotNull();
+    });
+
     test('ignores the grace period after playback starts', () {
       final detector = BargeInOnsetDetector()..arm();
       detector.add(_level(-60));
