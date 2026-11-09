@@ -307,6 +307,25 @@ class AudioSettingsPage extends ConsumerWidget {
         CustomizationTile(
           leading: SettingsIconBadge(
             icon: UiUtils.platformIcon(
+              ios: CupertinoIcons.speaker_1,
+              android: Icons.volume_down,
+            ),
+            color: theme.buttonPrimary,
+          ),
+          title: l10n.voiceWorkingSound,
+          subtitle: l10n.voiceWorkingSoundDescription,
+          trailing: AdaptiveSwitch(
+            value: settings.voiceWorkingSound,
+            onChanged: notifier.setVoiceWorkingSound,
+          ),
+          showChevron: false,
+          onTap: () =>
+              notifier.setVoiceWorkingSound(!settings.voiceWorkingSound),
+        ),
+        const SizedBox(height: Spacing.sm),
+        CustomizationTile(
+          leading: SettingsIconBadge(
+            icon: UiUtils.platformIcon(
               ios: CupertinoIcons.text_quote,
               android: Icons.short_text,
             ),

@@ -9580,6 +9580,14 @@
   "@voiceEngineEchoCancelDescription": {
     "description": "Explains the toggle for echo cancellation on the speech engine."
   },
+  "voiceWorkingSound": "Working sound",
+  "@voiceWorkingSound": {
+    "description": "Toggle: a soft sound plays in a voice call while a tool turn (calendar, notes, budget) is being worked on."
+  },
+  "voiceWorkingSoundDescription": "Plays a soft sound during a call while a request that needs a tool is being worked on, until the reply starts. It follows mute and never plays over speech.",
+  "@voiceWorkingSoundDescription": {
+    "description": "Explains the working sound toggle."
+  },
   "voiceShortFirstClause": "Short first clause",
   "@voiceShortFirstClause": {
     "description": "Toggle: a voice reply starts speaking after its first clause instead of its first sentence."

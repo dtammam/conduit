@@ -307,6 +307,38 @@ void main() {
     expect(engine.state.phase, RealtimeCallPhase.ended);
   });
 
+  test(
+    'the ack that follows a route owui is kept for the controller',
+    () async {
+      await engine.connect();
+      relay.json({
+        'type': 'eot',
+        'turn_id': 't1',
+        'text': 'what is on my calendar',
+      });
+      relay.json({'type': 'meta', 'turn_id': 't1', 'route': 'owui'});
+      relay.json({'type': 'ack', 'turn_id': 't1', 'text': 'Let me check.'});
+      await until(
+        () => engine.state.phase == RealtimeCallPhase.ended,
+        what: 'owui handover',
+      );
+      expect(engine.owuiText, 'what is on my calendar');
+      expect(engine.owuiAck, 'Let me check.');
+      expect(engine.endKind, VoiceSocketEnd.owui);
+    },
+  );
+
+  test('a route owui without an ack hands over with no ack', () async {
+    await engine.connect();
+    relay.json({'type': 'eot', 'turn_id': 't1', 'text': 'add milk'});
+    relay.json({'type': 'meta', 'turn_id': 't1', 'route': 'owui'});
+    await until(
+      () => engine.state.phase == RealtimeCallPhase.ended,
+      what: 'owui handover',
+    );
+    expect(engine.owuiAck, isNull);
+  });
+
   test('a refused upgrade (503 or 404) is unavailable, not a hang', () async {
     for (final status in [503, 404]) {
       relay.refuseWith = status;

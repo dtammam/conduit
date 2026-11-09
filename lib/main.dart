@@ -42,6 +42,7 @@ import 'platform/engine_speech_playback.dart';
 import 'platform/engine_voice_capture.dart';
 import 'platform/engine_voice_socket.dart';
 import 'platform/just_audio_playback.dart';
+import 'platform/just_audio_working_sound.dart';
 import 'platform/record_audio_capture.dart';
 import 'platform/flutter_secure_key_value_store.dart';
 import 'platform/flutter_key_value_store.dart';
@@ -583,6 +584,15 @@ void main() {
                   )
                 : null,
           ),
+          // The soft loop while a tool turn runs in a voice call (phones).
+          voiceWorkingSoundPlayerProvider.overrideWith(
+            (ref) =>
+                !kIsWeb &&
+                    (defaultTargetPlatform == TargetPlatform.iOS ||
+                        defaultTargetPlatform == TargetPlatform.android)
+                ? JustAudioWorkingSound()
+                : null,
+          ),
           // A realtime voice needs the native echo-cancelled audio engine.
           realtimePcmAudioFactoryProvider.overrideWithValue(
             () => _hasRealtimeAudio ? MethodChannelRealtimePcmAudio() : null,
@@ -1089,6 +1099,12 @@ class _ConduitAppState extends ConsumerState<ConduitApp> {
             await ref
                 .read(appSettingsProvider.notifier)
                 .setVoiceCallKitEnabled(value);
+          }
+        case 'voice-working-sound':
+          if (value is bool) {
+            await ref
+                .read(appSettingsProvider.notifier)
+                .setVoiceWorkingSound(value);
           }
         case 'voice-short-first-clause':
           if (value is bool) {

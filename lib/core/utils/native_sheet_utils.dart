@@ -967,6 +967,14 @@ NativeAudioSheetParts buildNativeAudioSheetParts(
       value: appSettings.voiceBargeInEnabled,
     ),
     NativeSheetItemConfig(
+      id: 'voice-working-sound',
+      title: l10n.voiceWorkingSound,
+      subtitle: l10n.voiceWorkingSoundDescription,
+      sfSymbol: 'speaker.wave.1',
+      kind: NativeSheetItemKind.toggle,
+      value: appSettings.voiceWorkingSound,
+    ),
+    NativeSheetItemConfig(
       id: 'voice-short-first-clause',
       title: l10n.voiceShortFirstClause,
       subtitle: l10n.voiceShortFirstClauseDescription,

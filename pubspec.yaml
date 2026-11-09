@@ -1,6 +1,6 @@
 name: conduit
 description: Open-source mobile client for Open-WebUI
-version: 4.2.1+196
+version: 4.2.1+197
 publish_to: 'none'
 
 environment:
@@ -198,6 +198,7 @@ flutter:
     - assets/flutter_tex.js
     - assets/flutter_tex.css
     - assets/vad/
+    - assets/sounds/
 
 flutter_native_splash:
   # Splash background matches the light theme; `color_dark` handles dark mode.

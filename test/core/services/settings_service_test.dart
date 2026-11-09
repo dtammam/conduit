@@ -141,6 +141,13 @@ void main() {
         ).equals(false);
       });
 
+      test('voiceWorkingSound defaults to on and copies', () {
+        check(settings.voiceWorkingSound).equals(true);
+        check(
+          settings.copyWith(voiceWorkingSound: false).voiceWorkingSound,
+        ).equals(false);
+      });
+
       test('voiceShortFirstClause defaults to off and copies', () {
         check(settings.voiceShortFirstClause).equals(false);
         check(

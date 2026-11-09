@@ -346,6 +346,7 @@ class SettingsService {
       PreferenceKeys.prepareReplyAudio: settings.prepareReplyAudio,
       PreferenceKeys.voiceEngineEchoCancel: settings.voiceEngineEchoCancel,
       PreferenceKeys.voiceShortFirstClause: settings.voiceShortFirstClause,
+      PreferenceKeys.voiceWorkingSound: settings.voiceWorkingSound,
       PreferenceKeys.voiceCallMode: settings.voiceCallMode.name,
       _socketTransportModeKey: settings.socketTransportMode,
       _quickPillsKey: settings.quickPills.toList(),
@@ -846,6 +847,7 @@ class SettingsService {
           get<bool>(PreferenceKeys.voiceEngineEchoCancel) ?? true,
       voiceShortFirstClause:
           get<bool>(PreferenceKeys.voiceShortFirstClause) ?? false,
+      voiceWorkingSound: get<bool>(PreferenceKeys.voiceWorkingSound) ?? true,
       voiceCallMode: VoiceCallMode.values.firstWhere(
         (mode) => mode.name == get<String>(PreferenceKeys.voiceCallMode),
         orElse: () => VoiceCallMode.auto,
@@ -1049,6 +1051,9 @@ class AppSettings {
   /// boundary (comma, semicolon, colon, dash) when the sentence is long, so
   /// speech starts sooner. Off by default.
   final bool voiceShortFirstClause;
+
+  /// A soft loop in a voice call while a tool turn runs (default on).
+  final bool voiceWorkingSound;
   final VoiceCallMode voiceCallMode;
   final String socketTransportMode; // 'polling' or 'ws'
   final List<String> quickPills; // e.g., ['web','image']
@@ -1129,6 +1134,7 @@ class AppSettings {
     this.prepareReplyAudio = true,
     this.voiceEngineEchoCancel = true,
     this.voiceShortFirstClause = false,
+    this.voiceWorkingSound = true,
     this.voiceCallMode = VoiceCallMode.auto,
     this.socketTransportMode = 'ws',
     this.quickPills = const [],
@@ -1201,6 +1207,7 @@ class AppSettings {
     bool? prepareReplyAudio,
     bool? voiceEngineEchoCancel,
     bool? voiceShortFirstClause,
+    bool? voiceWorkingSound,
     VoiceCallMode? voiceCallMode,
     String? socketTransportMode,
     List<String>? quickPills,
@@ -1289,6 +1296,7 @@ class AppSettings {
           voiceEngineEchoCancel ?? this.voiceEngineEchoCancel,
       voiceShortFirstClause:
           voiceShortFirstClause ?? this.voiceShortFirstClause,
+      voiceWorkingSound: voiceWorkingSound ?? this.voiceWorkingSound,
       voiceCallMode: voiceCallMode ?? this.voiceCallMode,
       socketTransportMode: socketTransportMode ?? this.socketTransportMode,
       quickPills: quickPills ?? this.quickPills,
@@ -1388,6 +1396,7 @@ class AppSettings {
         other.prepareReplyAudio == prepareReplyAudio &&
         other.voiceEngineEchoCancel == voiceEngineEchoCancel &&
         other.voiceShortFirstClause == voiceShortFirstClause &&
+        other.voiceWorkingSound == voiceWorkingSound &&
         other.voiceCallMode == voiceCallMode &&
         other.chatWebSearchEnabled == chatWebSearchEnabled &&
         other.chatImageGenerationEnabled == chatImageGenerationEnabled &&
@@ -1463,6 +1472,7 @@ class AppSettings {
       prepareReplyAudio,
       voiceEngineEchoCancel,
       voiceShortFirstClause,
+      voiceWorkingSound,
       voiceCallMode,
       chatWebSearchEnabled,
       chatImageGenerationEnabled,
@@ -1998,6 +2008,11 @@ class AppSettingsNotifier extends _$AppSettingsNotifier {
 
   Future<void> setVoiceProviderForAllChats(bool value) async {
     state = state.copyWith(voiceProviderForAllChats: value);
+    await SettingsService.saveSettings(state);
+  }
+
+  Future<void> setVoiceWorkingSound(bool value) async {
+    state = state.copyWith(voiceWorkingSound: value);
     await SettingsService.saveSettings(state);
   }
 

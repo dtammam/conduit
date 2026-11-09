@@ -124,6 +124,7 @@ final class VoiceSocketCallEngine implements RealtimeCallEngine {
     this.duckGain = 0.2,
     this.localBargeMinRms = 900,
     this.localBargeMs = 200,
+    this.owuiAckWait = const Duration(milliseconds: 150),
   }) : visemes = visemes ?? VisemeStore.instance;
 
   final VoiceSocketConnector connector;
@@ -149,10 +150,19 @@ final class VoiceSocketCallEngine implements RealtimeCallEngine {
   final double localBargeMinRms;
   final int localBargeMs;
 
+  /// How long a route owui waits for the ack that follows it before the
+  /// socket closes.
+  final Duration owuiAckWait;
+  Timer? _owuiTimer;
+
   VoiceSocketEnd endKind = VoiceSocketEnd.none;
 
   /// With [endKind] owui: what he said in the turn the relay handed back.
   String? owuiText;
+
+  /// With [endKind] owui: the relay's spoken ack for that turn, when it sent
+  /// one right after the route (the app speaks it; no second request needed).
+  String? owuiAck;
 
   /// Turns the call completed (done, or cut), for the controller's reread of
   /// the chat after the call.
@@ -379,6 +389,13 @@ final class VoiceSocketCallEngine implements RealtimeCallEngine {
         if (j['route'] == 'owui') _onOwuiRoute(j);
       case 'ack':
         final turn = _turn;
+        if (turn != null && turn.owui && turn.id == _s(j, 'turn_id')) {
+          final text = _s(j, 'text');
+          if (text != null && text.trim().isNotEmpty) owuiAck = text.trim();
+          _owuiTimer?.cancel();
+          unawaited(end());
+          return;
+        }
         if (turn != null &&
             turn.id == _s(j, 'turn_id') &&
             turn.parts.isEmpty) {
@@ -433,7 +450,8 @@ final class VoiceSocketCallEngine implements RealtimeCallEngine {
     endKind = VoiceSocketEnd.owui;
     owuiText = turn.userText;
     // The turn goes the old way; this call ends and the controller carries on.
-    unawaited(end());
+    // The relay's ack comes right behind the route, so wait a moment for it.
+    _owuiTimer = Timer(owuiAckWait, () => unawaited(end()));
   }
 
   void _onPart(Map<String, Object?> j) {
@@ -806,6 +824,7 @@ final class VoiceSocketCallEngine implements RealtimeCallEngine {
     _ended = true;
     _stopPlayed();
     _unduckTimer?.cancel();
+    _owuiTimer?.cancel();
     final channel = _channel;
     if (channel != null) {
       channel.sendText(encodeSocketJson({'type': 'bye'}));

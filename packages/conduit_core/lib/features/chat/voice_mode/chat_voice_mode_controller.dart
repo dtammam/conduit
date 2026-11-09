@@ -62,6 +62,7 @@ import 'package:conduit_core/features/chat/voice_mode/voice_direct_turn.dart';
 import 'package:conduit_core/database/local_conversation_loader.dart'
     show pullChatOrFetch;
 import 'package:conduit_core/features/chat/voice_mode/voice_event_log.dart';
+import 'package:conduit_core/features/chat/voice_mode/voice_working_sound.dart';
 import 'package:conduit_core/features/chat/voice_mode/voice_event_sender.dart';
 import 'package:conduit_core/features/chat/voice_mode/voice_mode_ports.dart';
 import 'package:conduit_core/features/chat/server_speech/server_speech_providers.dart'
@@ -72,6 +73,8 @@ import 'package:conduit_core/features/tools/providers/tools_providers.dart';
 export 'package:conduit_core/voice/voice_session.dart';
 export 'package:conduit_core/features/chat/voice_mode/voice_call_socket_providers.dart';
 export 'package:conduit_core/features/chat/voice_mode/voice_direct_providers.dart';
+export 'package:conduit_core/features/chat/voice_mode/voice_working_sound.dart'
+    show voiceWorkingSoundPlayerProvider, VoiceWorkingSoundPlayer;
 export 'package:conduit_core/features/chat/voice_mode/voice_mode_ports.dart';
 
 final class _ChatVoiceModeStartCancelled implements Exception {
@@ -396,6 +399,13 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
 
   /// Spoken before the reply text of the turn: the relay's ack clip.
   String _speechPrefix = '';
+
+  /// The soft loop while a tool turn runs on the Open WebUI path.
+  VoiceWorkingSound? _workingSound;
+
+  /// Set when the socket already answered route "owui" for a turn: that turn
+  /// goes straight to the Open WebUI path, never to /voice/turn again.
+  _SocketHandoff? _socketHandoff;
   bool _usesOpenWebUiTransport = false;
   List<String> _assistantSpeechChunks = const <String>[];
   int _activeAssistantSpeechChunkIndex = -1;
@@ -411,6 +421,11 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
     _serviceLifecycleGate = ref.read(
       _chatVoiceModeServiceLifecycleGateProvider,
     );
+    _workingSound = VoiceWorkingSound(
+      ref.read(voiceWorkingSoundPlayerProvider),
+    );
+    ref.onDispose(() => _workingSound?.stop('dispose'));
+    listenSelf((previous, next) => _followWorkingSound(next));
     ref.listen<String?>(streamingContentProvider, (_, next) {
       if (next != null) {
         _handleAssistantContentChanged();
@@ -749,7 +764,9 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
             if (sendText != null && sendText.isNotEmpty) {
               // The relay handed this turn back (a tool turn): it goes the
               // direct or Open WebUI way from here.
-              await _sendTranscript(sendText, startToken);
+              final handoff = _socketHandoff;
+              _socketHandoff = null;
+              await _sendTranscript(sendText, startToken, handoff: handoff);
             }
             if (_isCurrent(startToken) && state.isActive) {
               result = ChatVoiceModeStartResult.started;
@@ -1169,6 +1186,13 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
       'why': engine.endKind.name,
     });
     final fallback = _standardFallback;
+    // The socket already answered route "owui" for this turn: it goes straight
+    // to the Open WebUI path (its ack, if any, is spoken here). A socket that
+    // failed without a route answer leaves no hand-off: the direct path stays
+    // the fallback.
+    _socketHandoff = engine.endKind == VoiceSocketEnd.owui
+        ? _SocketHandoff(ack: engine.owuiAck)
+        : null;
     await _discardSocket(engine);
     _standardFallback = null;
     if (!_isCurrent(token) || _disposed) return;
@@ -1789,6 +1813,7 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
 
       switch (event) {
         case TtsStarted():
+          _workingSound?.speechStarted();
           if (_awaitingAssistant && state.phase != ChatVoiceModePhase.paused) {
             _assistantSpeechStartedAt ??= DateTime.now();
             _bargeInDetector?.arm();
@@ -1799,6 +1824,7 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
             state = state.copyWith(phase: ChatVoiceModePhase.speaking);
           }
         case TtsCompleted():
+          _workingSound?.speechEnded();
           if (_assistantFinalized && _awaitingAssistant) {
             unawaited(_resumeAfterAssistantSpeech(token));
           }
@@ -1829,6 +1855,7 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
         case TtsResumed():
           break;
         case TtsChunkStarted(:final chunkIndex):
+          _workingSound?.speechStarted();
           _handleTtsChunkStarted(chunkIndex);
           // A chunk starting is speech playing, even when the player kept
           // playing across a gap (a tool call mid-reply) and so never
@@ -2144,6 +2171,7 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
     if (!_isCurrent(token) || state.isMuted) return;
 
     _currentTranscript = event.text;
+    if (event.text.trim().isNotEmpty) _workingSound?.stop('user-speech');
     if (!event.isFinal &&
         event.text.trim().isNotEmpty &&
         state.phase == ChatVoiceModePhase.listening) {
@@ -2279,6 +2307,7 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
         return;
       }
       await _stopWatchingForServerBargeIn();
+      _workingSound?.stop('barge-in');
       DebugLogger.info(
         'barge-in-onset',
         scope: 'chat/voice_mode',
@@ -2549,7 +2578,11 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
     prewarmVoiceTurn(ref);
   }
 
-  Future<void> _sendTranscript(String transcript, int token) async {
+  Future<void> _sendTranscript(
+    String transcript,
+    int token, {
+    _SocketHandoff? handoff,
+  }) async {
     if (!_isCurrent(token)) return;
     VoiceEventLog.instance.add('send-start');
 
@@ -2612,7 +2645,26 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
       if (!_isCurrent(token)) return;
       final selectedToolIds = ref.read(selectedToolIdsProvider);
       _speechPrefix = '';
-      if (await _tryDirectTurn(transcript, token)) return;
+      if (handoff != null) {
+        // The relay's route answer stands: no second request, no second
+        // understanding pass. Speak its ack, wait for its saves, and go.
+        VoiceEventLog.instance.add('socket-owui-handoff', <String, Object?>{
+          'ack': handoff.ack != null,
+        });
+        final ack = handoff.ack;
+        if (ack != null && ack.isNotEmpty) {
+          _speechPrefix = '$ack ';
+          _feedAssistantText(_speechPrefix);
+        }
+        _workingSound?.handoff(
+          enabled: ref.read(appSettingsProvider).voiceWorkingSound,
+          muted: state.isMuted,
+          ackSpoken: _speechPrefix.isNotEmpty,
+        );
+        await _waitForRelaySaves();
+      } else if (await _tryDirectTurn(transcript, token)) {
+        return;
+      }
       if (!_isCurrent(token)) return;
       VoiceEventLog.instance.add('durable-send');
       await durableSend(
@@ -2720,6 +2772,49 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
     } finally {
       _directTurnActive = false;
       lease.release();
+    }
+  }
+
+  /// Waits for the relay's save queue of this call's chat to drain, so the
+  /// Open WebUI send that follows finds every earlier turn already stored.
+  /// Best effort: the relay missing or slow never blocks the turn.
+  Future<void> _waitForRelaySaves() async {
+    final access = ref.read(voiceDirectAccessProvider);
+    final chatId = ref.read(activeConversationProvider)?.id;
+    if (access == null || chatId == null) return;
+    try {
+      final lease = access.acquire();
+      try {
+        await lease.client.waitSaved(chatId);
+      } finally {
+        lease.release();
+      }
+    } catch (_) {}
+  }
+
+  /// Keeps the working sound in step with the call: it stops when the call
+  /// leaves the waiting phase (the reply speaks, the user speaks, the turn
+  /// ends or fails, the call ends) and goes quiet while muted or paused.
+  void _followWorkingSound(ChatVoiceModeSnapshot next) {
+    final sound = _workingSound;
+    if (sound == null || !sound.isActive) return;
+    switch (next.phase) {
+      case ChatVoiceModePhase.sending:
+        sound.mute(next.isMuted);
+      case ChatVoiceModePhase.muted:
+      case ChatVoiceModePhase.paused:
+        sound.mute(true);
+      case ChatVoiceModePhase.starting:
+        break;
+      case ChatVoiceModePhase.speaking:
+        sound.speechStarted();
+        if (sound.isActive) sound.mute(next.isMuted);
+      case ChatVoiceModePhase.listening:
+      case ChatVoiceModePhase.idle:
+      case ChatVoiceModePhase.ending:
+      case ChatVoiceModePhase.ended:
+      case ChatVoiceModePhase.error:
+        sound.stop('phase-${next.phase.name}');
     }
   }
 
@@ -3823,4 +3918,11 @@ bool storedVoiceModeCollapsed() {
     return true;
   }
   return PreferencesStore.getBool(PreferenceKeys.voiceModeCollapsed) ?? true;
+}
+
+/// The relay's route "owui" answer for a turn, carried from the socket's end
+/// to the Open WebUI send: [ack] is the line to speak while the tool runs.
+final class _SocketHandoff {
+  const _SocketHandoff({this.ack});
+  final String? ack;
 }

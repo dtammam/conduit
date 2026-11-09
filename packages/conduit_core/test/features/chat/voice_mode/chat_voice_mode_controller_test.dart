@@ -12,7 +12,10 @@ import 'package:conduit_core/features/chat/voice_mode/chat_voice_mode_controller
 import 'package:conduit_core/features/chat/server_speech/direct_voice_provider_settings.dart';
 import 'package:conduit_core/features/chat/server_speech/server_speech_providers.dart';
 import 'package:conduit_core/features/chat/voice_mode/voice_call_socket.dart';
+import 'package:conduit_core/features/chat/voice_mode/voice_direct_client.dart';
 import 'package:conduit_core/features/chat/voice_mode/voice_event_log.dart';
+import 'package:conduit_core/features/chat/voice_mode/voice_working_sound.dart';
+import 'package:dio/dio.dart';
 import 'package:conduit_core/features/direct_connections/models/direct_connection_profile.dart';
 import 'package:conduit_core/features/direct_connections/models/direct_remote_model.dart';
 import 'package:conduit_core/features/direct_connections/providers/direct_connection_providers.dart';
@@ -4040,7 +4043,12 @@ void main() {
     });
     tearDown(() => relay.close());
 
-    ProviderContainer socketContainer() {
+    ProviderContainer socketContainer({
+      _FakeTextToSpeechService? tts,
+      _CountingDirectAccess? direct,
+      _FakeWorkingSoundPlayer? sound,
+      AppSettings settings = const AppSettings(),
+    }) {
       final profile = DirectConnectionProfile(
         id: 'voice',
         name: 'Voice',
@@ -4049,9 +4057,15 @@ void main() {
       );
       final container = ProviderContainer(
         overrides: [
-          appSettingsProvider.overrideWithValue(const AppSettings()),
+          appSettingsProvider.overrideWithValue(settings),
           voiceModeInputProvider.overrideWithValue(input),
-          voiceModeSpeechProvider.overrideWithValue(_FakeTextToSpeechService()),
+          voiceModeSpeechProvider.overrideWithValue(
+            tts ?? _FakeTextToSpeechService(),
+          ),
+          if (direct != null)
+            voiceDirectAccessProvider.overrideWithValue(direct),
+          if (sound != null)
+            voiceWorkingSoundPlayerProvider.overrideWithValue(sound),
           voiceCallKitProvider.overrideWithValue(_UnavailableCallKitService()),
           chatVoiceModeBackgroundCoordinatorProvider.overrideWithValue(
             _FakeChatVoiceBackgroundCoordinator(),
@@ -4230,6 +4244,132 @@ void main() {
       await controller.debugReopenSocketForTest();
       check(relay.connections).equals(3);
       check(mic.starts).equals(1);
+      await controller.stop();
+    });
+
+    // A tool turn with its text: the socket answered route owui (and the ack),
+    // so the app goes straight to the Open WebUI path. The held relay-save
+    // wait keeps the call in the waiting phase for the checks.
+    Future<void> owuiTurnWithText(String id, String text, {String? ack}) async {
+      relay.json({'type': 'eot', 'turn_id': id, 'text': text});
+      relay.json({'type': 'meta', 'turn_id': id, 'route': 'owui'});
+      if (ack != null) {
+        relay.json({'type': 'ack', 'turn_id': id, 'text': ack});
+      }
+    }
+
+    test('route owui goes straight to Open WebUI, with no direct request',
+        () async {
+      final direct = _CountingDirectAccess()..holdSaves();
+      final sound = _FakeWorkingSoundPlayer();
+      final container = socketContainer(direct: direct, sound: sound);
+      final controller = container.read(
+        chatVoiceModeControllerProvider.notifier,
+      );
+      await controller.start(startNewConversation: false, admittedModel: _model);
+      await owuiTurnWithText('t1', 'what is on my calendar');
+      await _until(() => direct.savedAsked > 0);
+      check(direct.turns).equals(0);
+      await _until(() => sound.playing);
+      direct.releaseSaves();
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+      check(direct.turns).equals(0);
+      await controller.stop();
+      check(sound.playing).isFalse();
+    });
+
+    test('the working sound plays until the reply speaks', () async {
+      final direct = _CountingDirectAccess()..holdSaves();
+      final sound = _FakeWorkingSoundPlayer();
+      final tts = _FakeTextToSpeechService();
+      final container = socketContainer(direct: direct, sound: sound, tts: tts);
+      final controller = container.read(
+        chatVoiceModeControllerProvider.notifier,
+      );
+      await controller.start(startNewConversation: false, admittedModel: _model);
+      await owuiTurnWithText('t1', 'what is on my calendar');
+      await _until(() => sound.playing);
+      tts.emit(const TtsChunkStarted(0));
+      await _until(() => !sound.playing);
+      check(sound.log).deepEquals(['start', 'stop']);
+      direct.releaseSaves();
+      await controller.stop();
+      check(sound.log).deepEquals(['start', 'stop']);
+    });
+
+    test('a spoken ack goes first, the sound starts after it ends', () async {
+      final direct = _CountingDirectAccess()..holdSaves();
+      final sound = _FakeWorkingSoundPlayer();
+      final tts = _FakeTextToSpeechService();
+      final container = socketContainer(direct: direct, sound: sound, tts: tts);
+      final controller = container.read(
+        chatVoiceModeControllerProvider.notifier,
+      );
+      await controller.start(startNewConversation: false, admittedModel: _model);
+      await owuiTurnWithText('t1', 'what is on my calendar',
+          ack: 'Let me check.');
+      await _until(() => direct.savedAsked > 0);
+      tts.emit(const TtsStarted());
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      check(sound.log).isEmpty();
+      tts.emit(const TtsCompleted());
+      await _until(() => sound.playing);
+      tts.emit(const TtsChunkStarted(1));
+      await _until(() => !sound.playing);
+      direct.releaseSaves();
+      await controller.stop();
+    });
+
+    test('mute silences the working sound, unmute brings it back', () async {
+      final direct = _CountingDirectAccess()..holdSaves();
+      final sound = _FakeWorkingSoundPlayer();
+      final container = socketContainer(direct: direct, sound: sound);
+      final controller = container.read(
+        chatVoiceModeControllerProvider.notifier,
+      );
+      await controller.start(startNewConversation: false, admittedModel: _model);
+      await owuiTurnWithText('t1', 'what is on my calendar');
+      await _until(() => sound.playing);
+      await controller.toggleMute();
+      await _until(() => !sound.playing);
+      await controller.toggleMute();
+      await _until(() => sound.playing);
+      direct.releaseSaves();
+      await controller.stop();
+    });
+
+    test('the setting off keeps tool turns silent', () async {
+      final direct = _CountingDirectAccess()..holdSaves();
+      final sound = _FakeWorkingSoundPlayer();
+      final container = socketContainer(
+        direct: direct,
+        sound: sound,
+        settings: const AppSettings(voiceWorkingSound: false),
+      );
+      final controller = container.read(
+        chatVoiceModeControllerProvider.notifier,
+      );
+      await controller.start(startNewConversation: false, admittedModel: _model);
+      await owuiTurnWithText('t1', 'what is on my calendar');
+      await _until(() => direct.savedAsked > 0);
+      check(sound.log).isEmpty();
+      direct.releaseSaves();
+      await controller.stop();
+    });
+
+    test('a socket that drops with no route answer still uses the direct path',
+        () async {
+      final direct = _CountingDirectAccess();
+      final container = socketContainer(direct: direct);
+      final controller = container.read(
+        chatVoiceModeControllerProvider.notifier,
+      );
+      await controller.start(startNewConversation: false, admittedModel: _model);
+      relay.refuseWith = 503;
+      await relay.ws.close(1011);
+      await _until(() => input.beginCalls > 0);
+      await input.completeCurrent('what time is it');
+      await _until(() => direct.turns > 0);
       await controller.stop();
     });
 
@@ -5103,4 +5243,80 @@ final class _RealtimeAudio implements RealtimePcmAudioPort {
 
   @override
   Future<void> stop() async => stopped = true;
+}
+
+
+final class _FakeWorkingSoundPlayer implements VoiceWorkingSoundPlayer {
+  final log = <String>[];
+  var playing = false;
+
+  @override
+  Future<void> start() async {
+    log.add('start');
+    playing = true;
+  }
+
+  @override
+  Future<void> stop() async {
+    log.add('stop');
+    playing = false;
+  }
+}
+
+/// A relay for /voice/turn and /voice/saved that counts requests: turns
+/// answer 404 (the app then uses the Open WebUI path), saves can be held.
+final class _CountingDirectAccess implements VoiceDirectAccess {
+  _CountingDirectAccess() {
+    dio = Dio()..httpClientAdapter = _CountingAdapter(this);
+  }
+  late final Dio dio;
+  var turns = 0;
+  var savedAsked = 0;
+  Completer<void>? _gate;
+
+  void holdSaves() => _gate = Completer<void>();
+  void releaseSaves() {
+    final gate = _gate;
+    if (gate != null && !gate.isCompleted) gate.complete();
+  }
+
+  @override
+  VoiceDirectLease acquire() => VoiceDirectLease(
+    VoiceDirectClient(
+      dio: dio,
+      turnUri: Uri.parse('http://127.0.0.1:9/voice/turn'),
+      maxAttempts: 1,
+    ),
+    () {},
+  );
+}
+
+final class _CountingAdapter implements HttpClientAdapter {
+  _CountingAdapter(this.owner);
+  final _CountingDirectAccess owner;
+
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) async {
+    if (options.path.endsWith('/voice/turn')) {
+      owner.turns++;
+      return ResponseBody.fromString('', 404);
+    }
+    owner.savedAsked++;
+    final gate = owner._gate;
+    if (gate != null) await gate.future;
+    return ResponseBody.fromString(
+      '{"pending":0}',
+      200,
+      headers: {
+        Headers.contentTypeHeader: ['application/json'],
+      },
+    );
+  }
+
+  @override
+  void close({bool force = false}) {}
 }
