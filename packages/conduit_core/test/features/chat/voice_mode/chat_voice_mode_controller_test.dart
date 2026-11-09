@@ -4163,6 +4163,76 @@ void main() {
       await controller.stop();
     });
 
+    // The test has no Open WebUI to send to, so the handed-back turn carries
+    // no text: the call lands on the old path, listening, as after a reply.
+    Future<void> owuiTurn(String id, String text) async {
+      relay.json({'type': 'eot', 'turn_id': id, 'text': ''});
+      relay.json({'type': 'meta', 'turn_id': id, 'route': 'owui'});
+    }
+
+    test('after a tool turn the call returns to the socket', () async {
+      final container = socketContainer();
+      final controller = container.read(
+        chatVoiceModeControllerProvider.notifier,
+      );
+      await controller.start(startNewConversation: false, admittedModel: _model);
+      check(relay.connections).equals(1);
+      // turn 1 talks on the socket
+      relay.json({'type': 'eot', 'turn_id': 't1', 'text': 'hi'});
+      relay.json({
+        'type': 'part',
+        'turn_id': 't1',
+        'part': 0,
+        'text': 'Hello.',
+        'chars': [0, 6],
+      });
+      relay.audio(0, 4800);
+      await _until(
+        () =>
+            container.read(chatVoiceModeControllerProvider).phase ==
+            ChatVoiceModePhase.speaking,
+      );
+      relay.json({'type': 'turn_done', 'turn_id': 't1'});
+      // turn 2 is a tool turn: it goes the old way
+      await owuiTurn('t2', 'what is on my calendar');
+      await _until(() => input.beginCalls > 0);
+      check(mic.stops).equals(1);
+      check(relay.connections).equals(1);
+      // the old-way reply has played
+      await controller.debugReopenSocketForTest();
+      check(relay.connections).equals(2);
+      check(relay.hellos.last['call_id']).equals(relay.hellos.first['call_id']);
+      check(mic.starts).equals(2);
+      // the mic is live on the socket again, and nothing stopped it since
+      check(mic.stops).equals(1);
+      // turn 3 is on the socket
+      relay.json({'type': 'eot', 'turn_id': 't3', 'text': 'thanks'});
+      await _until(
+        () =>
+            container.read(chatVoiceModeControllerProvider).transcript ==
+            'thanks',
+      );
+      await controller.stop();
+    });
+
+    test('a reopen that fails stays direct and stops after two', () async {
+      final container = socketContainer();
+      final controller = container.read(
+        chatVoiceModeControllerProvider.notifier,
+      );
+      await controller.start(startNewConversation: false, admittedModel: _model);
+      await owuiTurn('t1', 'what is on my calendar');
+      await _until(() => input.beginCalls > 0);
+      relay.refuseWith = 503;
+      await controller.debugReopenSocketForTest();
+      await controller.debugReopenSocketForTest();
+      check(relay.connections).equals(3);
+      await controller.debugReopenSocketForTest();
+      check(relay.connections).equals(3);
+      check(mic.starts).equals(1);
+      await controller.stop();
+    });
+
     test('a socket that drops for good carries the call on turn by turn',
         () async {
       final container = socketContainer();

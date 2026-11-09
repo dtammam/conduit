@@ -339,6 +339,15 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
   /// Carries on a call on the direct or old path from where its realtime
   /// socket ended (dropped, or the relay handed a turn back). Null otherwise.
   Future<void> Function(String? sendText)? _standardFallback;
+
+  /// What a socket call keeps after the relay hands a turn back (or the
+  /// socket drops): the way back onto the old path, so the next turn can try
+  /// the realtime socket again. Cleared at call end.
+  Future<void> Function(String? sendText)? _socketReopenFallback;
+
+  /// Reopens that failed in this call; two and it stops trying (no flapping).
+  int _socketReopenFailures = 0;
+  bool _socketReopening = false;
   ChatBridgeCallHost? _realtimeHost;
   StreamSubscription<RealtimeCallState>? _realtimeSub;
   ProviderSubscription<Conversation?>? _realtimeChatSub;
@@ -758,6 +767,7 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
           if (socket != null) {
             _standardFallback = (text) =>
                 runStandard(callStarted: true, sendText: text);
+            _socketReopenFallback = _standardFallback;
             await _startCallKit(model.name, startToken);
             if (lostOwnership()) return;
             cancelIfRequested();
@@ -1011,6 +1021,100 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
     _realtime = engine;
     return engine;
   }
+
+  /// After a turn the relay handed back (a tool turn) has played or been
+  /// interrupted: goes back to the realtime socket for the next turn, with the
+  /// same call id and the history rebuilt from the chat (the tool turn is in
+  /// it). True when the socket took the call over; false leaves the call on
+  /// the direct path. Waits for the relay's save queue first, as the direct
+  /// path does. Two failed reopens in a call stop further tries.
+  Future<bool> _tryReopenSocket(int token) async {
+    final fallback = _socketReopenFallback;
+    if (fallback == null ||
+        _socketReopening ||
+        _socketReopenFailures >= 2 ||
+        _realtime != null ||
+        _directTurnActive ||
+        _disposed ||
+        !state.isActive ||
+        state.isMuted ||
+        state.phase == ChatVoiceModePhase.paused ||
+        !_isCurrent(token)) {
+      return false;
+    }
+    final chatId = ref.read(activeConversationProvider)?.id;
+    if (chatId == null) return false;
+    _socketReopening = true;
+    VoiceSocketCallEngine? engine;
+    try {
+      final access = ref.read(voiceDirectAccessProvider);
+      if (access != null) {
+        final lease = access.acquire();
+        try {
+          if (!await lease.client.waitSaved(chatId)) {
+            // Not drained yet: stay on the direct path for this turn.
+            VoiceEventLog.instance.add('socket-reopen-wait');
+            return false;
+          }
+        } finally {
+          lease.release();
+        }
+        if (!_isCurrent(token)) return false;
+      }
+      engine = await _prepareSocketCall(chatId, token);
+      if (engine == null) {
+        if (_isCurrent(token)) _socketReopenFailures++;
+        VoiceEventLog.instance.add('socket-reopen-failed', <String, Object?>{
+          'failures': _socketReopenFailures,
+        });
+        return false;
+      }
+      // Nothing of the old path may keep listening under the socket's mic.
+      await _detachListeningSubscriptions();
+      final input = _voiceInput;
+      if (input != null && !input.isHoldingServerRecorderForResponse) {
+        try {
+          await input.stopListening();
+        } catch (_) {}
+      }
+      if (!_isCurrent(token)) {
+        await _discardSocket(engine);
+        return false;
+      }
+      _standardFallback = fallback;
+      await _audioSessionCoordinator?.configureForBargeInSpeaking();
+      _assistantFinalized = true;
+      _awaitingAssistant = false;
+      try {
+        await _startSocketCall(engine, token, chatId: chatId);
+      } on VoiceSocketUnavailable catch (error) {
+        VoiceEventLog.instance.add('socket-reopen-failed', <String, Object?>{
+          'why': error.reason,
+        });
+        _socketReopenFailures++;
+        _standardFallback = null;
+        await _discardSocket(engine);
+        return false;
+      }
+      VoiceEventLog.instance.add('socket-reopened');
+      return true;
+    } catch (error) {
+      if (_isCurrent(token)) _socketReopenFailures++;
+      VoiceEventLog.instance.add('socket-reopen-failed', <String, Object?>{
+        'why': '$error',
+      });
+      if (engine != null && identical(_realtime, engine)) {
+        _standardFallback = null;
+        await _discardSocket(engine);
+      }
+      return false;
+    } finally {
+      _socketReopening = false;
+    }
+  }
+
+  @visibleForTesting
+  Future<bool> debugReopenSocketForTest() => _tryReopenSocket(_token);
 
   /// Starts the microphone and the call's snapshot on [engine] (socket open).
   Future<void> _startSocketCall(
@@ -1877,6 +1981,10 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
     Duration? heldAudioLookback,
   }) async {
     if (!_isCurrent(token) || state.isMuted) {
+      return;
+    }
+    if ((why == 'after-assistant-speech' || why == 'cancel-speaking') &&
+        await _tryReopenSocket(token)) {
       return;
     }
 
@@ -3499,6 +3607,9 @@ class ChatVoiceModeController extends Notifier<ChatVoiceModeSnapshot> {
     _socketBackgroundLease?.dispose();
     _socketBackgroundLease = null;
     _usesOpenWebUiTransport = false;
+    _socketReopenFallback = null;
+    _socketReopenFailures = 0;
+    _socketReopening = false;
     _emptyTranscriptRestarts = 0;
     _currentTranscript = '';
     _lastFedAssistantText = '';
